@@ -10,7 +10,7 @@
 
 | 层 | 选型 |
 |---|---|
-| 前端 | React 18 + TypeScript + Vite + Tailwind CSS v4 + shadcn/ui + Zustand + React Router v6 + axios + Recharts |
+| 前端 | React 19 + TypeScript 6 + Vite 8 + Tailwind CSS v4 + shadcn/ui + Zustand + React Router v7 + axios + Recharts |
 | 后端 | Python 3.12+ + FastAPI + SQLModel + PostgreSQL + APScheduler |
 | AI | DeepSeek API（httpx 直连，SSE 流式，Pydantic 结构化输出） |
 | 桌面端 | Electron（M3 阶段包壳） |
@@ -45,10 +45,30 @@
 
 ## 快速开始
 
-### 前端
+### 一键脚本（推荐，Windows PowerShell）
+
+仓库根目录有三个 `.ps1`：
+
+| 脚本 | 作用 |
+|---|---|
+| `setup-backend.ps1` | 建 venv + 装 Python 依赖（幂等，已存在则跳过） |
+| `dev-backend.ps1` | 建表灌种子 + 起 uvicorn（http://localhost:8000，接口文档 `/docs`） |
+| `dev-frontend.ps1` | 装依赖（缺失时）+ 起 Vite（http://localhost:5173） |
+
+直接运行，或在 PowerShell 里 `.\dev-backend.ps1`。若提示脚本被禁止执行：
 
 ```powershell
-# 注意：本机 Node 装在 C:\Program Files\nodejs，但可能不在当前 shell 的 PATH 里
+powershell -ExecutionPolicy Bypass -File .\dev-backend.ps1
+```
+
+**为什么要包一层**：本机 Node 与 Python 是后来才装的，**在安装之前打开的终端里 `npm` / `python` 找不到**（PATH 是会话启动时的快照）。脚本内显式补 PATH 并用绝对路径调用解释器，绕开这个问题。直接开一个新终端也可以。
+
+> **维护注意**：这三个 `.ps1` 必须保存为 **UTF-8 with BOM**。Windows PowerShell 5.1 读无 BOM 的 `.ps1` 会按 ANSI（GBK）解析，中文会乱码并导致语法错误——本项目实际踩过这个坑。
+
+### 前端（手动）
+
+```powershell
+# 若当前终端是在装 Node 之前打开的，先补 PATH：
 $env:PATH = "C:\Program Files\nodejs;" + $env:PATH
 
 cd frontend
@@ -57,6 +77,12 @@ npm run dev          # http://localhost:5173
 ```
 
 dev 环境通过 Vite 代理把 `/api` 转发到 `http://localhost:8000`，因此不需要配置 CORS。
+
+> **`vite preview` 的坑**：它默认只监听 IPv6 `[::1]`，`http://127.0.0.1:4173` **连不上**，必须用 `http://localhost:4173`。任何拿 `127.0.0.1` 探测 4173 的脚本或健康检查都会失败。
+
+### 渲染冒烟测试（无需后端）
+
+`tools/render-check/` 下有独立的前端渲染验证工具：用本机 Edge（`playwright-core` + `channel: 'msedge'`，**不需要下载 Chromium**）在 mock 后端的情况下逐路由渲染、截图并采集未捕获异常。见 `tools/render-check/REPORT.md`。
 
 ### 后端
 

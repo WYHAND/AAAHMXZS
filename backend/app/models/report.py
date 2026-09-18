@@ -1,4 +1,4 @@
-"""reports：成长报告（手册 5.3）。"""
+﻿"""reports：成长报告（手册 5.3）。"""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import UUID, uuid4
 
-from sqlmodel import Column, Field, SQLModel
+from sqlmodel import Field, SQLModel
 
-from app.models.profile import JSONType
+from app.models.types import json_column
 from app.models.user import utcnow
 
 
@@ -26,7 +26,7 @@ class Report(SQLModel, table=True):
     type: str = Field(default="growth", max_length=50, index=True, description="报告类型")
     content: Optional[Dict[str, Any]] = Field(
         default=None,
-        sa_column=Column(JSONType, nullable=True),
+        sa_column=json_column(),
         description="报告内容 JSONB",
     )
 

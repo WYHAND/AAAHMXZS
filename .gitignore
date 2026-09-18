@@ -43,6 +43,7 @@ htmlcov/
 
 # ---- 应用产物 ----
 backend/uploads/
+backend/data/
 *.db
 *.sqlite3
 
@@ -70,3 +71,7 @@ desktop.ini
 
 # ---- 临时转换产物 ----
 docs/_build/
+
+# ---- 验证工具产物（渲染冒烟测试的截图与依赖） ----
+tools/render-check/shots/
+tools/render-check/node_modules/

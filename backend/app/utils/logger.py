@@ -27,7 +27,16 @@ def configure_logging(level: int | None = None) -> None:
     root = logging.getLogger()
     if _CONFIGURED:
         return
-    handler = logging.StreamHandler(sys.stdout)
+    stream = sys.stdout
+    # Windows 控制台默认是 GBK，中文日志会变成乱码（甚至 UnicodeEncodeError）。
+    # 这里显式把 stdout 切成 UTF-8；拿不到 reconfigure（被替换过的流）就跳过。
+    reconfigure = getattr(stream, "reconfigure", None)
+    if callable(reconfigure):
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):  # 例：流已被关闭/不是 TextIOWrapper
+            pass
+    handler = logging.StreamHandler(stream)
     handler.setFormatter(logging.Formatter(LOG_FORMAT, DATE_FORMAT))
     root.handlers = [handler]
     if level is not None:

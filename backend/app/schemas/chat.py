@@ -1,4 +1,8 @@
-"""chat 相关 schema（AI 职业指导对话，11.4）。"""
+"""chat 相关 schema（AI 职业指导对话，11.4）。
+
+SSE 事件契约的权威说明在 ``backend/README.md`` 的「SSE 契约」一节；
+本文件里的 ``SSEEvent`` / ``SSEEventType`` 是它的代码化表达，改动请同步两处。
+"""
 
 from __future__ import annotations
 
@@ -7,6 +11,9 @@ from typing import Any, Dict, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+
+# SSE 事件类型（前端可按 SSE 的 ``event:`` 行或 data 里的 type 字段分派）
+SSEEventType = Literal["start", "delta", "tag", "done", "error", "pending"]
 
 
 class ConversationCreate(BaseModel):
@@ -32,6 +39,13 @@ class ConversationResponse(BaseModel):
     updated_at: datetime
     message_count: int = Field(default=0, description="消息数，列表页展示用")
     conclusion: Optional[Dict[str, Any]] = Field(default=None, description="结论卡片（11.11）")
+    # 7.7 追问计数器（会话级状态，手册 5.3 缺，授权补列）
+    followup_direction: Optional[str] = Field(
+        default=None, description="当前挖掘维度（兴趣/能力/技能/痛点/焦虑/认知）"
+    )
+    followup_round: int = Field(
+        default=0, description="同方向已追问轮数，1 起；达到 3 后下一轮会主动换维度"
+    )
 
 
 class MessageResponse(BaseModel):
@@ -40,14 +54,28 @@ class MessageResponse(BaseModel):
     id: UUID
     conversation_id: UUID
     role: Literal["user", "assistant", "system"] | str
-    content: str
+    content: str = Field(description="纯原话内容，不含任何幂等标记")
+    client_msg_id: Optional[str] = Field(
+        default=None,
+        description="前端幂等 id（仅用户消息有值）：前端用它把自己的临时消息与后端落库消息对上",
+    )
     created_at: datetime
 
 
 class ChatRequest(BaseModel):
-    """POST /chat/conversations/{id}/messages 入参。"""
+    """发送消息入参（``POST .../messages`` 与 ``POST .../stream`` 共用同一 schema）。
+
+    ``client_msg_id`` 用于幂等去重（设计文档 4.3）：同一条消息重试提交时，
+    后端不会产生第二条用户消息，也不会再调一次 AI。
+    建议前端为每次「发送动作」生成一个 UUID，重试时复用同一个值。
+    """
 
     content: str = Field(min_length=1, max_length=2000, description="用户消息")
+    client_msg_id: Optional[str] = Field(
+        default=None,
+        max_length=64,
+        description="客户端消息幂等 id，建议 UUID；重试时复用同一个值",
+    )
 
 
 class ChatResponse(BaseModel):
@@ -58,6 +86,19 @@ class ChatResponse(BaseModel):
     assistant_message: MessageResponse
     # 7.8 画像回流：本轮抽取到的标签（已写库），前端可选展示“AI 对你的新认识”
     extracted_tags: list[Dict[str, Any]] = Field(default_factory=list)
+
+
+class PendingChatResponse(BaseModel):
+    """幂等命中「重复提交且上一轮尚未生成完」时的 data 结构。
+
+    这不是错误：前端应忽略本次响应，等待上一轮的 SSE 结果（或轮询消息列表）。
+    """
+
+    conversation_id: UUID
+    client_msg_id: str
+    user_message_id: UUID
+    pending: bool = True
+    message: str = "该消息正在生成回复，已忽略本次重复提交"
 
 
 class ChatConclusionCard(BaseModel):
@@ -72,24 +113,43 @@ class ChatConclusionCard(BaseModel):
 
 
 class SSEEvent(BaseModel):
-    """SSE 事件负载（7.2）。
+    """SSE 事件的 ``data`` 负载（7.2 + 设计文档 5.4）。
 
-    线格式（每行一个事件，双换行结尾）::
+    线格式（每组事件以空行结尾）::
 
-        event: message
-        data: {"type": "delta", "content": "你"}
+        event: delta
+        data: {"code":0,"message":"success","data":{"type":"delta","content":"你","conversation_id":"...","followup_round":2,"followup_direction":"兴趣"}}
 
-        event: done
-        data: {"type": "done", "message_id": "..."}
-
-    即 data 是 SSEEvent 的 JSON。这样既满足 7.2 的 SSE 流式，
-    又保持 10.1 的 ``{code,message,data}`` 语义（见 README「待确认」）。
+    外层恒为 10.1 的 ``{code,message,data}``；``event:`` 行与 ``data.data.type`` 一致，
+    前端任选其一分派即可。
     """
 
-    type: Literal["start", "delta", "tag", "done", "error"] = "delta"
-    content: Optional[str] = Field(default=None, description="增量文本（delta）")
-    message_id: Optional[UUID] = Field(default=None, description="流结束时返回，便于前端对齐消息 id")
-    conversation_id: Optional[UUID] = None
+    type: SSEEventType = Field(default="delta", description="start/delta/tag/done/error/pending")
+    content: Optional[str] = Field(default=None, description="增量文本，仅 delta 有值")
+    conversation_id: Optional[UUID] = Field(
+        default=None, description="start/delta/done/pending 都会带，便于前端校验"
+    )
+    message_id: Optional[UUID] = Field(
+        default=None, description="本轮 assistant 消息 id，仅 done 有值"
+    )
+    # 7.7 追问计数器（会话级状态，存在 conversations 表上）：
+    #   start / delta 带「这一轮开始前」的值；done 带「本轮更新后」的值。
+    #   前端进度环按 done 的值前进；相邻两轮方向不同时数值会重置为 1。
+    followup_round: Optional[int] = Field(
+        default=None,
+        description=(
+            "同方向追问轮次（1 起）。start/delta 是这一轮开始前的值，done 是本轮更新后的值；"
+            "null 仅出现在拿不到画像标签且会话还没开始计数时（此时前端隐藏进度环）"
+        ),
+    )
+    followup_direction: Optional[str] = Field(
+        default=None,
+        description="当前挖掘维度；done 事件里是更新后的维度，与上一轮不同表示已换维度",
+    )
+    conclusion_ready: Optional[bool] = Field(
+        default=None,
+        description="仅 done 事件：本轮结束后是否已有结论卡片可拉取（GET .../conclusion）",
+    )
+    data: Optional[Dict[str, Any]] = Field(default=None, description="扩展数据，如 tag 事件的 tags")
     code: int = Field(default=0, description="error 时按 6.5 错误码表给值")
     message: str = Field(default="success")
-    data: Optional[Dict[str, Any]] = Field(default=None, description="扩展数据")

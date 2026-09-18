@@ -11,7 +11,7 @@ from fastapi import Depends, Header, Request
 from sqlmodel import Session
 
 from app.core.config import Settings, get_settings
-from app.core.errors import BusinessException, ErrorCode
+from app.core.errors import BusinessException
 from app.core.security import get_subject_from_token
 from app.db.session import SessionLocal
 
@@ -33,24 +33,30 @@ def get_db() -> Generator[Session, None, None]:
 def _extract_bearer(authorization: Optional[str]) -> str:
     """从 ``Authorization: Bearer <token>`` 中取出 token。"""
     if not authorization:
-        raise BusinessException(ErrorCode.UNAUTHORIZED, "缺少 Authorization 请求头")
+        raise BusinessException.unauthorized("缺少 Authorization 请求头")
     parts = authorization.split(None, 1)
     if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise BusinessException(ErrorCode.UNAUTHORIZED, "Authorization 格式应为 'Bearer <token>'")
+        raise BusinessException.unauthorized("Authorization 格式应为 'Bearer <token>'")
     return parts[1].strip()
 
 
-class _Bearer:
-    """极简认证依赖：避免直接依赖 python-multipart 之外的额外包。
+def oauth2_scheme(authorization: Optional[str] = Header(default=None)) -> str:
+    """认证依赖：从 ``Authorization: Bearer <token>`` 里取出 token 字符串。
 
-    返回原始 token 字符串，供 ``get_current_user`` 使用。
+    ⚠️ **必须写成普通函数，不要改回"可调用类实例"**（例如 ``oauth2_scheme = _Bearer()``）。
+    原因：本模块有 ``from __future__ import annotations``，所有注解都是**字符串**
+    （``"Optional[str]"``），FastAPI 需要用函数所在模块的 ``__globals__`` 去解析它。
+    FastAPI 取 globalns 的方式是 ``getattr(call, "__globals__", {})`` ——
+    **类实例没有 ``__globals__``**（只有函数/绑定方法有），于是 globalns 变成 ``{}``，
+    ``Optional`` 解析不出来，生成 OpenAPI 时会炸：
+
+        pydantic.errors.PydanticUserError:
+        `TypeAdapter[Annotated[ForwardRef('Optional[str]'), Header(None)]]`
+        is not fully defined
+
+    （这个坑就是实际跑 ``app.openapi()`` 时暴露出来的，见 README §5.1 的验证记录。）
     """
-
-    async def __call__(self, authorization: Optional[str] = Header(default=None)) -> str:
-        return _extract_bearer(authorization)
-
-
-oauth2_scheme = _Bearer()
+    return _extract_bearer(authorization)
 
 
 def get_current_user(
@@ -67,7 +73,7 @@ def get_current_user(
     user_id = get_subject_from_token(token)
     user = db.get(User, user_id)
     if user is None or user.deleted_at is not None:
-        raise BusinessException(ErrorCode.UNAUTHORIZED, "用户不存在或已注销")
+        raise BusinessException.unauthorized("用户不存在或已注销")
     return user
 
 

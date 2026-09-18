@@ -1,4 +1,4 @@
-"""daily_questions / daily_answers：每日一问题库与回答（手册 5.3）。"""
+﻿"""daily_questions / daily_answers：每日一问题库与回答（手册 5.3）。"""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import UUID, uuid4
 
-from sqlmodel import Column, Field, SQLModel
+from sqlmodel import Field, SQLModel
 
-from app.models.profile import JSONType
+from app.models.types import json_column
 from app.models.user import utcnow
 
 
@@ -24,7 +24,7 @@ class DailyQuestion(SQLModel, table=True):
 
     options: Optional[Dict[str, Any]] = Field(
         default=None,
-        sa_column=Column(JSONType, nullable=True),
+        sa_column=json_column(),
         description="选项 JSONB，形如 [{key,text,weight}]",
     )
 

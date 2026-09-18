@@ -6,19 +6,19 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlmodel import Column, Field, SQLModel
+from sqlmodel import Field, SQLModel
 
+from app.models.types import json_column
 from app.models.user import utcnow
-
-# 生产用 JSONB（手册 5.1：扩展字段用 JSONB）；JSONB 不可用时（例如本地 sqlite 试跑）
-# 退化到 JSON。用 with_variant 让同一定义同时兼容两种方言。
-JSONType = JSONB().with_variant(JSON(), "sqlite")
 
 
 class Profile(SQLModel, table=True):
-    """画像主表：三个分项分数 + 加权总分 + 阶段。"""
+    """画像主表：三个分项分数 + 加权总分 + 阶段。
+
+    注意 ``stage`` 存的是**中文**（探索期/准备期/冲刺期，手册 5.3 原定义），
+    对外接口统一转成 slug（explore/prepare/sprint），转换在 schema 层做，
+    见 backend/README.md §4.11。**不要**为了改接口而动这一列的编码。
+    """
 
     __tablename__ = "profiles"
 
@@ -30,7 +30,7 @@ class Profile(SQLModel, table=True):
     resume_score: float = Field(default=0.0, description="简历完整度 0-100")
     total_score: float = Field(default=0.0, description="加权总分 0-100")
 
-    # 探索期 / 准备期 / 冲刺期
+    # 探索期 / 准备期 / 冲刺期（中文存储，接口层转 slug）
     stage: str = Field(default="探索期", max_length=20, index=True)
 
     updated_at: datetime = Field(default_factory=utcnow)
@@ -55,7 +55,7 @@ class ProfileTag(SQLModel, table=True):
 
     extra: Optional[Dict[str, Any]] = Field(
         default=None,
-        sa_column=Column(JSONType, nullable=True),
+        sa_column=json_column(),  # PG=JSONB / SQLite=JSON(TEXT)，见 app/models/types.py
         description="扩展信息（证据原文、模型置信度等）",
     )
 

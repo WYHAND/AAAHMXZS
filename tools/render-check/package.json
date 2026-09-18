@@ -1,0 +1,14 @@
+{
+  "name": "render-check",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Independent browser render smoke test for the frontend (React 19 + Vite build), driven by playwright-core + local Edge.",
+  "type": "module",
+  "scripts": {
+    "check": "node render-check.mjs"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "playwright-core": "^1.63.0"
+  }
+}

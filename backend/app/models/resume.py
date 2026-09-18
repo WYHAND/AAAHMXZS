@@ -1,4 +1,4 @@
-"""resumes：简历（手册 5.3）。"""
+﻿"""resumes：简历（手册 5.3）。"""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import UUID, uuid4
 
-from sqlmodel import Column, Field, SQLModel
+from sqlmodel import Field, SQLModel
 
-from app.models.profile import JSONType
+from app.models.types import json_column
 from app.models.user import utcnow
 
 
@@ -30,7 +30,7 @@ class Resume(SQLModel, table=True):
 
     parsed_data: Optional[Dict[str, Any]] = Field(
         default=None,
-        sa_column=Column(JSONType, nullable=True),
+        sa_column=json_column(),
         description="解析后结构化数据 JSONB",
     )
 

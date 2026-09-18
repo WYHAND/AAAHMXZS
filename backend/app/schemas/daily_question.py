@@ -20,9 +20,16 @@ class DailyQuestionResponse(BaseModel):
 
 
 class TodayQuestionResponse(BaseModel):
-    """GET /daily/today 出参：题目 + 今天是否已答。"""
+    """GET /daily/today 出参：题目 + 今天是否已答。
 
-    question: DailyQuestionResponse
+    ``question`` 可以为 ``null``：题库未初始化、或该用户已答完全部题目时。
+    前端应展示空态（提示先运行 ``python -m app.db.init_db`` 或"题库答完啦"），
+    **不要**再拿一个假 UUID 去调 ``POST /daily/answer``（会被 2001 拒绝）。
+    """
+
+    question: Optional[DailyQuestionResponse] = Field(
+        default=None, description="今日题目；题库为空/已答完时为 null"
+    )
     answered: bool = False
     answer: Optional[str] = Field(default=None, description="今日已答的答案")
     streak: int = Field(default=0, description="连续打卡天数（11.7 累计7题触发画像微调）")

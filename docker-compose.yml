@@ -1,0 +1,132 @@
+# Docker Compose 编排（《开发手册》16.2 docker-compose / 16.4 启动）
+#
+# 默认（SQLite，**不需要 db 容器**）：
+#   docker-compose up -d                    # 起 app + nginx
+#   docker-compose run --rm migrate         # 建表（SQLite 下等价于 init_db）
+#   docker-compose logs -f app              # 看后端日志（16.6）
+#
+# 想用 PostgreSQL（生产建议）：
+#   docker-compose --profile postgres up -d
+#   （app 的 DATABASE_URL 要改成 postgresql://...@db:5432/ai_career，见下面注释）
+#
+# ⚠️ 与手册 16.2 的差异（已在 backend/README.md 记录）：
+#   1. **数据库默认由 PostgreSQL 改成 SQLite（用户拍板）**：本机没有 PG 也没有 Docker，
+#      SQLite 能让后端起得来、跑得通。PG 服务**保留**在 `postgres` profile 下，
+#      生产可一键切回（理由见 README §4.13）。
+#   2. app 的启动命令默认走 `python -m app.db.init_db`（create_all 建表，SQLite 最省事）；
+#      切回 PG 时改成 `alembic upgrade head`。手册 5.5 要求 Alembic，但 16.2 没写在哪一步执行。
+#   3. uploads 卷从 `./uploads` 改为 `./backend/uploads`：手册 16.2 写 `./uploads`，
+#      而 13.1 要求文件落在 backend 的 UPLOAD_DIR 下，两者路径不一致。
+#   4. 增加 db 健康检查与 app healthcheck，补上手册未写的端口/重启策略。
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL：**保留但默认不启动**（profile: postgres）
+  # ---------------------------------------------------------------------------
+  # 为什么保留而不是删掉：
+  #   - 生产环境仍建议用 PG（并发写、JSONB 索引、成熟运维），删掉等于把切换路径也删了；
+  #   - profile 让它不参与默认 `docker-compose up`，所以不会拖慢本地联调；
+  #   - 代码侧完全不用改（DATABASE_URL 一换即可，见 README §4.13 的切换步骤）。
+  db:
+    image: postgres:16
+    container_name: ai_career_db
+    profiles: ["postgres"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ai_career
+      POSTGRES_USER: ai_user
+      POSTGRES_PASSWORD: your_password
+      TZ: Asia/Shanghai
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_user -d ai_career"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # 生产不建议暴露端口；本地调试可解开下面两行
+    # ports:
+    #   - "5432:5432"
+
+  # ---------------------------------------------------------------------------
+  # 迁移/建表：docker-compose run --rm migrate
+  # ---------------------------------------------------------------------------
+  migrate:
+    build: ./backend
+    container_name: ai_career_migrate
+    env_file: .env
+    environment:
+      # 默认 SQLite（放在 app 数据卷里，与 app 共用同一个库文件）
+      DATABASE_URL: sqlite:////data/app.db
+      # 切回 PostgreSQL 时改成下面这行，并且要用 `--profile postgres` 一起起 db：
+      # DATABASE_URL: postgresql://ai_user:your_password@db:5432/ai_career
+    volumes:
+      - sqlite_data:/data
+    # SQLite：create_all 建表（幂等，最省事）。
+    # 有 Alembic 迁移脚本之后，把下面这行换成 `alembic upgrade head`。
+    command: ["sh", "-c", "cd /app/backend 2>/dev/null || cd /app; python -m app.db.init_db"]
+    restart: "no"
+
+  # ---------------------------------------------------------------------------
+  # 后端
+  # ---------------------------------------------------------------------------
+  app:
+    build: ./backend
+    container_name: ai_career_app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # 默认 SQLite：库文件落在 sqlite_data 卷（容器内 /data/app.db）
+      DATABASE_URL: sqlite:////data/app.db
+      # 切回 PostgreSQL（配合 `--profile postgres`）时改成：
+      # DATABASE_URL: postgresql://ai_user:your_password@db:5432/ai_career
+      UPLOAD_DIR: /app/uploads
+      APP_ENV: production
+      DEBUG: "false"
+      TZ: Asia/Shanghai
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - sqlite_data:/data
+    ports:
+      - "8000:8000"
+    # 注意：默认不再 depends_on db（PG 在 profile 里，默认不起，依赖会直接失败）
+    # 5.5 / SQLite：先建表再启动（建表失败则不让 app 起来，避免"表不存在"的 500）
+    command: >
+      sh -c "cd /app/backend 2>/dev/null || cd /app;
+             python -m app.db.init_db &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Nginx（16.3）
+  # ---------------------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: ai_career_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # 前端构建产物；frontend/ 尚未产出 dist 时该挂载为空目录，/ 会返回占位页
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      # ⚠️ 安全（14.5 / 14.1）：**不把 uploads 挂给 Nginx**。
+      # nginx.conf 里也没有 /uploads 的静态 location —— 否则未登录的人遍历
+      # /uploads/resumes/{user_id}/{uuid}.pdf 就能下载别人的简历（PII）。
+      # 简历文件只能经 GET /api/v1/resume/{id}/file（带鉴权）读取。
+      # 16.3 / 14.4：HTTPS 证书目录（Let's Encrypt 申请后放这里）
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - app
+
+volumes:
+  # SQLite 库文件（默认路径）
+  sqlite_data:
+  # PostgreSQL 数据（仅 --profile postgres 时使用）
+  pgdata:

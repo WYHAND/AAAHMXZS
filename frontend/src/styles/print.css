@@ -1,0 +1,49 @@
+/* 打印样式（设计说明书 7：报告 / 简历打印时不得出现导航与按钮） */
+@media print {
+  /* 隐藏导航、按钮、输入区、浮层 */
+  nav,
+  aside,
+  header[data-print='hide'],
+  [data-print='hide'],
+  button,
+  input,
+  textarea,
+  select,
+  [role='dialog'],
+  [data-sonner-toaster],
+  [data-radix-popper-content-wrapper] {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 12pt;
+  }
+
+  /* 打印时取消侧栏偏移，内容铺满纸张 */
+  [data-print='main'] {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  /* 卡片去掉阴影与描边，避免打印机拖灰 */
+  [data-print='card'] {
+    box-shadow: none !important;
+    border: 1px solid #999 !important;
+    break-inside: avoid;
+  }
+
+  a[href]::after {
+    content: ' (' attr(href) ')';
+    font-size: 9pt;
+    color: #444;
+  }
+
+  @page {
+    margin: 16mm;
+  }
+}

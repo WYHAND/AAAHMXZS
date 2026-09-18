@@ -25,8 +25,21 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # ---------- 数据库（3.5） ----------
-    DATABASE_URL: str = "postgresql://ai_user:your_password@localhost:5432/ai_career"
+    # ---------- 数据库（3.5；默认 SQLite，生产建议 PostgreSQL） ----------
+    # 默认值改成 SQLite：本机既没有 PostgreSQL 也没有 Docker，SQLite 开箱即跑
+    # （用户拍板，见 README §4.13 与第 6 节）。想切回 PostgreSQL 就把 .env 里的
+    # DATABASE_URL 换成下面注释的那一行（不用改代码）。
+    DATABASE_URL: str = "sqlite:///./data/app.db"
+    # DATABASE_URL: str = "postgresql://ai_user:your_password@localhost:5432/ai_career"
+
+    # SQLite 专用：是否对同一连接开启跨线程复用。
+    # FastAPI 的同步 route 跑在线程池里（且 SSE 端点会在生成器里再用一次），
+    # 不设 False 会报 "SQLite objects created in a thread can only be used in that same thread"。
+    SQLITE_CHECK_SAME_THREAD_FALSE: bool = True
+
+    # 是否把每条 SQL 打到日志（SQLAlchemy echo）。
+    # 默认关闭：DEBUG=true 时会刷屏（一次建表就能打上千行），排查时再开。
+    DB_ECHO: bool = False
 
     # ---------- JWT（3.5 / 6.8 / 14.2） ----------
     SECRET_KEY: str = "your-secret-key-change-me"
@@ -63,6 +76,25 @@ class Settings(BaseSettings):
     @property
     def is_development(self) -> bool:
         return self.APP_ENV.lower() in {"development", "dev", "local"}
+
+    # ---------- 数据库方言判定（SQLite / PostgreSQL 双跑，见 README §4.13） ----------
+
+    @property
+    def is_sqlite(self) -> bool:
+        """当前是否走 SQLite（``sqlite://`` 或 ``sqlite+pysqlite://``）。"""
+        return self.DATABASE_URL.strip().lower().startswith("sqlite")
+
+    @property
+    def is_postgres(self) -> bool:
+        """当前是否走 PostgreSQL（``postgresql://`` / ``postgres://`` / ``postgresql+psycopg2://``）。"""
+        return self.DATABASE_URL.strip().lower().startswith(("postgresql", "postgres"))
+
+    @property
+    def is_in_memory_sqlite(self) -> bool:
+        """内存库（``sqlite://``、``sqlite:///:memory:``）—— 只用于临时试跑/测试。"""
+        return self.is_sqlite and (
+            ":memory:" in self.DATABASE_URL or self.DATABASE_URL.rstrip("/").endswith("sqlite:")
+        )
 
 
 @lru_cache

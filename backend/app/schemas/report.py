@@ -22,7 +22,8 @@ class ReportResponse(BaseModel):
 class GrowthReportContent(BaseModel):
     """growth 报告的 content 约定结构（11.10：画像变化 + 完成任务数）。"""
 
-    stage: str = Field(default="探索期")
+    stage: str = Field(default="explore", description="阶段 slug：explore / prepare / sprint")
+    stage_label: str = Field(default="探索期", description="阶段中文展示名")
     stage_changed: bool = False
     clarity_score: float = 0.0
     action_score: float = 0.0

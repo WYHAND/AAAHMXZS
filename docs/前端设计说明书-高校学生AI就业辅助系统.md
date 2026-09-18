@@ -1,14 +1,17 @@
 # 高校学生AI就业辅助系统 前端设计说明书
 
-版本：V1.2（配色定为 浅米黄底 + 低饱和克制蓝主色）
+版本：V1.3（5.1/5.2 换成与后端定稿的真实契约）
 日期：2026-09-18
 依据：《高校学生AI就业辅助系统 开发手册》第 1.3、4.2、8、10 章
 范围：仅前端（Web + Electron 渲染层），不含后端实现
 
 > 变更记录
+> - V1.3：5.1 改为「HTTP 状态码 + 业务码双路径解包」（401/403/404/500 带信封）；5.2 改为具名事件 + 事件内信封的真实 SSE 契约（POST + fetch），补充 `pending` 幂等事件与 `followup_round` 可为 null 的降级要求。
 > - V1.2：主题色改为**浅米黄底（`43 44% 96%`）+ 低饱和克制蓝主色（`213 30% 44%` ≈ `#4E6D92`）**；确立"暖色负责氛围、冷色负责动作"的分工；补充语义色与图表配色；6.1 新增第 2、3 条用色纪律。
 > - V1.1：UI 组件库由 Ant Design 改为 **shadcn/ui**；新增 6.1 配色纪律、6.3 主题变量、6.5 组件映射；第 11 章问题同步更新。
 > - V1.0：初稿（信息架构、页面线框、状态管理、API 层、设计系统）。
+
+> 与手册的偏差统一记录在 `docs/开发手册-勘误与决策记录.md`。
 
 ---
 
@@ -27,7 +30,9 @@
 
 ### 1.2 技术约束（UI 层改用 shadcn/ui）
 
-React 18 + TypeScript + Vite + Zustand + **shadcn/ui（Radix + Tailwind CSS）** + axios + React Router v6。
+React 19 + TypeScript 6 + Vite 8 + Zustand + **shadcn/ui（Radix + Tailwind CSS v4）** + axios + React Router v7。
+
+> 版本以实际脚手架为准（`create-vite` 当前模板）。手册 2.1 写的 React 18 / React Router v6 已确认**回退不必**，见《勘误与决策记录》4.6。
 
 > **与手册的偏差（需同步修订手册 2.1、8.5）**：手册原定 Ant Design。改成 shadcn/ui 的理由：① 产品是"陪伴型"而不是中后台，AntD 的企业级观感偏重；② shadcn 是源码级组件，配色/圆角/密度完全可控，才可能落实 6.1 的用色纪律；③ 组件即源码，没有主题黑盒和版本升级风险。
 >
@@ -318,28 +323,89 @@ idle → connecting → streaming → done
 
 ## 5. API 层设计
 
-### 5.1 统一响应解包
+### 5.1 统一响应解包（已决策）
 
-按手册 6.5/10.1 的 `{ code, message, data }`：
+后端所有 JSON 响应都是 `{ code, message, data }` 信封（手册 6.5/10.1 优先于 6.2 的裸示例）。**HTTP 状态码与业务码并存**：
+
+| 情况 | HTTP | body | 前端行为 |
+|---|---|---|---|
+| 成功 | 200 | `code: 0` | 返回 `data` |
+| 参数错误 | **400** | `code: 1001`（+ `data.errors`） | 表单错误提示，reject `ApiError` |
+| 未登录 / token 失效 | **401** | `code: 1002` | 登出（只清 token）+ 交由守卫 `<Navigate>` 跳 `/login` |
+| 权限不足 | **403** | `code: 1003` | toast |
+| 资源不存在（含"不属于你"） | **404** | `code: 2001` | toast |
+| **AI 调用失败** | **200** | `code: 3001` | toast + 「重试」action（**唯一刻意保持 200 的业务码**） |
+| 未捕获异常 | **500** | `code: 5000` | toast「服务器开小差了」 |
+
+> 规则由后端 `CODE_TO_HTTP_STATUS` 单点推导：**业务码相同 → HTTP 状态一定相同**。因此前端不能假设"HTTP 200 就是成功"，也不能假设"非 200 就没有信封"。
+
+所以拦截器必须**两条路径都解信封**——成功路径可能是业务失败，错误路径也带信封：
 
 ```ts
 // src/api/client.ts
-client.interceptors.response.use((res) => {
-  const { code, message, data } = res.data;
-  if (code === 0) return data;                 // 直接给业务数据
-  if (code === 1002) { authStore.logout(); location.href = '/login'; }
-  message.error(ERROR_TEXT[code] ?? message);
-  return Promise.reject(new ApiError(code, message));
-});
+const unwrap = (body: any) => {
+  const { code, message, data } = body ?? {};
+  if (code === 0) return data;
+  // 1002：只清 token，**不做 location.href 整页硬跳**
+  // 跳转交给路由守卫（RequireAuth 渲染 <Navigate to="/login" replace>），
+  // 这样不重载 bundle、不丢 SPA 状态。实测：spaAlive 探针从未重置、navType === 'navigate'。
+  if (code === 1002) useAuthStore.getState().logout();
+  throw new ApiError(code, ERROR_TEXT[code] ?? message ?? '请求失败');
+};
+
+client.interceptors.response.use(
+  (res) => unwrap(res.data),                       // HTTP 2xx：可能是成功，也可能是 3001 这类业务失败
+  (err) => {
+    const body = err.response?.data;
+    if (body && typeof body.code === 'number') {   // 400/401/403/404/500 同样带信封
+      try { unwrap(body); } catch (e) { toast((e as ApiError).message); return Promise.reject(e); }
+    }
+    toast('网络不太好，稍后再试');
+    return Promise.reject(err);
+  },
+);
 ```
 
-错误码文案映射（手册 10.3）：`1001 参数有误`、`1002 登录已过期，请重新登录`、`1003 没有权限`、`2001 内容不存在`、`3001 AI 暂时忙不过来，请稍后再试`、`5000 服务器开小差了`。
+错误码文案（手册 10.3）：`1001 参数有误`、`1002 登录已过期，请重新登录`、`1003 没有权限`、`2001 内容不存在`、`3001 AI 暂时忙不过来，请稍后再试`、`5000 服务器开小差了`。
 
-> **需后端确认**：手册 6.2 的示例直接 `response_model=ChatResponse`，与 6.5 的包装格式冲突。前端按**统一包装**实现，请后端确认并把 SSE 接口排除在包装之外（流式无法包装）。
+> 决策依据与后端改动记录在 `docs/开发手册-勘误与决策记录.md` 第 1.1、2.1 节。SSE 接口本身不走 JSON 信封（流式无法包装），但其**事件体内**自带信封，见 5.2。
 
-### 5.2 流式对话方案（修正手册 8.4）
+### 5.2 流式对话方案（修正手册 8.4，已决策）
 
-手册 8.4 用 `EventSource`，但 `EventSource` **不能设置 `Authorization` header**，与手册 10.1 的 Bearer 鉴权冲突，且只能 GET（无法带消息体）。前端改用：
+手册 8.4 用 `EventSource`，但它**不能设置 `Authorization` header**、只能 GET（无法带消息体），与 10.1 的 Bearer 鉴权直接冲突。已与后端定下契约：
+
+```
+POST /api/v1/chat/conversations/{id}/stream
+Body: { content, client_msg_id }
+Response: text/event-stream
+```
+
+是**具名事件**（`event:` 行 + `data:` 行），每个 `data` 都是一层信封：
+
+```
+event: start
+data: {"code":0,"message":"success","data":{"type":"start","conversation_id":"...","followup_round":2}}
+
+event: delta
+data: {"code":0,"message":"success","data":{"type":"delta","content":"增量文本","followup_round":2}}
+
+event: tag
+data: {"code":0,"message":"success","data":{"type":"tag","tags":[...]}}
+
+event: done
+data: {"code":0,"message":"success","data":{"type":"done","message_id":"...","conversation_id":"...","followup_round":3,"conclusion_ready":false}}
+
+event: pending
+data: {"code":0,"message":"该消息已提交过，未重复生成","data":{"type":"pending","replay_message_id":"..."}}
+
+event: error
+data: {"code":3001,"message":"AI调用失败","data":null}
+
+event: end
+data: [DONE]
+```
+
+前端实现：
 
 ```ts
 const ctrl = new AbortController();
@@ -356,13 +422,18 @@ while (true) {
   const { value, done } = await reader.read();
   if (done) break;
   buf += decoder.decode(value, { stream: true });
-  const parts = buf.split('\n\n');       // 按 SSE 事件切分
-  buf = parts.pop()!;
-  for (const p of parts) chatStore.appendDelta(parseSSE(p));
+  const blocks = buf.split('\n\n');
+  buf = blocks.pop()!;                      // 最后一块可能被截断，留到下一轮
+  for (const block of blocks) handleEvent(parseSSEBlock(block));
 }
 ```
 
-`stop()` 即 `ctrl.abort()`。**需后端配合**：流式接口用 POST + `text/event-stream` 响应，事件体建议 `{"delta":"..."}` / `{"done":true,"followup_round":2,"conclusion_ready":false}`。
+- `parseSSEBlock` 取 `event:` 与 `data:` 两行；`data === '[DONE]'` 直接结束，**不要** `JSON.parse` 它。
+- 先解信封：`code !== 0` 走错误分支，**不要静默丢弃**。
+- 事件分派：`start` 取 `conversation_id` 与初始 `followup_round`；`delta` 追加文本；`tag` 触发 `profileStore.bumpVersion()`；`done` 取 `message_id` / `followup_round` / `conclusion_ready`（为 true 时浮出结论卡片入口）。
+- `pending` 是**幂等命中**：带 `replay_message_id` = 上一轮已完成（直接拉消息列表），不带 = 上一轮仍在生成（提示"正在生成中，请稍候"）。
+- **`followup_round` 可能为 `null`**（后端尚未识别出挖掘方向时）：进度环必须能降级隐藏，绝不能把 `null` 画成 `0`。
+- `stop()` 即 `ctrl.abort()`；断流保留已收到文本，气泡尾部显示"（回答中断，点击重试）"，重试**复用同一个 `client_msg_id`**（后端据此不重复调 AI）。
 
 ### 5.3 类型来源
 

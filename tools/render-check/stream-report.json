@@ -1,0 +1,66 @@
+{
+  "deltas": [
+    "你提到的「投了几家没回音」，",
+    "通常不是能力问题，",
+    "而是简历里的项目描述没有给出可验证的结果。"
+  ],
+  "expectedFull": "你提到的「投了几家没回音」，通常不是能力问题，而是简历里的项目描述没有给出可验证的结果。",
+  "samples": [
+    {
+      "ms": 671,
+      "text": "你提到的「投了几家没回音」，",
+      "len": 14,
+      "isDeltaBoundary": true
+    },
+    {
+      "ms": 1407,
+      "text": "你提到的「投了几家没回音」，通常不是能力问题，",
+      "len": 23,
+      "isDeltaBoundary": true
+    },
+    {
+      "ms": 2088,
+      "text": "你提到的「投了几家没回音」，通常不是能力问题，而是简历里的项目描述没有给出可验证的结果。",
+      "len": 44,
+      "isDeltaBoundary": true
+    }
+  ],
+  "timeline": [
+    {
+      "at": 30,
+      "ev": "request",
+      "url": "http://127.0.0.1:4174/api/v1/chat/conversations/c1/stream",
+      "body": "{\"content\":\"我投了几家都没回音，简历我也改过。\",\"client_msg_id\":\"8b42c59a-1975-46d8-b16f-324907893d87\"}"
+    },
+    {
+      "at": 31,
+      "ev": "response-headers",
+      "status": 200,
+      "ct": "text/event-stream; charset=utf-8"
+    }
+  ],
+  "textareaCount": 1,
+  "distinctStates": [
+    "你提到的「投了几家没回音」，",
+    "你提到的「投了几家没回音」，通常不是能力问题，",
+    "你提到的「投了几家没回音」，通常不是能力问题，而是简历里的项目描述没有给出可验证的结果。"
+  ],
+  "everPartial": true,
+  "partialCount": 2,
+  "deltaBoundaryStates": [
+    "你提到的「投了几家没回音」，",
+    "你提到的「投了几家没回音」，通常不是能力问题，"
+  ],
+  "reachedFull": true,
+  "monotonicGrowth": true,
+  "growthDurationsMs": [
+    671,
+    1407,
+    2088
+  ],
+  "finalBubbleText": "你提到的「投了几家没回音」，通常不是能力问题，而是简历里的项目描述没有给出可验证的结果。",
+  "userEcho": true,
+  "followupProgressText": "追问进度 2/3",
+  "conclusionCardVisible": true,
+  "verdict": "PASS"
+}

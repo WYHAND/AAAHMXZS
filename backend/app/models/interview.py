@@ -1,4 +1,4 @@
-"""interviews / interview_questions：面试记录与题目（手册 5.2 / 5.3）。
+﻿"""interviews / interview_questions：面试记录与题目（手册 5.2 / 5.3）。
 
 ``interview_questions`` 在 5.2 表清单里，但 5.3 没有给字段表；
 本骨架按“面试题目与回答”（5.2 的描述）补齐字段，见 README「待确认」。
@@ -10,9 +10,9 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import UUID, uuid4
 
-from sqlmodel import Column, Field, SQLModel
+from sqlmodel import Field, SQLModel
 
-from app.models.profile import JSONType
+from app.models.types import json_column
 from app.models.user import utcnow
 
 
@@ -36,7 +36,7 @@ class Interview(SQLModel, table=True):
 
     report: Optional[Dict[str, Any]] = Field(
         default=None,
-        sa_column=Column(JSONType, nullable=True),
+        sa_column=json_column(),
         description="复盘报告 JSONB",
     )
 
@@ -58,14 +58,14 @@ class InterviewQuestion(SQLModel, table=True):
 
     followups: Optional[Dict[str, Any]] = Field(
         default=None,
-        sa_column=Column(JSONType, nullable=True),
+        sa_column=json_column(),
         description="追问与追问回答 JSONB，形如 [{q, a}]",
     )
 
     score: Optional[float] = Field(default=None, description="该题得分 0-100")
     extra: Optional[Dict[str, Any]] = Field(
         default=None,
-        sa_column=Column(JSONType, nullable=True),
+        sa_column=json_column(),
         description="扩展信息 JSONB",
     )
 

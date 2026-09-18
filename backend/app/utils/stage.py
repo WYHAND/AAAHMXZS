@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 WEIGHT_CLARITY = 0.40
 WEIGHT_ACTION = 0.35
@@ -58,3 +58,41 @@ def calc_profile_scores(clarity: float, action: float, resume: float) -> Dict[st
         "total_score": total,
         "stage": calc_stage(total),
     }
+
+
+# ---------------------------------------------------------------------------
+# 阶段 slug（前端契约用）
+# ---------------------------------------------------------------------------
+# 数据库里存的是中文阶段名（手册 5.3：探索期/准备期/冲刺期），
+# 前端路由与样式用小写英文 slug，这里做一层唯一映射，避免前端各自硬编码。
+STAGE_SLUGS: Dict[str, str] = {
+    STAGE_EXPLORE: "explore",
+    STAGE_PREPARE: "prepare",
+    STAGE_SPRINT: "sprint",
+}
+
+STAGE_LABELS: Dict[str, str] = {
+    "explore": STAGE_EXPLORE,
+    "prepare": STAGE_PREPARE,
+    "sprint": STAGE_SPRINT,
+}
+
+
+def to_stage_slug(stage: Optional[str]) -> str:
+    """中文阶段 -> ``explore`` / ``prepare`` / ``sprint``。
+
+    未知值一律返回 ``explore``（与"新用户默认探索期"一致，保证前端永远拿到合法 slug）。
+    """
+    if not stage:
+        return "explore"
+    if stage in STAGE_SLUGS:
+        return STAGE_SLUGS[stage]
+    lowered = str(stage).strip().lower()
+    return lowered if lowered in STAGE_LABELS else "explore"
+
+
+def to_stage_label(slug: Optional[str]) -> str:
+    """slug -> 中文阶段名（反向，供需要展示中文的场景）。"""
+    if not slug:
+        return STAGE_EXPLORE
+    return STAGE_LABELS.get(str(slug).strip().lower(), STAGE_EXPLORE)

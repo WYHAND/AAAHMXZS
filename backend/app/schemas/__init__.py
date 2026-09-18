@@ -1,4 +1,4 @@
-"""schemas：Pydantic 请求/响应模型（《开发手册》6.3 命名规范）。
+﻿"""schemas：Pydantic 请求/响应模型（《开发手册》6.3 命名规范）。
 
 命名约定：
 - 请求 ``XxxRequest``
@@ -15,7 +15,9 @@ from app.schemas.chat import (
     ConversationResponse,
     ConversationUpdate,
     MessageResponse,
+    PendingChatResponse,
     SSEEvent,
+    SSEEventType,
 )
 from app.schemas.common import ApiResponse, PageData, ok
 from app.schemas.daily_question import (
@@ -24,10 +26,27 @@ from app.schemas.daily_question import (
     DailyQuestionResponse,
     TodayQuestionResponse,
 )
+from app.schemas.event import (
+    MAX_EVENTS_PER_BATCH,
+    EventItem,
+    EventStats,
+    EventSubmitRequest,
+)
+from app.schemas.home import (
+    HomeAiFinding,
+    HomeDailyQuestion,
+    HomeNextAction,
+    HomeOngoingTask,
+    HomeProfileSummary,
+    HomeSummaryResponse,
+    HomeTag,
+)
 from app.schemas.interview import (
     InterviewAnswerRequest,
+    InterviewAnswerResponse,
     InterviewFinishResponse,
     InterviewQuestionResponse,
+    InterviewQuestionsResponse,
     InterviewResponse,
     InterviewReviewResponse,
     InterviewStartRequest,
@@ -56,7 +75,7 @@ from app.schemas.task import (
     TaskStepCompleteRequest,
     TaskStepResponse,
 )
-from app.schemas.test import TestQuestion, TestResultResponse, TestSubmitRequest
+from app.schemas.test import TestQuestionResponse, TestResultResponse, TestSubmitRequest
 from app.schemas.user import TokenResponse, UserCreate, UserLoginRequest, UserResponse, UserUpdate
 
 __all__ = [
@@ -77,7 +96,7 @@ __all__ = [
     "ProfileTagResponse",
     "ProfileFeedbackRequest",
     # test
-    "TestQuestion",
+    "TestQuestionResponse",
     "TestSubmitRequest",
     "TestResultResponse",
     # chat
@@ -87,8 +106,10 @@ __all__ = [
     "MessageResponse",
     "ChatRequest",
     "ChatResponse",
+    "PendingChatResponse",
     "ChatConclusionCard",
     "SSEEvent",
+    "SSEEventType",
     # resume
     "ResumeCreate",
     "ResumeUpdate",
@@ -101,7 +122,9 @@ __all__ = [
     "InterviewAnswerRequest",
     "InterviewSubmitRequest",
     "InterviewQuestionResponse",
+    "InterviewQuestionsResponse",
     "InterviewResponse",
+    "InterviewAnswerResponse",
     "InterviewFinishResponse",
     "InterviewReviewResponse",
     # task
@@ -120,4 +143,17 @@ __all__ = [
     # badge
     "BadgeResponse",
     "UserBadgeResponse",
+    # home（设计说明书 5.4 补实现）
+    "HomeSummaryResponse",
+    "HomeProfileSummary",
+    "HomeTag",
+    "HomeDailyQuestion",
+    "HomeAiFinding",
+    "HomeOngoingTask",
+    "HomeNextAction",
+    # events（设计说明书 5.4 补实现）
+    "EventItem",
+    "EventSubmitRequest",
+    "EventStats",
+    "MAX_EVENTS_PER_BATCH",
 ]

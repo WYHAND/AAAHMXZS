@@ -119,7 +119,11 @@ def random_transition(exclude: Optional[str] = None) -> str:
 
 
 def build_history_text(messages: Iterable[object], limit: int = 20) -> str:
-    """把消息列表拼成纯文本，供画像抽取 Prompt 使用。"""
+    """把消息列表拼成纯文本，供画像抽取 Prompt 使用。
+
+    ``messages.content`` 只存纯原话（幂等 id 在 ``Message.client_msg_id`` 列上），
+    因此这里**不需要任何 strip**。
+    """
     lines: List[str] = []
     for msg in list(messages)[-limit:]:
         role = getattr(msg, "role", "user")

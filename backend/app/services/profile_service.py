@@ -1,4 +1,4 @@
-"""画像与基础测试表业务逻辑。
+﻿"""画像与基础测试表业务逻辑。
 
 覆盖《开发手册》：
 - 11.2 基础测试表（获取题目 / 提交答案 / 取结果）
@@ -22,10 +22,10 @@ from app.core.errors import BusinessException, ErrorCode
 from app.models.profile import Profile, ProfileTag
 from app.models.resume import Resume
 from app.models.task import Task, TaskStep
-from app.models.test import TestResult
+from app.models.test import TestQuestion, TestResult
 from app.models.user import User, utcnow
 from app.schemas.profile import ProfileFeedbackRequest, ProfileResponse, ProfileTagResponse
-from app.schemas.test import TestOption, TestQuestion, TestResultResponse, TestSubmitRequest
+from app.schemas.test import TestOption, TestQuestionResponse, TestResultResponse, TestSubmitRequest
 from app.utils.logger import get_logger
 from app.utils.stage import (
     STAGE_EXPLORE,
@@ -40,132 +40,17 @@ from app.utils.stage import (
 logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
-# 题库占位（手册 5.4 要求 30-50 题、纯选择题、四维度；骨架只放少量示例，
-# 真实题库应落库或放静态 JSON，见 app/db/init_db.py 的 seed_test_questions）
-# 维度含义：clarity=职业目标清晰度、action=求职行动进度、resume=简历完整度、interest=兴趣倾向
+# 题库来源（重要变更）
+#
+# 手册 5.4 要求"基础测试题 30-50 题"，早期骨架把题目硬编码在本模块的
+# TEST_QUESTION_BANK 常量里，结果出现"接口有数据、数据库里空着"的假象：
+#   - 库里 test_questions 表 0 行，GET /test/questions 却返回 11 道题；
+#   - 前端拿常量里的题作答，提交后 test_results 落库，但题库本身查不到。
+# 现在题库**真正落库**（app/db/seed_data.py::TEST_QUESTIONS，由
+# `python -m app.db.init_db` 灌入 test_questions 表），本模块只从 DB 读。
+# 维度含义：clarity=职业目标清晰度、action=求职行动进度、
+#          resume=简历完整度、interest=兴趣倾向
 # ---------------------------------------------------------------------------
-TEST_QUESTION_BANK: List[Dict[str, Any]] = [
-    {
-        "id": "q_clarity_01",
-        "dimension": "clarity",
-        "content": "你目前有明确的职业方向吗？",
-        "options": [
-            {"key": "A", "text": "很清楚，已经锁定具体岗位", "score": 5},
-            {"key": "B", "text": "有大致方向，还在验证", "score": 3},
-            {"key": "C", "text": "有感兴趣的几个领域，说不清哪个更适合", "score": 2},
-            {"key": "D", "text": "完全没想过", "score": 0},
-        ],
-    },
-    {
-        "id": "q_clarity_02",
-        "dimension": "clarity",
-        "content": "你了解自己想去的岗位每天在做什么吗？",
-        "options": [
-            {"key": "A", "text": "了解，问过从业者或做过相关项目", "score": 5},
-            {"key": "B", "text": "看过一些介绍，大概知道", "score": 3},
-            {"key": "C", "text": "只有模糊印象", "score": 1},
-            {"key": "D", "text": "完全不了解", "score": 0},
-        ],
-    },
-    {
-        "id": "q_clarity_03",
-        "dimension": "clarity",
-        "content": "你了解自己的优势吗？",
-        "options": [
-            {"key": "A", "text": "很清楚，能说出具体例子", "score": 5},
-            {"key": "B", "text": "知道大概，但举不出例子", "score": 3},
-            {"key": "C", "text": "别人说过，自己不太确定", "score": 2},
-            {"key": "D", "text": "没想过", "score": 0},
-        ],
-    },
-    {
-        "id": "q_action_01",
-        "dimension": "action",
-        "content": "你写过简历吗？",
-        "options": [
-            {"key": "A", "text": "写过，并且根据岗位改过至少 2 个版本", "score": 5},
-            {"key": "B", "text": "写过一版", "score": 3},
-            {"key": "C", "text": "有素材但没整理成简历", "score": 1},
-            {"key": "D", "text": "完全没写过", "score": 0},
-        ],
-    },
-    {
-        "id": "q_action_02",
-        "dimension": "action",
-        "content": "你参加过实习或与专业相关的实践吗？",
-        "options": [
-            {"key": "A", "text": "有 2 段及以上相关经历", "score": 5},
-            {"key": "B", "text": "有 1 段相关经历", "score": 3},
-            {"key": "C", "text": "做过一些零散的实践，不算正式经历", "score": 2},
-            {"key": "D", "text": "完全没有", "score": 0},
-        ],
-    },
-    {
-        "id": "q_action_03",
-        "dimension": "action",
-        "content": "最近一个月，你为就业做过哪些具体的事？",
-        "options": [
-            {"key": "A", "text": "投递/面试/做项目，每周都有动作", "score": 5},
-            {"key": "B", "text": "偶尔看过岗位或改过简历", "score": 3},
-            {"key": "C", "text": "只是想过，没行动", "score": 1},
-            {"key": "D", "text": "没有", "score": 0},
-        ],
-    },
-    {
-        "id": "q_resume_01",
-        "dimension": "resume",
-        "content": "你的简历里有可以量化的项目或实习成果吗？",
-        "options": [
-            {"key": "A", "text": "有，多条都有具体数字或结果", "score": 5},
-            {"key": "B", "text": "有 1-2 条", "score": 3},
-            {"key": "C", "text": "只写了职责，没有结果", "score": 1},
-            {"key": "D", "text": "没有可写的经历", "score": 0},
-        ],
-    },
-    {
-        "id": "q_resume_02",
-        "dimension": "resume",
-        "content": "你知道目标岗位的关键词、知道简历要往上靠吗？",
-        "options": [
-            {"key": "A", "text": "知道，并且简历里已经对齐", "score": 5},
-            {"key": "B", "text": "知道有这回事，但没做", "score": 2},
-            {"key": "C", "text": "第一次听说", "score": 0},
-        ],
-    },
-    {
-        "id": "q_interest_01",
-        "dimension": "interest",
-        "content": "如果可以选，你更想做哪种类型的工作？",
-        "options": [
-            {"key": "A", "text": "和技术/产品打交道，做出东西", "score": 3},
-            {"key": "B", "text": "和人打交道，做沟通与组织", "score": 3},
-            {"key": "C", "text": "和数据打交道，做分析与决策支持", "score": 3},
-            {"key": "D", "text": "还不确定，都行", "score": 1},
-        ],
-    },
-    {
-        "id": "q_interest_02",
-        "dimension": "interest",
-        "content": "你对未来就业焦虑吗？",
-        "options": [
-            {"key": "A", "text": "非常焦虑，经常影响状态", "score": 3},
-            {"key": "B", "text": "有点焦虑", "score": 2},
-            {"key": "C", "text": "还好，走一步看一步", "score": 1},
-            {"key": "D", "text": "不焦虑", "score": 1},
-        ],
-    },
-    {
-        "id": "q_interest_03",
-        "dimension": "interest",
-        "content": "做小组作业时，你通常是？",
-        "options": [
-            {"key": "A", "text": "牵头的人，负责分工和推进", "score": 3},
-            {"key": "B", "text": "执行主力，把分配的任务做好", "score": 2},
-            {"key": "C", "text": "查资料、写文档的人", "score": 2},
-            {"key": "D", "text": "不太参与，能少做就少做", "score": 0},
-        ],
-    },
-]
 
 # 维度 -> 附录A 画像标签维度 的映射（用于把测试结果转成 profile_tags）
 TEST_DIMENSION_TAG: Dict[str, str] = {
@@ -175,82 +60,122 @@ TEST_DIMENSION_TAG: Dict[str, str] = {
     "interest": "兴趣",
 }
 
-# 每个分项在题库中的满分数值（用于把原始分折算到 0-100）
-_DIMENSION_MAX: Dict[str, float] = {
-    "clarity": sum(max(o["score"] for o in q["options"]) for q in TEST_QUESTION_BANK if q["dimension"] == "clarity"),
-    "action": sum(max(o["score"] for o in q["options"]) for q in TEST_QUESTION_BANK if q["dimension"] == "action"),
-    "resume": sum(max(o["score"] for o in q["options"]) for q in TEST_QUESTION_BANK if q["dimension"] == "resume"),
-    "interest": sum(max(o["score"] for o in q["options"]) for q in TEST_QUESTION_BANK if q["dimension"] == "interest"),
-}
-
 
 # ---------------------------------------------------------------------------
 # 11.2 基础测试表
 # ---------------------------------------------------------------------------
 
-def get_test_questions(db: Optional[Session] = None) -> List[TestQuestion]:
-    """GET /test/questions：返回题库（骨架为内置占位题库）。
+def load_test_bank(db: Session) -> List[TestQuestion]:
+    """从数据库读题库（``test_questions`` 表），按 ``order_no`` 展示序。
 
-    TODO: 题库落库后改成从 DB 读（5.4 要求 30-50 题）。
+    返回 ORM 行（不是接口 schema），因为提交计分时要读 ``options`` / ``dimension``。
     """
+    statement = select(TestQuestion).order_by(
+        TestQuestion.order_no.asc(), TestQuestion.code.asc()  # type: ignore[union-attr]
+    )
+    return list(db.exec(statement).all())
+
+
+def get_test_questions(db: Optional[Session] = None) -> List[TestQuestionResponse]:
+    """GET /test/questions：从**数据库**返回题库（手册 5.4 要求 30-50 题）。
+
+    题库为空时返回空列表（不再用代码常量假装有数据）；前端应据此提示
+    "题库未初始化，请先运行 python -m app.db.init_db"。
+    """
+    if db is None:
+        # 没有会话就没法读库：返回空列表而不是造数据（避免再次出现"接口有数据、库里没有"）
+        logger.warning("get_test_questions 未传 db，返回空题库")
+        return []
     return [
-        TestQuestion(
-            id=q["id"],
-            dimension=q["dimension"],
-            content=q["content"],
-            options=[TestOption(**opt) for opt in q["options"]],
-            multiple=False,
+        TestQuestionResponse(
+            id=row.code,  # 对外用业务编号（q_clarity_01），稳定且便于规则引用
+            dimension=row.dimension,
+            content=row.content,
+            options=[TestOption(**opt) for opt in (row.options or [])],
+            multiple=bool(row.multiple),
         )
-        for q in TEST_QUESTION_BANK
+        for row in load_test_bank(db)
     ]
 
 
 def submit_test(db: Session, user: User, payload: TestSubmitRequest) -> TestResultResponse:
-    """POST /test/submit：算分 → 写 test_results → 生成初始画像（11.3）。"""
+    """POST /test/submit：算分 → 写 test_results → 生成初始画像（11.3）。
+
+    **原子性**：整个流程（写 ``test_results`` + 写 ``profiles`` + 写 ``profile_tags``）
+    在**一个事务**里完成，任何一步失败都整体回滚。
+    之前每步各自 ``commit``，实测出现过"接口返回 500，但 ``tested`` 已变 true、
+    标签已落库"的半成品状态 —— 用户看到失败、重试又会产生重复的 ``test_results``。
+
+    **响应一致性**：返回的分数/总分/阶段取自**重算并落库后的 profile**，
+    因此与随后 ``GET /profile`` 逐字段一致。
+    之前返回的是"测试原始分"（新用户可能是 clarity/action/resume 全 100、冲刺期），
+    而 ``GET /profile`` 是"按实际行为重算过的"（没有任务与简历就是 0），两处打架。
+    """
     if not payload.answers:
         raise BusinessException(ErrorCode.PARAM_ERROR, "答案不能为空")
 
-    scores = _score_answers(payload.answers)
+    bank = load_test_bank(db)
+    if not bank:
+        raise BusinessException(
+            ErrorCode.PARAM_ERROR,
+            "题库为空，请先执行 `python -m app.db.init_db` 初始化基础测试题",
+        )
 
-    # 11.3：三个分项分数（clarity / action / resume）
-    profile_scores = calc_profile_scores(scores["clarity"], scores["action"], scores["resume"])
+    scores = _score_answers(bank, payload.answers)
+    if scores["matched"] == 0:
+        raise BusinessException(ErrorCode.PARAM_ERROR, "答案里没有任何已知题目，请重新获取题目后再提交")
 
-    result = TestResult(
-        user_id=user.id,
-        answers=payload.answers,
-        free_text=payload.free_text,
-        clarity_score=float(profile_scores["clarity_score"]),
-        action_score=float(profile_scores["action_score"]),
-        resume_score=float(profile_scores["resume_score"]),
-        total_score=float(profile_scores["total_score"]),
-        stage=str(profile_scores["stage"]),
-    )
-    db.add(result)
-    db.commit()
+    try:
+        # 1) 测试结果先入库（分数稍后用重算后的画像值覆盖，保证三处一致）
+        result = TestResult(
+            user_id=user.id,
+            answers=payload.answers,
+            free_text=payload.free_text,
+        )
+        db.add(result)
+        db.flush()
+
+        # 2) 画像：clarity 用测试分（它就是"职业目标清晰度"的直接测量），
+        #    action / resume 由 recompute_stage 按真实行为算（没有任务/简历就是 0）。
+        profile = get_or_create_profile(db, user.id, commit=False)
+        profile.clarity_score = float(scores["clarity"])
+        profile.updated_at = utcnow()
+        db.add(profile)
+        db.flush()
+
+        # 3) 选择题 -> 画像标签（11.3 第 1 步）；这里不触发重算，最后统一重算一次
+        _apply_test_tags(db, user.id, payload.answers)
+
+        # 4) 重算画像（action/resume/total/stage）并落库
+        profile = recompute_stage(db, user.id, commit=False)
+
+        # 5) 把**落库后的画像值**写回 test_results，使 响应 == 本行 == GET /profile
+        result.clarity_score = profile.clarity_score
+        result.action_score = profile.action_score
+        result.resume_score = profile.resume_score
+        result.total_score = profile.total_score
+        result.stage = profile.stage
+        db.add(result)
+
+        # 6) 唯一一次提交：要么全部生效，要么全部回滚
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
     db.refresh(result)
-
-    # 写画像主表 + 阶段
-    profile = get_or_create_profile(db, user.id)
-    profile.clarity_score = float(profile_scores["clarity_score"])
-    profile.action_score = float(profile_scores["action_score"])
-    profile.resume_score = float(profile_scores["resume_score"])
-    profile.total_score = float(profile_scores["total_score"])
-    profile.stage = str(profile_scores["stage"])
-    profile.updated_at = utcnow()
-    db.add(profile)
-    db.commit()
-
-    # 选择题 -> 标签（11.3 第 1 步：选择题映射标签和分值）
-    _apply_test_tags(db, user.id, payload.answers)
 
     # 11.2 第 4 步：文字补充交给 DeepSeek 抽标签（异步，需要时由调用方 await）
     if payload.free_text and payload.free_text.strip():
         logger.info("test free_text 已保存，等待 AI 抽取标签 user_id=%s", user.id)
-        # TODO: 在异步上下文中调用 extract_tags_from_text（AIClient.chat_prompt_json）
-        #       当前 router 为同步 route，实际接入时改为 async 并 await，见 README「待确认」。
+        # TODO: 在异步上下文中调用 extract_tags_from_text（见 app/services/profile_service.py
+        #       的 extract_tags_from_text）；当前 router 是同步 route，需要时改 async + await。
 
-    db.refresh(result)
-    logger.info("测试提交完成 user_id=%s total=%s stage=%s", user.id, result.total_score, result.stage)
+    logger.info(
+        "测试提交完成 user_id=%s clarity=%s action=%s resume=%s total=%s stage=%s",
+        user.id, result.clarity_score, result.action_score,
+        result.resume_score, result.total_score, result.stage,
+    )
     return TestResultResponse.model_validate(result)
 
 
@@ -272,27 +197,50 @@ def get_latest_test_result(db: Session, user_id) -> Optional[TestResult]:
     return db.exec(statement).first()
 
 
-def _score_answers(answers: Dict[str, str]) -> Dict[str, float]:
-    """按题库把选项折算成 0-100 的分项分。"""
+def _score_answers(bank: Sequence[TestQuestion], answers: Dict[str, str]) -> Dict[str, float]:
+    """按**数据库题库**把选项折算成 0-100 的分项分。
+
+    返回 ``{"clarity":..., "action":..., "resume":..., "interest":..., "matched": int}``，
+    其中 ``matched`` 是命中的题目数 —— 调用方用它判断"答案里到底有没有有效题目"
+    （全部无效时应该报 1001，而不是静默给 0 分写库）。
+    """
     raw: Dict[str, float] = {"clarity": 0.0, "action": 0.0, "resume": 0.0, "interest": 0.0}
-    for question in TEST_QUESTION_BANK:
-        chosen = answers.get(question["id"])
+    max_map: Dict[str, float] = {"clarity": 0.0, "action": 0.0, "resume": 0.0, "interest": 0.0}
+    matched = 0
+
+    for question in bank:
+        options = question.options or []
+        if question.dimension in max_map and options:
+            # 该题满分 = 选项里的最高分（题库里每题满分都是 5）
+            max_map[question.dimension] += max(float(o.get("score") or 0.0) for o in options)
+
+        chosen = answers.get(question.code)
         if not chosen:
             continue
-        for option in question["options"]:
-            if option["key"] == chosen:
-                raw[question["dimension"]] += float(option["score"])
+        for option in options:
+            if str(option.get("key")) == str(chosen):
+                if question.dimension in raw:
+                    raw[question.dimension] += float(option.get("score") or 0.0)
+                matched += 1
                 break
 
     scaled: Dict[str, float] = {}
     for dimension, value in raw.items():
-        maximum = _DIMENSION_MAX.get(dimension) or 0.0
+        maximum = max_map.get(dimension) or 0.0
         scaled[dimension] = clamp_score(100.0 * value / maximum) if maximum else 0.0
+    scaled["matched"] = float(matched)
     return scaled
 
 
 def _apply_test_tags(db: Session, user_id, answers: Dict[str, str]) -> None:
-    """把选择题作答映射成画像标签（11.3）。骨架阶段只做两条最有信息量的规则。"""
+    """把选择题作答映射成画像标签（11.3 第 1 步）。
+
+    只做最有信息量的几条规则；``commit=False`` + ``recompute=False``
+    是因为调用方（``submit_test``）要在最后统一重算并只提交一次。
+
+    ⚠️ 规则引用的四个 code（``q_resume_01`` / ``q_action_03`` / ``q_interest_01`` /
+    ``q_interest_02``）在 ``app/db/seed_data.py`` 的题库里必须存在，改题库时不要动。
+    """
     tags: List[Dict[str, Any]] = []
 
     # 规则 1：简历完整度低 -> 痛点“缺项目/无简历”
@@ -319,31 +267,52 @@ def _apply_test_tags(db: Session, user_id, answers: Dict[str, str]) -> None:
         tags.append({"dimension": "兴趣", "label": interest_map[interest_answer], "weight": 0.6, "source": "test"})
 
     if tags:
-        apply_tags(db, user_id, tags)
+        apply_tags(db, user_id, tags, commit=False, recompute=False)
 
 
 # ---------------------------------------------------------------------------
 # 画像读写
 # ---------------------------------------------------------------------------
 
-def get_or_create_profile(db: Session, user_id) -> Profile:
-    """取画像主表，没有就建一条默认（懒创建）。"""
+def get_or_create_profile(db: Session, user_id, *, commit: bool = True) -> Profile:
+    """取画像主表，没有就建一条默认（懒创建）。
+
+    ``commit=False`` 时只 ``flush`` 不提交，供需要**跨多步原子写**的调用方使用
+    （例如 ``submit_test``：写 test_results + profiles + profile_tags 必须同一个事务）。
+    """
     profile = db.exec(select(Profile).where(Profile.user_id == user_id)).first()
     if profile is None:
         profile = Profile(user_id=user_id, stage=STAGE_EXPLORE)
         db.add(profile)
-        db.commit()
-        db.refresh(profile)
+        if commit:
+            db.commit()
+            db.refresh(profile)
+        else:
+            db.flush()
     return profile
 
 
+def has_finished_test(db: Session, user_id) -> bool:
+    """该用户是否做过基础测试表（`test_results` 是否存在记录）。
+
+    ⚠️ 前端判断「用户做没做过测评」必须用这个值（``ProfileResponse.tested``），
+    **不能**看画像对象是否存在 —— ``get_or_create_profile`` 会懒创建，
+    画像存在 ≠ 做过测评，否则「新用户强制去 /test/intro」的漏斗永远不会触发。
+
+    只取一列做 ``LIMIT 1``，避免把整行拉回来（也避免 N+1：调用方一次算好复用）。
+    """
+    statement = select(TestResult.id).where(TestResult.user_id == user_id).limit(1)
+    return db.exec(statement).first() is not None
+
+
 def get_profile(db: Session, user: User) -> ProfileResponse:
-    """GET /profile：画像主表 + 标签 + 基础资料。"""
+    """GET /profile：画像主表 + 标签 + 基础资料 + 是否做过测评。"""
     from app.schemas.user import UserResponse
 
     profile = get_or_create_profile(db, user.id)
     tags = list_tags(db, user.id)
     response = ProfileResponse.model_validate(profile)
+    response.tested = has_finished_test(db, user.id)
     response.tags = [ProfileTagResponse.model_validate(t) for t in tags]
     response.user = UserResponse.model_validate(user)
     return response
@@ -362,8 +331,19 @@ def list_tags_response(db: Session, user_id, dimension: Optional[str] = None) ->
     return [ProfileTagResponse.model_validate(t) for t in list_tags(db, user_id, dimension)]
 
 
-def apply_tags(db: Session, user_id, tags: Sequence[Dict[str, Any]], source: Optional[str] = None) -> List[ProfileTag]:
+def apply_tags(
+    db: Session,
+    user_id,
+    tags: Sequence[Dict[str, Any]],
+    source: Optional[str] = None,
+    *,
+    commit: bool = True,
+    recompute: bool = True,
+) -> List[ProfileTag]:
     """7.8 画像回流入库：同维度同标签做权重融合。
+
+    ``commit=False`` / ``recompute=False`` 供**跨多步原子写**的调用方使用：
+    ``submit_test`` 会在最后统一重算 + 只提交一次（见那里的说明）。
 
     融合规则（骨架约定，见 README「待确认」）：
     - 已有标签：``new_weight = 0.6 * old + 0.4 * incoming``（新证据多则逐步抬高）
@@ -411,43 +391,66 @@ def apply_tags(db: Session, user_id, tags: Sequence[Dict[str, Any]], source: Opt
             db.add(existing)
         results.append(existing)
 
-    db.commit()
-    for item in results:
-        db.refresh(item)
-    if results:
-        recompute_stage(db, user_id)
+    if commit:
+        db.commit()
+        for item in results:
+            db.refresh(item)
+    else:
+        db.flush()
+
+    if results and recompute:
+        recompute_stage(db, user_id, commit=commit)
     return results
 
 
-def recompute_stage(db: Session, user_id) -> Profile:
-    """重新计算画像分数与阶段（7.8 最后一步）。
+def recompute_stage(db: Session, user_id, *, commit: bool = True) -> Profile:
+    """重新计算画像分数与阶段（7.8 最后一步 / 11.6 打卡后更新）。
 
-    骨架实现：
-    - clarity_score：沿用测试/最近一次的值（TODO：按标签质量重算）
-    - action_score：已完成任务数 + 已完成步骤数 折算
-    - resume_score：最新简历的 completeness/ats_score
+    实现：
+    - ``clarity_score``：沿用测试/最近一次的值（TODO：按标签质量重算）
+    - ``action_score``：**所有任务**的已完成步骤 + 已完成任务数 折算
+    - ``resume_score``：最新简历的 completeness
+
+    ⚠️ ``action_score`` 为什么把**进行中任务**的已完成步骤也算进去：
+    手册 11.6 的闭环是"完成任务步骤 → 打卡 → 更新画像"，行动力应该由**行动本身**
+    累积，而不是等整个任务做完才给分。原实现只统计 ``status == "已完成"`` 的任务，
+    实测出现"用户打了卡、进度条前进，但 action_score 仍是 0.0"——
+    用户看不到任何正反馈，与 11.6 的意图相反。
+    所以现在分两部分：① 每个已完成步骤 +8（无论任务是否结束）；
+    ② 每个**整个完成**的任务额外 +20（把"有始有终"与"只是动了一下"区分开）。
     """
-    profile = get_or_create_profile(db, user_id)
+    profile = get_or_create_profile(db, user_id, commit=commit)
 
-    # action：完成任务与打卡步骤
-    completed_tasks = db.exec(
-        select(Task).where(Task.user_id == user_id, Task.status == "已完成")
-    ).all()
-    task_ids = [t.id for t in completed_tasks]
+    # ① 全部任务的已完成步骤（含进行中任务的）—— 行动力来自行动本身
+    all_tasks = db.exec(select(Task).where(Task.user_id == user_id)).all()
+    all_task_ids = [t.id for t in all_tasks]
     completed_steps = 0
-    if task_ids:
+    if all_task_ids:
         completed_steps = len(
             db.exec(
-                select(TaskStep).where(TaskStep.task_id.in_(task_ids), TaskStep.completed.is_(True))  # type: ignore[union-attr]
+                select(TaskStep).where(
+                    TaskStep.task_id.in_(all_task_ids),  # type: ignore[union-attr]
+                    TaskStep.completed.is_(True),  # type: ignore[union-attr]
+                )
             ).all()
         )
-    action_score = clamp_score(min(100.0, 20.0 * len(completed_tasks) + 8.0 * completed_steps), 0.0, 100.0)
+
+    # ② 整单完成的任务（额外奖励，区分"有始有终"）
+    completed_tasks = [t for t in all_tasks if t.status == "已完成"]
+
+    action_score = clamp_score(
+        min(100.0, 20.0 * len(completed_tasks) + 8.0 * completed_steps), 0.0, 100.0
+    )
 
     # resume：最新简历的完整度
+    # ⚠️ 新用户**必然没有简历**，latest_resume 就是 None。
+    # 这里曾经写成 `latest_resume.completeness or 0.0`，导致「新用户提交测评」
+    # 直接 500（AttributeError: 'NoneType' object has no attribute 'completeness'），
+    # 也就是 M1 主链路对所有人都是坏的 —— 实测跑通注册→测评时才发现。
     latest_resume = db.exec(
         select(Resume).where(Resume.user_id == user_id).order_by(Resume.updated_at.desc())  # type: ignore[union-attr]
     ).first()
-    resume_score = clamp_score(latest_resume.completeness or 0.0)
+    resume_score = clamp_score(latest_resume.completeness or 0.0) if latest_resume is not None else 0.0
 
     total = calc_total_score(profile.clarity_score, action_score, resume_score)
     profile.action_score = action_score
@@ -456,21 +459,33 @@ def recompute_stage(db: Session, user_id) -> Profile:
     profile.stage = calc_stage(total)
     profile.updated_at = utcnow()
     db.add(profile)
-    db.commit()
-    db.refresh(profile)
+
+    if commit:
+        db.commit()
+        db.refresh(profile)
+    else:
+        db.flush()
+    logger.info(
+        "画像重算 user_id=%s clarity=%.1f action=%.1f(步骤=%s/完成任务=%s) resume=%.1f total=%.1f stage=%s",
+        user_id, profile.clarity_score, action_score,
+        completed_steps, len(completed_tasks), resume_score, total, profile.stage,
+    )
     return profile
 
 
-def update_resume_score(db: Session, user_id, completeness: float) -> Profile:
+def update_resume_score(db: Session, user_id, completeness: float, *, commit: bool = True) -> Profile:
     """11.8 画像回流钩子：简历解析/优化后更新 resume_score 并重算阶段。"""
-    profile = get_or_create_profile(db, user_id)
+    profile = get_or_create_profile(db, user_id, commit=commit)
     profile.resume_score = clamp_score(completeness)
     profile.total_score = calc_total_score(profile.clarity_score, profile.action_score, profile.resume_score)
     profile.stage = calc_stage(profile.total_score)
     profile.updated_at = utcnow()
     db.add(profile)
-    db.commit()
-    db.refresh(profile)
+    if commit:
+        db.commit()
+        db.refresh(profile)
+    else:
+        db.flush()
     return profile
 
 
@@ -513,7 +528,13 @@ def top_pain_points(db: Session, user_id, limit: int = 3) -> List[str]:
 
 
 def get_stage(db: Session, user_id) -> str:
-    """取当前阶段（供 Prompt 变量使用）。"""
+    """取当前阶段，返回**中文**阶段名（数据库原值：探索期/准备期/冲刺期）。
+
+    本函数是给**服务端内部**用的（主要用途是拼 Prompt 变量，Prompt 里写的是中文），
+    **不要**把它的返回值直接塞进对外 schema。对外接口必须用
+    ``app.utils.stage.to_stage_slug()`` 转 slug，或在 schema 层由
+    ``_normalize_stage`` 校验器自动转换（README §4.11）。
+    """
     profile = db.exec(select(Profile).where(Profile.user_id == user_id)).first()
     if profile is None:
         return STAGE_EXPLORE

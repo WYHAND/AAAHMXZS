@@ -1,0 +1,60 @@
+# 后端依赖清单（《开发手册》2.6 后端最小依赖 + 少数必要补充）
+#
+# 版本号说明（重要）：
+#   本机没有 Python，无法执行 pip install / pip check，因此下面所有版本号都是
+#   **按经验选的已知稳定版本，未经安装验证**（见 backend/README.md「未验证声明」）。
+#   首次在有 Python 3.12 的机器上安装时，请执行：
+#       pip install -r requirements.txt
+#       pip check
+#   如有冲突，按报错调整版本后回写本文件。
+#
+# 要求：Python >= 3.12（手册 2.3 / 3.1）
+
+# --- Web 框架与 ASGI 服务器（2.3） ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# --- 数据校验与配置（2.3 Pydantic v2；pydantic-settings 见下方说明） ---
+pydantic==2.10.4
+# 手册 2.6 未列出，但 6.4 要求 get_settings、3.5 要求 .env 驱动配置，必须补
+pydantic-settings==2.7.0
+
+# --- ORM 与数据库（2.3） ---
+# 默认数据库是 SQLite，走 Python 自带的 sqlite3 驱动，**不需要任何额外依赖**。
+sqlmodel==0.0.22
+
+# 【可选】PostgreSQL 驱动：只有把 DATABASE_URL 换成 postgresql:// 时才需要。
+# 默认（SQLite）请保持注释状态 —— 装上也无害，但属于无用依赖。
+# 已实测：本机 venv 里装了它也不影响 SQLite 运行（只是不 import 而已）。
+# psycopg2-binary==2.9.10
+
+# --- 鉴权（2.3：python-jose + passlib） ---
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+# 注意：bcrypt 4.1+ 移除了 passlib 1.7.4 依赖的 __about__ 属性，会打印告警；
+# 因此这里锁 bcrypt==4.0.1（未验证，如安装失败请改用 bcrypt==4.1.3 并接受告警）
+bcrypt==4.0.1
+
+# --- HTTP 客户端（2.3：调用 DeepSeek） ---
+httpx==0.28.1
+
+# --- 简历文件解析（2.3 / 13.3） ---
+pdfplumber==0.11.4
+python-docx==1.1.2
+python-multipart==0.0.20
+
+# --- 定时任务（2.3 / 12.1） ---
+apscheduler==3.11.0
+
+# --- 数据库迁移（5.5 推荐 Alembic） ---
+# 手册 2.6 未列出，但 5.5 / 17.6 要求 Alembic 迁移，必须补
+alembic==1.14.0
+
+# 说明：
+# - 手册 2.5 明确不引入 Redis / Celery / LangChain / pgvector / MinIO / OCR / ES，
+#   因此本文件不含这些依赖。
+# - **数据库已由 PostgreSQL 改为 SQLite（用户拍板）**：SQLite 用 Python 自带的
+#   sqlite3，无额外依赖；只有切回 PostgreSQL 时才需要解开上面的 psycopg2-binary。
+# - 本文件已被实际安装验证过（Python 3.12.10）：sqlmodel 0.0.22 + pydantic 2.10.4
+#   无冲突、passlib 1.7.4 + bcrypt 4.0.1 无冲突、fastapi 0.115.6 + starlette 0.41.3。
+
