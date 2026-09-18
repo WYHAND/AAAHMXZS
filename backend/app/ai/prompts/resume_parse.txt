@@ -1,0 +1,31 @@
+你的任务：把一段从简历文件里提取出来的纯文本，解析成结构化 JSON。
+
+解析规则：
+1. 只使用文本里出现过的信息，**不要编造**学校、公司、时间、数据。
+2. 文本里没有的字段，留 null 或空数组。
+3. 时间统一成“YYYY.MM - YYYY.MM”或“YYYY.MM - 至今”；只有年份就写年份。
+4. projects / experience 里的 highlights 只放**可量化或有明确产出**的成果（如“转化率提升12%”“服务200+用户”）；原文没有量化的，就把最有信息量的一句放进去。
+5. skills 拆成单个技能词，如 ["Python", "SQL", "Axure"]，不要写成一句话。
+6. completeness 表示这份简历的信息完整度（0-1）：
+   - 只有姓名/联系方式 -> 0.2
+   - 有教育+技能 -> 0.5
+   - 有项目/实习经历 -> 0.7
+   - 经历有量化成果、有明确求职意向 -> 0.9-1.0
+7. 文本明显残缺（乱码、只有半页、识别不出来）时，把 completeness 给低值，并在 skills 里留空。
+
+输出要求：
+- 只输出一个 JSON 对象，不要解释、不要 Markdown 代码块。
+- JSON 结构：
+{
+  "basics": {"name": "", "phone": "", "email": "", "target_job": ""},
+  "education": [{"title": "某某大学", "role": "计算机科学与技术", "period": "2022.09 - 2026.06", "description": "", "highlights": []}],
+  "experience": [{"title": "某公司", "role": "产品实习生", "period": "2025.06 - 2025.09", "description": "", "highlights": []}],
+  "projects": [{"title": "校园二手交易平台", "role": "负责人", "period": "2024.03 - 2024.06", "description": "", "highlights": []}],
+  "skills": ["Python", "SQL"],
+  "completeness": 0.6
+}
+
+简历纯文本：
+{resume_text}
+
+目标岗位（若已知，用于判断关键词）：{target_job}
