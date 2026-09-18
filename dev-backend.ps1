@@ -2,6 +2,11 @@
     dev-backend.ps1 —— 建表灌种子 + 启动 FastAPI（http://localhost:8000）
 
     默认使用 SQLite；想换 PostgreSQL，先设置 $env:DATABASE_URL 再运行本脚本。
+
+    ⚠️ 本文件必须保存为 UTF-8 **with BOM**：Windows PowerShell 5.1 读无 BOM 的 .ps1
+    会按 ANSI(GBK) 解析，中文会乱码并可能导致语法错误。
+    注意：用「局部替换」类工具改本文件可能会**把 BOM 抹掉**（实际踩过），
+    改完请确认前三字节仍是 EF BB BF。
 #>
 $ErrorActionPreference = 'Stop'
 
@@ -26,7 +31,20 @@ try {
     if ($LASTEXITCODE -ne 0) { Write-Host '[错误] 初始化数据库失败' -ForegroundColor Red; exit 1 }
 
     if (-not $env:DEEPSEEK_API_KEY) {
-        Write-Host '[提示] 未配置 DEEPSEEK_API_KEY，AI 能力会走 7.6 兜底话术（不是报错）' -ForegroundColor Yellow
+        # 密钥放在 backend\.env 里是**正常做法**，不能只看环境变量，否则会打出假警报
+        # （本脚本第一版就是这么错的，还据此误判过"AI 没接上"）。
+        $envFile = Join-Path $backend '.env'
+        $hasKeyInFile = $false
+        if (Test-Path $envFile) {
+            $hasKeyInFile = [bool](Select-String -Path $envFile -Pattern '^\s*DEEPSEEK_API_KEY=sk-(?!xxx)' -Quiet)
+        }
+        if ($hasKeyInFile) {
+            Write-Host '[提示] DEEPSEEK_API_KEY 将从 backend\.env 读取（未走环境变量），AI 能力可用' -ForegroundColor DarkGray
+        }
+        else {
+            Write-Host '[提示] 未找到可用的 DEEPSEEK_API_KEY（环境变量与 backend\.env 都没有）。' -ForegroundColor Yellow
+            Write-Host '        AI 能力会走 7.6 兜底话术（不是报错）。配置参考 .env.example。' -ForegroundColor Yellow
+        }
     }
 
     Write-Host ''

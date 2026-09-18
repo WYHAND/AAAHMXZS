@@ -12,7 +12,8 @@
 from __future__ import annotations
 
 import json
-from typing import AsyncGenerator, List
+from datetime import date, datetime
+from typing import Any, AsyncGenerator, List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -111,6 +112,34 @@ SSE_DESCRIPTION = (
 )
 
 
+def _json_default(value: Any) -> Any:
+    """SSE 事件的 JSON 兜底序列化。
+
+    ⚠️ 为什么必须有：service 层往事件字典里塞的是**ORM 原始值**，其中
+    ``conversation_id`` / ``message_id`` / ``user_message_id`` 都是 ``uuid.UUID``，
+    ``created_at`` 是 ``datetime``。Python 的 ``json.dumps`` 不认识它们，
+    会抛 ``TypeError: Object of type UUID is not JSON serializable``。
+    而这个异常发生在**生成器内部**（流已经开始），只能被吞成 ``event: error``，
+    前端看到的是「服务器内部错误」——整条流式对话因此 100% 不可用，
+    而日志里只有一行 err 信息、没有 traceback，极难定位（实际就踩过）。
+
+    UUID / 日期统一转字符串（与 API JSON 的表示一致）；其它类型仍抛错，
+    避免悄悄产出前端无法使用的字段。
+    """
+    if isinstance(value, UUID):
+        return str(value)
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    raise TypeError(f"SSE 事件包含不可序列化的类型: {type(value).__name__}")
+
+
+def _sse_data(payload: dict) -> str:
+    """把事件负载序列化成一行 ``data:`` 内容。"""
+    return json.dumps(payload, ensure_ascii=False, default=_json_default)
+
+
 async def _immediate_stream(prep: "chat_service.StreamPreparation") -> AsyncGenerator[str, None]:
     """幂等命中时的「一次性事件流」（FIX 1 / 4.3）。
 
@@ -124,7 +153,7 @@ async def _immediate_stream(prep: "chat_service.StreamPreparation") -> AsyncGene
         else {"type": "pending", "pending": True}
     )
     payload = {"code": 0, "message": "该消息已提交过，未重复生成", "data": data}
-    yield f"event: pending\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+    yield f"event: pending\ndata: {_sse_data(payload)}\n\n"
     yield "event: end\ndata: [DONE]\n\n"
 
 
@@ -213,14 +242,13 @@ def _event_generator(prep: "chat_service.StreamPreparation", user_id: UUID) -> A
                 prep.followup,
             ):
                 payload = _to_sse_payload(event)
-                yield f"event: {event.get('type', 'message')}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                yield f"event: {event.get('type', 'message')}\ndata: {_sse_data(payload)}\n\n"
             yield "event: end\ndata: [DONE]\n\n"
         except Exception as exc:  # noqa: BLE001 - 流已开始，只能以 error 事件收尾
-            logger.error("SSE 生成器异常 conversation_id=%s err=%s", prep.conversation_id, sanitize(exc))
-            error_payload = json.dumps(
-                {"code": 5000, "message": "服务器内部错误", "data": None},
-                ensure_ascii=False,
-            )
+            # 用 exception() 而不是 error()：流内异常此前只留一行 err 文本、没有 traceback，
+            # 排查 "Object of type UUID is not JSON serializable" 时几乎无从下手。
+            logger.exception("SSE 生成器异常 conversation_id=%s err=%s", prep.conversation_id, sanitize(exc))
+            error_payload = _sse_data({"code": 5000, "message": "服务器内部错误", "data": None})
             yield f"event: error\ndata: {error_payload}\n\n"
             yield "event: end\ndata: [DONE]\n\n"
         finally:
