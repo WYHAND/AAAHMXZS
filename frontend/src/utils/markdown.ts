@@ -1,7 +1,19 @@
 /**
  * 极简 Markdown 清洗与渲染（设计说明书 3.2 ②：AI 气泡渲染 Markdown，但不允许 HTML 注入）。
- * 不做完整 Markdown 实现：先整体转义 HTML，再只还原白名单标记。
+ * 不做完整 Markdown 实现：只切块 + 行内粗体/代码。
  * 支持：标题 / 有序无序列表 / 粗体 / 行内代码 / 代码块 / 换行。
+ *
+ * ⚠️ **这里刻意不做 HTML 转义**（曾经做过，是个 bug，见下）：
+ * 本模块的输出全部通过 React 的**文本节点**渲染（`<span>{text}</span>`），
+ * 而 React 在把字符串放进 DOM 时会**自动转义**，`<script>` 只会被当成文字显示，
+ * 不存在注入风险。如果再手动转义一次，就会变成「双重转义」：
+ *
+ *     AI 原文：  现在最"热"的其实是…
+ *     手动转义： 现在最&quot;热&quot;的其实是…      ← 存进了 block 里
+ *     React 渲染：把 &quot; 当普通文字显示 → 用户看到 &quot;
+ *
+ * 正确做法是**只信任 React**。只有当你改用 `dangerouslySetInnerHTML`
+ * 直接把字符串当 HTML 插入时，才需要自己转义——本项目没有任何一处这么用。
  */
 
 export interface MarkdownBlock {
@@ -18,19 +30,6 @@ export interface MarkdownBlock {
 export interface MarkdownSpan {
   type: 'text' | 'strong' | 'code'
   text: string
-}
-
-const ESCAPE_MAP: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-}
-
-/** 转义所有 HTML，防止注入 */
-export function escapeHtml(input: string): string {
-  return input.replace(/[&<>"']/g, (ch) => ESCAPE_MAP[ch] ?? ch)
 }
 
 /** 行内解析：**粗体** 与 `代码` */
@@ -57,10 +56,10 @@ export function parseInline(raw: string): MarkdownSpan[] {
   return spans.length ? spans : [{ type: 'text', text: raw }]
 }
 
-/** 把 Markdown 文本切成块，输入已在渲染前经过 escapeHtml 处理 */
+/** 把 Markdown 文本切成块。**不做 HTML 转义**，转义交给 React（见文件头说明）。 */
 export function parseMarkdown(source: string): MarkdownBlock[] {
   const blocks: MarkdownBlock[] = []
-  const lines = escapeHtml(source).split(/\r?\n/)
+  const lines = source.split(/\r?\n/)
   let index = 0
 
   while (index < lines.length) {

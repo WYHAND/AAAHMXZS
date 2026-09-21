@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Compass, Plus, Send, Square } from 'lucide-react'
+import { Compass, Plus, Send, Square, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { AIThinking } from '@/components/AIThinking'
 import { ChatBubble } from '@/components/ChatBubble'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -16,6 +26,7 @@ import {
 import { loadConclusion, useChatStore } from '@/store/chatStore'
 import { useResponsive } from '@/hooks/useResponsive'
 import { useStage } from '@/hooks/useStage'
+import type { Conversation } from '@/types'
 import { cn } from '@/lib/utils'
 
 /**
@@ -27,10 +38,32 @@ import { cn } from '@/lib/utils'
  * - 结论卡片：后端 done 事件 conclusion_ready=true 时浮出可折叠卡片
  * - 中文输入法组合期间回车不发送（compositionstart/end）
  */
+
+/**
+ * 追问轮次的上限（开发手册 7.7：同一方向连续追问不超过 3 轮）。
+ *
+ * ⚠️ 后端有一个**已知的计数问题**：方向未切换时 followup_round 会超过 3
+ * （实测出现过 4，导致界面显示「追问进度 4/3」这种不可能的状态）。
+ * 那是后端的逻辑问题，本轮先不修，但**不能让它在界面上露出来**——
+ * 所以这里对显示值做钳制，保证分子永远不会超过分母。
+ * 后端修好之后这个钳制也建议保留，作为防御性显示。
+ */
+const MAX_FOLLOWUP_PER_DIRECTION = 3
+
+/** 把后端返回的追问轮次钳制到 [1, MAX]；null / 非法值表示「还没开始计数」 */
+function displayFollowupRound(raw: number | null | undefined): number | null {
+  if (raw == null || !Number.isFinite(raw)) return null
+  return Math.min(Math.max(Math.trunc(raw), 1), MAX_FOLLOWUP_PER_DIRECTION)
+}
+
 export default function ChatPage() {
   const { isDesktop } = useResponsive()
   const { stage } = useStage()
   const [draft, setDraft] = useState('')
+  /** 等待二次确认的会话；null 表示弹窗关闭 */
+  const [deleteTarget, setDeleteTarget] = useState<Conversation | null>(null)
+  /** 删除请求进行中：禁用确认按钮，防连点 */
+  const [deleting, setDeleting] = useState(false)
   const composingRef = useRef(false)
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
@@ -45,6 +78,7 @@ export default function ChatPage() {
     conclusion,
     loadConversations,
     setActive,
+    deleteConversation,
     loadMessages,
     send,
     retry,
@@ -54,6 +88,8 @@ export default function ChatPage() {
   const streaming = streamState === 'streaming' || streamState === 'connecting'
   const lastMessage = messages.at(-1)
   const sendDisabled = streaming || !draft.trim()
+  // 钳制后的追问轮次：永远落在 [1, MAX]，不会出现 "4/3"
+  const shownFollowupRound = displayFollowupRound(followupRound)
 
   useEffect(() => {
     void loadConversations()
@@ -93,6 +129,21 @@ export default function ChatPage() {
       .catch(() => toast.error('还差一点信息，再多聊两句'))
   }
 
+  /**
+   * 确认删除。store 内部已经 catch 了失败（toast 报错且不改列表），不会抛，
+   * 所以这里 finally 一定能关弹窗。
+   */
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteTarget || deleting) return
+    setDeleting(true)
+    try {
+      await deleteConversation(deleteTarget.id)
+    } finally {
+      setDeleting(false)
+      setDeleteTarget(null)
+    }
+  }, [deleteTarget, deleting, deleteConversation])
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
       <header className="flex items-center justify-between gap-3">
@@ -116,19 +167,47 @@ export default function ChatPage() {
             <ScrollArea className="h-[520px] rounded-xl border bg-card p-2">
               {conversations.length ? (
                 conversations.map((conversation) => (
-                  <button
-                    key={conversation.id}
-                    type="button"
-                    onClick={() => setActive(conversation.id)}
-                    className={cn(
-                      'w-full truncate rounded-md px-3 py-2 text-left text-sm transition-colors',
-                      conversation.id === activeId
-                        ? 'bg-primary-soft text-primary'
-                        : 'text-muted-foreground hover:bg-secondary',
-                    )}
-                  >
-                    {conversation.title}
-                  </button>
+                  /*
+                   * 会话项 = 「切换会话」按钮 + 右侧删除按钮的兄弟组合。
+                   * 不用"按钮套按钮"（非法 HTML、点击目标也会打架）。
+                   */
+                  <div key={conversation.id} className="group relative">
+                    <button
+                      type="button"
+                      onClick={() => setActive(conversation.id)}
+                      className={cn(
+                        // pr-8 给右侧删除图标留位，标题仍然 truncate
+                        'w-full truncate rounded-md py-2 pr-8 pl-3 text-left text-sm transition-colors',
+                        conversation.id === activeId
+                          ? 'bg-primary-soft text-primary'
+                          : 'text-muted-foreground hover:bg-secondary',
+                      )}
+                    >
+                      {conversation.title}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`删除会话「${conversation.title}」`}
+                      disabled={deleting}
+                      // 图标是会话项的兄弟节点，理论上不会冒泡到"切换会话"；
+                      // 这里显式拦一层，防止以后挪进按钮内部时悄悄变成"删完顺手切走"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setDeleteTarget(conversation)
+                      }}
+                      className={cn(
+                        'absolute top-1/2 right-1 -translate-y-1/2 rounded-sm p-1 text-muted-foreground',
+                        'opacity-0 transition-opacity group-hover:opacity-100',
+                        // 键盘 Tab 到它时也要看得见
+                        'focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
+                        // 触摸设备没有 hover：常显，否则用户根本看不到入口
+                        'pointer-coarse:opacity-100',
+                        'hover:text-destructive disabled:pointer-events-none disabled:opacity-50',
+                      )}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
                 ))
               ) : (
                 <p className="px-2 py-3 text-xs text-muted-foreground">
@@ -271,13 +350,49 @@ export default function ChatPage() {
             </div>
             <p className="flex items-center gap-1 text-xs text-muted-foreground">
               <Compass className="size-3" />
-              {followupRound == null
+              {shownFollowupRound == null
                 ? '先聊两句，我就能开始记录追问进度'
-                : `追问进度 ${followupRound}/3 · 达到 3 轮后我会换一个方向继续挖`}
+                : `追问进度 ${shownFollowupRound}/${MAX_FOLLOWUP_PER_DIRECTION} · 达到 ${MAX_FOLLOWUP_PER_DIRECTION} 轮后我会换一个方向继续挖`}
             </p>
           </div>
         </Card>
       </div>
+
+      {/*
+        删除二次确认（整页共用一个：每个会话项各挂一份 state 没必要，
+        而且 isDesktop 切到移动端时会话列表会整块卸载，共用的这份不受影响）。
+        AlertDialogAction 默认"点完就关"，这里 preventDefault 拦住，
+        等请求结束再手动关 —— 中间按钮是 disabled，连点无效。
+      */}
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          // 删除进行中不接受 ESC / 遮罩点击关闭，避免"以为取消了其实已经删了"
+          if (!open && !deleting) setDeleteTarget(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除这个会话？</AlertDialogTitle>
+            <AlertDialogDescription>
+              对话记录会被删除，且无法恢复。你不受影响——画像和成长任务都会保留。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleting}
+              onClick={(event) => {
+                event.preventDefault()
+                void handleConfirmDelete()
+              }}
+            >
+              {deleting ? '删除中…' : '删除'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

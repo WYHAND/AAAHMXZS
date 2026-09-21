@@ -7,7 +7,8 @@ import { cn } from '@/lib/utils'
  * 消息气泡（设计说明书 3.2 ②、6.5 自建 ChatBubble）
  *
  * - AI 侧浅底（bg-card + 暖色竖条），用户侧 bg-secondary；两端都不用主色实心。
- * - Markdown 渲染但不允许 HTML 注入：由 utils/markdown 先转义再白名单还原。
+ * - Markdown 渲染但不允许 HTML 注入：**靠 React 的文本节点自动转义**，
+ *   不要在 utils/markdown 里手动转义（那会造成双重转义，用户看到 &quot; 这样的实体）。
  * - 中断时不清空内容，尾部显示「（回答中断，点击重试）」。
  */
 export interface ChatBubbleProps {

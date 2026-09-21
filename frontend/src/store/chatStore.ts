@@ -39,6 +39,8 @@ interface ChatState {
 
   loadConversations: () => Promise<void>
   setActive: (id: string | null) => void
+  /** 删除会话：成功才动列表；删的是当前会话时把 activeId 让给下一条 */
+  deleteConversation: (id: string) => Promise<void>
   /** 没有会话时先建一个（流式接口必须带 conversation_id） */
   ensureConversation: () => Promise<string | null>
   loadMessages: (conversationId: string) => Promise<void>
@@ -51,6 +53,28 @@ interface ChatState {
 
 /** 模块级 AbortController：stop() 即 ctrl.abort() */
 let streamCtrl: AbortController | null = null
+
+/**
+ * 本地对 messages 的写入序号（每本地写一次 +1）。
+ *
+ * 解决的是什么问题：新建会话时 `ensureConversation()` 会 `set({ activeId })`，
+ * 而 ChatPage 有个 `useEffect([activeId])` 会去 `loadMessages()`。那个请求返回时执行
+ * `set({ messages: list })` —— **整个数组替换**。但此刻本地已经插入了
+ * 「用户消息 + 空的 AI 气泡」，流式增量也正在往里写；而这份"历史"里
+ * **只有用户消息**（后端开流前先落库用户消息，AI 回复要等流结束才写库）。
+ * 于是气泡被冲掉：delta 按 id 找不到消息 → 界面不显示 → 但后端已落库，
+ * 所以「切走再切回 / 刷新」又能看到。表现为「第一次对话的回复不显示」。
+ *
+ * 解法：`loadMessages` 发请求前记下序号，返回后若序号变了，说明这期间本地写过
+ * 消息，这份历史比本地状态旧 → **丢弃它**。标记点覆盖乐观插入与每个流式增量，
+ * 因此无论竞态发生在哪个时刻都能拦住。
+ */
+let localWriteSeq = 0
+
+/** 标记「本地刚写过 messages」 */
+function markLocalWrite(): void {
+  localWriteSeq += 1
+}
 
 export const useChatStore = create<ChatState>((set, get) => ({
   conversations: [],
@@ -94,6 +118,54 @@ export const useChatStore = create<ChatState>((set, get) => ({
     })
   },
 
+  async deleteConversation(id) {
+    try {
+      // 失败文案由这里给（api 层传了 silent，见 chatApi.deleteConversation）
+      await chatApi.deleteConversation(id)
+    } catch (error) {
+      // 失败：**列表一个字节都不动**。后端可能压根没删掉，
+      // 前端必须与后端保持一致，不能"看着删了、刷新又回来"。
+      toast.error(error instanceof ApiError ? error.message : '删除失败，请稍后再试')
+      return
+    }
+
+    const { conversations, activeId } = get()
+    const index = conversations.findIndex((c) => c.id === id)
+    if (index === -1) return
+    const rest = conversations.filter((c) => c.id !== id)
+
+    // 删的不是当前会话：只是列表少一条，消息区不动
+    if (activeId !== id) {
+      set({ conversations: rest })
+      return
+    }
+
+    /*
+     * 删的**正是当前会话**：清空消息区并把 activeId 让给下一条。
+     *
+     * ⚠️ 这里**有意不碰 profileStore**（不清画像、不 bumpVersion）：
+     * 画像标签与成长任务由后端按 user_id 独立存储，删聊天记录**不影响**用户画像 ——
+     * 这是产品需求。只有对话里**新抽出标签**才算画像写操作（见 send() 的 onTag）。
+     */
+    // 正在流式时删掉当前会话：先停流，否则流会继续往一个已删除的会话里写
+    if (get().streamState === 'streaming' || get().streamState === 'connecting') get().stop()
+
+    // "下一条"= 原来紧邻它的那一条；它本来就是最后一条时没有下一条 → null，
+    // 此时消息区由空态兜住（ChatPage 的 useEffect 只有 activeId 真值才 loadMessages）
+    const next = rest[index] ?? null
+    set({
+      conversations: rest,
+      activeId: next?.id ?? null,
+      messages: [],
+      conclusion: null,
+      conclusionReady: false,
+      // 追问进度属于会话，必须跟着换：ChatPage 只在 activeId 变化时 loadMessages，
+      // 不会重新拉 followup_round / followup_direction，留旧值会显示别的会话的进度
+      followupRound: next?.followup_round ?? null,
+      followupDirection: next?.followup_direction ?? null,
+    })
+  },
+
   async ensureConversation() {
     const existing = get().activeId
     if (existing) return existing
@@ -107,12 +179,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   async loadMessages(conversationId) {
+    // 记下"发请求时"的本地写入序号
+    const seqAtStart = localWriteSeq
     set({ loading: true })
     try {
       const list = normalizeList(await chatApi.listMessages(conversationId))
+      // 这期间本地写过消息（乐观插入 / 流式增量）→ 这份历史是旧的，丢弃，
+      // 否则会把正在流式渲染的 AI 气泡冲掉（见 localWriteSeq 的说明）
+      if (seqAtStart !== localWriteSeq) return
+      // 这期间切换了会话 → 结果已不属于当前会话，同样丢弃
+      if (get().activeId !== conversationId) return
       set({ messages: list })
     } catch {
-      set({ messages: [] })
+      // 失败时也要遵守同一套护栏，避免把别的会话/正在流式的消息清空
+      if (seqAtStart === localWriteSeq && get().activeId === conversationId) {
+        set({ messages: [] })
+      }
     } finally {
       set({ loading: false })
     }
@@ -161,10 +243,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       streamState: 'connecting',
       error: null,
     }))
+    // 乐观插入属于本地写入：让任何在途的 loadMessages 结果作废
+    markLocalWrite()
 
     track('chat_round', { conversation_id: conversationId })
 
     const appendDelta = (delta: string) => {
+      // 每个增量都算一次本地写入：只要流还在推进，在途的历史请求就不该生效
+      markLocalWrite()
       set((state) => ({
         messages: state.messages.map((m) =>
           m.id === assistantId ? { ...m, content: m.content + delta } : m,
@@ -226,6 +312,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return
       }
 
+      // 流结束：本地已经握着完整回复，同样让在途的历史请求作废
+      markLocalWrite()
       set({ streamState: 'done' })
       // 对话结束属于画像写操作
       useProfileStore.getState().bumpVersion()

@@ -186,6 +186,8 @@ export const put = <T>(url: string, data?: unknown, config?: AxiosRequestConfig)
   request<T>({ ...config, url, method: 'PUT', data })
 
 /*
- * 未提供 patch / del 助手：后端 37 条路由里**没有任何 PATCH 或 DELETE**。
- * 等后端真的加了再补，避免有人顺手调用一个不存在的端点。
+ * 未提供 patch / del 助手：后端 37 条路由里原本**没有任何 PATCH 或 DELETE**。
+ * 现在只多了一条 DELETE /chat/conversations/{id}，还没有多到值得抽助手，
+ * 调用方按 api/resume.ts 里 downloadFile 的先例直接用 client.delete(...)，
+ * 见 api/chat.ts 的 chatApi.deleteConversation。
  */

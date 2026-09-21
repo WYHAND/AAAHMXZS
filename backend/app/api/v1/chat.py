@@ -63,6 +63,29 @@ async def list_conversations(
     return ApiResponse.ok(chat_service.list_conversations(db, current_user))
 
 
+@router.delete(
+    "/conversations/{conversation_id}",
+    response_model=ApiResponse[None],
+    summary="删除对话（连同其全部消息）",
+)
+async def delete_conversation(
+    conversation_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ApiResponse[None]:
+    """删除一个对话及其全部消息。
+
+    - 不存在**或不属于当前用户** -> 404 + ``code 2001``（不区分，避免枚举 oracle，见 README §8.1）；
+    - **不会触碰 ``profiles`` / ``profile_tags``**：画像按 ``user_id`` 独立存储，
+      删聊天记录不影响画像（这是产品决策，见 README §8 与 §4.14）；
+    - 重复删除同一个 id 第二次返回 2001（已不存在），符合预期。
+
+    响应固定 ``{code:0, message:"success", data:null}``。
+    """
+    chat_service.delete_conversation(db, current_user, conversation_id)
+    return ApiResponse.ok(None)
+
+
 @router.get(
     "/conversations/{conversation_id}/messages",
     response_model=ApiResponse[List[MessageResponse]],

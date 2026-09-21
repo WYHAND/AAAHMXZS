@@ -180,8 +180,16 @@ export default function TestQuestionPage() {
   const percent = total ? Math.round(((index + 1) / total) * 100) : 0
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
-      <div className="flex flex-col gap-2">
+    // 高度来源（改 AppLayout 的间距时必须同步这里，否则按钮就不再固定）：
+    //   移动端(<768px)：顶栏 h-14(3.5rem) + main pt py-6(1.5rem) + main pb pb-24(6rem)  = 11rem
+    //   ≥768px        ：顶栏 h-14(3.5rem) + main pt py-6(1.5rem) + main pb pb-10(2.5rem) = 7.5rem
+    // ⚠️ 这里**不能**用 h-full（height:100%）：AppLayout 外层是 min-h-svh，
+    //    min-height 不构成"确定高度"，百分比会退化成 auto —— 实测过，按钮照样跳 54px。
+    //   只要容器高度确定：「题目区 flex-1」吃掉剩余空间、「操作区 shrink-0」钉在底部，
+    //   选项 3 个还是 4 个都不影响按钮位置。
+    <div className="mx-auto flex h-[calc(100svh-11rem)] w-full max-w-2xl flex-col gap-5 md:h-[calc(100svh-7.5rem)]">
+      {/* 顶部进度：固定高度 */}
+      <div className="flex shrink-0 flex-col gap-2">
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>
             第 {index + 1} / {total} 题 · 已作答 {answeredCount}
@@ -191,40 +199,47 @@ export default function TestQuestionPage() {
         <Progress value={percent} className="h-1.5" />
       </div>
 
-      <Card>
-        <CardContent className="flex flex-col gap-4 pt-6">
-          <h1 className="text-lg font-semibold text-foreground">{current.content}</h1>
-          {current.multiple ? (
-            <p className="text-xs text-muted-foreground">这题可选多项（骨架阶段按单选提交）</p>
-          ) : null}
+      {/* 题目区：吃掉剩余高度，卡片在其中垂直居中；选项过多时本区域内部滚动
+          （min-h-0 必须写，否则 flex 子项不会收缩，滚动失效） */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="flex min-h-full items-center justify-center">
+          <Card className="w-full">
+            <CardContent className="flex flex-col gap-4 pt-6">
+              <h1 className="text-lg font-semibold text-foreground">{current.content}</h1>
+              {current.multiple ? (
+                <p className="text-xs text-muted-foreground">这题可选多项（骨架阶段按单选提交）</p>
+              ) : null}
 
-          <div className="flex flex-col gap-2">
-            {current.options.map((option) => {
-              const selected = answers[current.id] === option.key
-              return (
-                <button
-                  key={option.key}
-                  type="button"
-                  onClick={() => choose(option.key)}
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg border px-4 py-3 text-left text-sm transition-colors',
-                    selected
-                      ? 'border-primary bg-primary-soft text-foreground'
-                      : 'border-border bg-card hover:bg-secondary',
-                  )}
-                >
-                  <span className="font-numeric text-xs text-muted-foreground">
-                    {option.key}
-                  </span>
-                  <span>{option.text}</span>
-                </button>
-              )
-            })}
-          </div>
-        </CardContent>
-      </Card>
+              <div className="flex flex-col gap-2">
+                {current.options.map((option) => {
+                  const selected = answers[current.id] === option.key
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => choose(option.key)}
+                      className={cn(
+                        'flex items-center gap-3 rounded-lg border px-4 py-3 text-left text-sm transition-colors',
+                        selected
+                          ? 'border-primary bg-primary-soft text-foreground'
+                          : 'border-border bg-card hover:bg-secondary',
+                      )}
+                    >
+                      <span className="font-numeric text-xs text-muted-foreground">
+                        {option.key}
+                      </span>
+                      <span>{option.text}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
-      <div className="flex items-center justify-between">
+      {/* 底部操作区：固定在底部，任何题目都在同一位置 */}
+      <div className="flex shrink-0 items-center justify-between border-t pt-4">
         <Button
           variant="outline"
           disabled={index === 0}

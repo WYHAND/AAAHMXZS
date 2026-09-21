@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Dict, List, Optional
 from uuid import UUID
 
+from sqlalchemy import delete as sa_delete
 from sqlmodel import Session, select
 
 from app.ai import deepseek_client
@@ -28,6 +29,7 @@ from app.ai.parser import load_prompt
 from app.ai.schemas import ConclusionCardResult, empty_conclusion
 from app.core.errors import BusinessException, ErrorCode, not_found_unless_owner
 from app.models.conversation import Conversation, Message
+from app.models.task import Task
 from app.models.user import User, utcnow
 from app.schemas.chat import (
     ChatConclusionCard,
@@ -110,13 +112,86 @@ class StreamPreparation:
 # 对话 CRUD
 # ---------------------------------------------------------------------------
 
+# 默认标题前缀（需求 2a：新建会话未传 title 时用「新对话 N」）
+DEFAULT_TITLE_PREFIX = "新对话"
+
+
+def next_default_title(db: Session, user_id) -> str:
+    """给新会话生成默认标题 ``新对话 N``（N 从 1 开始，同一用户下不重名）。
+
+    ``N`` 以"该用户已有会话数 + 1"为起点；因为**用户可以删会话**，
+    纯计数会撞名（例如有 1/2/3 后删掉 2，再建就会得到"新对话 3"），
+    所以这里再往后找到一个没被占用的编号 —— 既满足"序号递增"的手感，
+    又真正保证同一用户下不重名。
+
+    ⚠️ **标题只在创建时写入这一处**（需求 2 的范围已收敛为"只做序号命名"）：
+    曾经实现过"用首条消息内容自动命名会话"，**已按用户要求完整回退**。
+    理由是标题行为要**可预测** —— 序号至少能确定"这是第几个会话"，
+    而自动命名会在用户没预期的时候改变标题（说第一句话标题就变了）。
+    因此 ``send_message`` / ``prepare_stream`` / ``stream_reply`` 里
+    **没有任何修改 title 的代码**；改标题只能通过创建时的 ``title`` 入参。
+    """
+    existing = set(
+        db.exec(select(Conversation.title).where(Conversation.user_id == user_id)).all()
+    )
+    index = len(existing) + 1
+    candidate = f"{DEFAULT_TITLE_PREFIX} {index}"
+    while candidate in existing:
+        index += 1
+        candidate = f"{DEFAULT_TITLE_PREFIX} {index}"
+    return candidate
+
+
 def create_conversation(db: Session, user: User, payload: ConversationCreate) -> ConversationResponse:
-    """POST /chat/conversations：创建对话。"""
-    conversation = Conversation(user_id=user.id, title=payload.title or "新的职业对话")
+    """POST /chat/conversations：创建对话。
+
+    未传 ``title`` 时用 ``新对话 N``（而不是所有会话都叫"新的职业对话"——
+    那样列表里一堆同名，用户根本认不出来）。
+    **标题不会被后续消息改写**（决策理由见 ``next_default_title`` 的说明）。
+    """
+    title = (payload.title or "").strip() or next_default_title(db, user.id)
+    conversation = Conversation(user_id=user.id, title=title)
     db.add(conversation)
     db.commit()
     db.refresh(conversation)
     return to_conversation_response(db, conversation)
+
+
+def delete_conversation(db: Session, user: User, conversation_id: UUID) -> None:
+    """DELETE /chat/conversations/{id}：删除会话**及其全部消息**。
+
+    实现要点（两条都是刻意的，不是随手写的）：
+
+    1. **显式先删 messages，再删 conversation**，不依赖数据库级联。
+       模型里 ``messages.conversation_id`` 是 ``foreign_key`` 但没有
+       ``ondelete="CASCADE"``；而且 SQLite 的外键行为取决于 ``PRAGMA foreign_keys``
+       （本项目已在 ``app/db/session.py`` 逐连接开启，但换个部署/迁移工具就可能没开）。
+       显式删除在"开不开外键强制"的库上行为一致，也顺手兼容了 PostgreSQL 的 NO ACTION。
+    2. ⚠️ **产品决策：只删对话与消息，绝不触碰 ``profiles`` / ``profile_tags``。**
+       画像标签是按 ``user_id`` 独立存储的，它记录的是"对这个人已经了解到的信息"，
+       和"哪次聊天说了这些"无关。用户在界面上清理聊天记录时，
+       绝不能连带丢掉他辛苦积累的画像 —— 否则删一次记录就要重新测评，
+       而画像又是所有推荐（任务、简历、面试）的输入。
+       所以这里**一行 profiles / profile_tags 的代码都不写**；若以后有人想"顺手清理画像"，
+       请先看 README §8 的这条决策。
+
+    幂等性：重复删除同一个 id，第二次会因为会话已不存在而返回 2001（符合预期，
+    与"不存在/不属于自己"同一语义，不做特殊处理）。
+    """
+    conversation = get_conversation(db, user, conversation_id)
+
+    # ① 先删消息（显式，不依赖级联）
+    db.execute(sa_delete(Message).where(Message.conversation_id == conversation.id))
+
+    # ② 再删会话本身
+    db.delete(conversation)
+
+    # ③ 只提交这两类改动。**注意：全程没有碰 profiles / profile_tags**（见上方产品决策）
+    db.commit()
+    logger.info(
+        "删除对话 user_id=%s conversation_id=%s（画像 profiles/profile_tags 未受影响）",
+        user.id, conversation_id,
+    )
 
 
 def list_conversations(db: Session, user: User) -> List[ConversationResponse]:
@@ -211,6 +286,24 @@ def _build_llm_messages(
         "注意：以上是背景信息，不要直接念出来，用于决定你追问的方向。",
     ]
 
+    # 让 AI 能问"上次那件事做到哪了"（规则 9：先问进展再挖细节）。
+    # 不注入这个，模型根本不知道用户手里有什么任务，只能反复泛泛地问兴趣/性格——
+    # 那正是用户反馈的"一直问相同的问题"。
+    ongoing_tasks = db.exec(
+        select(Task)
+        .where(Task.user_id == user.id, Task.status == "进行中")  # type: ignore[arg-type]
+        .order_by(Task.updated_at.desc())  # type: ignore[union-attr]
+        .limit(3)
+    ).all()
+    if ongoing_tasks:
+        titles = "、".join(f"「{t.title}」" for t in ongoing_tasks)
+        context_lines.append(
+            f"用户进行中的成长任务：{titles}。"
+            "如果本轮合适，可以顺势问他这些任务做到哪一步了（一轮只问一个，不要连问）。"
+        )
+    else:
+        context_lines.append("用户目前没有进行中的成长任务。")
+
     state = followup or FollowupState()
     if state.direction:
         context_lines.append(
@@ -262,6 +355,9 @@ async def send_message(db: Session, user: User, conversation_id: UUID, payload: 
         raise BusinessException(ErrorCode.PARAM_ERROR, "该消息正在生成回复，请勿重复提交")
 
     user_message = _persist_user_message(db, conversation, payload.content, payload.client_msg_id)
+
+    # ⚠️ 这里**不修改会话标题**：需求 2 的范围已收敛为"仅创建时按序号命名"，
+    #    "用首条消息自动命名"的方案已按用户要求完整回退（理由见 next_default_title 的说明）。
 
     # 7.7 这一步开始前的追问状态（用于给 Prompt 注入换维度指令）。
     # 用 db.get 重新取一次：conversation 实例可能已被前面的 commit() expire，
@@ -344,7 +440,10 @@ def prepare_stream(
             ),
         )
 
+    # ⚠️ 这里**不修改会话标题**（与 send_message 一致）：首条消息自动命名已回退，
+    #    标题只在 create_conversation 里写一次（见 next_default_title 的说明）。
     user_message = _persist_user_message(db, conversation, content, client_msg_id)
+
     # 7.7：读这一步开始前的追问状态（既用于 Prompt 换维度指令，也用于 start/delta 事件）。
     # 同样用 db.get 重新取，避免拿到被 commit() expire 的实例。
     state = read_followup_state(db.get(Conversation, conversation.id) or conversation)

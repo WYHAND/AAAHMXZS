@@ -1,0 +1,106 @@
+{
+  // VS Code 任务配置：一次点击启动项目
+  // 用法：Ctrl+Shift+P → 输入 "Run Task" → 选择任务；或 Ctrl+Shift+B 直接跑默认任务
+  // 注意：每个任务会占用一个终端面板，启动后不要关闭面板（关闭 = 杀掉服务）
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "▶ 启动全部（前端 + 后端）",
+      "detail": "并行启动 FastAPI(:8000) 与 Vite(:5173)，各占一个终端面板",
+      "dependsOn": ["1 · 后端 FastAPI", "2 · 前端 Vite"],
+      "dependsOrder": "parallel",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "1 · 后端 FastAPI",
+      "detail": "建表灌种子 + 启动 uvicorn（http://localhost:8000，接口文档 /docs）",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy", "Bypass",
+        "-NoProfile",
+        "-File", "${workspaceFolder}\\dev-backend.ps1"
+      ],
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": false,
+      "problemMatcher": [],
+      "presentation": {
+        "group": "dev",
+        "panel": "dedicated",
+        "reveal": "always",
+        "clear": true,
+        "echo": true
+      }
+    },
+    {
+      "label": "2 · 前端 Vite",
+      "detail": "启动 Vite 开发服务器（http://localhost:5173）",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy", "Bypass",
+        "-NoProfile",
+        "-File", "${workspaceFolder}\\dev-frontend.ps1"
+      ],
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": false,
+      "problemMatcher": [],
+      "presentation": {
+        "group": "dev",
+        "panel": "dedicated",
+        "reveal": "always",
+        "clear": true,
+        "echo": true
+      }
+    },
+    {
+      "label": "3 · 初始化数据库（建表 + 灌种子）",
+      "detail": "幂等：重复执行不会重复插数据。换机器或删了 data/app.db 后跑一次",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy", "Bypass",
+        "-NoProfile",
+        "-Command",
+        "Set-Location '${workspaceFolder}\\backend'; & '.\\venv\\Scripts\\python.exe' -m app.db.init_db"
+      ],
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "reveal": "always", "clear": true }
+    },
+    {
+      "label": "4 · 安装全部依赖（后端 + 前端）",
+      "detail": "新环境第一次使用时跑一次：建 venv 装 Python 依赖，再装前端依赖",
+      "dependsOn": ["4a · 安装后端依赖", "4b · 安装前端依赖"],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "presentation": { "panel": "shared", "reveal": "always" }
+    },
+    {
+      "label": "4a · 安装后端依赖",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy", "Bypass",
+        "-NoProfile",
+        "-File", "${workspaceFolder}\\setup-backend.ps1"
+      ],
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "reveal": "always", "clear": true }
+    },
+    {
+      "label": "4b · 安装前端依赖",
+      "type": "shell",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "set \"PATH=C:\\Program Files\\nodejs;%PATH%\" && cd /d \"${workspaceFolder}\\frontend\" && npm install"
+      ],
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "reveal": "always", "clear": true }
+    }
+  ]
+}

@@ -33,15 +33,60 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Textarea } from '@/components/ui/textarea'
 import { PageShell } from '@/components/PageShell'
 import { taskProgress, useTaskStore } from '@/store/taskStore'
 import type { TaskStep } from '@/types'
+import { toResourceLink } from '@/utils/resourceLink'
+import { cn } from '@/lib/utils'
 
 const ABANDON_REASONS = ['太难了，做不下去', '不感兴趣了', '时间不够', '方向变了']
+
+/** 打卡表单选项：全部是"点一下"就能答完的，不需要用户组织语言 */
+const STEP_PROGRESS = ['做完了', '做了一半', '还没开始'] as const
+const STEP_FEELING = ['顺利', '有点卡', '卡住了'] as const
+
+/** 打卡表单里的单选按钮组（沿用答题页的选中样式，保持全站一致） */
+function ChoiceRow({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string
+  options: readonly string[]
+  value: string
+  onChange: (next: string) => void
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Label>{label}</Label>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => {
+          const selected = value === option
+          return (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onChange(option)}
+              className={cn(
+                'rounded-lg border px-3 py-1.5 text-sm transition-colors',
+                selected
+                  ? 'border-primary bg-primary-soft text-foreground'
+                  : 'border-border bg-card hover:bg-secondary',
+              )}
+            >
+              {option}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 /**
  * 任务详情与打卡（设计说明书 3.2 ③）
@@ -67,8 +112,11 @@ export default function TaskDetailPage() {
 
   const [activeStepId, setActiveStepId] = useState<string | null>(null)
   const [checkInOpen, setCheckInOpen] = useState(false)
-  const [duration, setDuration] = useState('')
-  const [blocker, setBlocker] = useState('')
+  // 打卡改成「做题/填表」：两个单选 + 一个可选短填空。
+  // 产品决策：**不要求用户写小作文**（写长文本是留存杀手，尤其对低主动性用户）。
+  const [stepProgress, setStepProgress] = useState<string>(STEP_PROGRESS[0])
+  const [stepFeeling, setStepFeeling] = useState<string>(STEP_FEELING[0])
+  const [note, setNote] = useState('')
   const [reason, setReason] = useState(ABANDON_REASONS[0])
   const [submitting, setSubmitting] = useState(false)
 
@@ -88,6 +136,10 @@ export default function TaskDetailPage() {
     () => steps.find((s) => s.id === activeStepId),
     [activeStepId, steps],
   )
+
+  // 后端的 resource 存的是**搜索关键词**（Prompt 明确禁止编造 URL），
+  // 不能直接当 href 用（会跳到本站 404）。这里翻译成对应平台的搜索页。
+  const resourceLink = useMemo(() => toResourceLink(activeStep?.resource), [activeStep])
 
   if (loading && !task) {
     return (
@@ -117,19 +169,16 @@ export default function TaskDetailPage() {
   const handleCheckIn = async () => {
     if (!id || !activeStep) return
     setSubmitting(true)
-    // 后端 TaskStepCompleteRequest 只有一个 feedback 字段
-    const feedback = [
-      duration.trim() ? `花了多久：${duration.trim()}` : '',
-      blocker.trim() ? `卡在哪：${blocker.trim()}` : '',
-    ]
+    // 后端 TaskStepCompleteRequest 只有一个 feedback 字段：
+    // 把「做题式」的答案合成一句结构化文本（不是让用户写作文，是我们自己拼）
+    const feedback = [`进度：${stepProgress}`, `感受：${stepFeeling}`, note.trim() ? `补充：${note.trim()}` : '']
       .filter(Boolean)
-      .join('\n')
+      .join(' · ')
     const ok = await completeStep(id, activeStep.id, feedback)
     setSubmitting(false)
     if (ok) {
       setCheckInOpen(false)
-      setDuration('')
-      setBlocker('')
+      setNote('')
       toast.success('打卡成功，首页和画像已同步更新')
     } else {
       toast.error('打卡失败，请稍后再试')
@@ -235,15 +284,15 @@ export default function TaskDetailPage() {
               </p>
             )}
 
-            {activeStep.resource ? (
+            {resourceLink ? (
               <div className="flex flex-wrap gap-2">
                 <a
-                  href={activeStep.resource}
+                  href={resourceLink.href}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs text-primary hover:bg-primary-soft"
                 >
-                  参考资源
+                  {resourceLink.label}
                   <ExternalLink className="size-3" />
                 </a>
               </div>
@@ -308,36 +357,36 @@ export default function TaskDetailPage() {
         </AlertDialog>
       </div>
 
-      {/* 打卡弹窗 */}
+      {/* 打卡弹窗：做题式表单（点选为主，最多 30 字可选补充），不让用户写小作文 */}
       <Dialog open={checkInOpen} onOpenChange={setCheckInOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>记录这一步</DialogTitle>
             <DialogDescription>
-              这一步花了多久？卡在哪？（都可以不填，会合成一段反馈提交）
+              点两下就好，不用写字。（最后那一栏可留空）
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
+            <ChoiceRow
+              label="这一步做到哪了？"
+              options={STEP_PROGRESS}
+              value={stepProgress}
+              onChange={setStepProgress}
+            />
+            <ChoiceRow
+              label="做得顺利吗？"
+              options={STEP_FEELING}
+              value={stepFeeling}
+              onChange={setStepFeeling}
+            />
             <div className="flex flex-col gap-2">
-              <Label htmlFor="duration">花了多久</Label>
-              <Textarea
-                id="duration"
-                rows={2}
-                maxLength={500}
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
-                placeholder="比如：断断续续两天"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="blocker">卡在哪</Label>
-              <Textarea
-                id="blocker"
-                rows={2}
-                maxLength={500}
-                value={blocker}
-                onChange={(e) => setBlocker(e.target.value)}
-                placeholder="比如：不知道选什么技术栈"
+              <Label htmlFor="note">想补充一句？（选填，最多 30 字）</Label>
+              <Input
+                id="note"
+                maxLength={30}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="比如：找不到教程"
               />
             </div>
           </div>

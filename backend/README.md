@@ -1107,6 +1107,63 @@ find_assistant_reply -> '回复1'      # 修复前是 None
 > 仍需注意：显式传 `created_at` 的调用方（导入历史数据/测试）会绕过单调保证；
 > 那种情况下排序是未定义的（查询里已加 id 次级键，至少保证同一次查询结果稳定）。
 
+### 4.14 会话标题规则与「删除会话不影响画像」
+
+#### 4.14.1 标题只在创建时确定：`新对话 N`
+
+- 创建会话（`POST /chat/conversations`）**未传 `title`** 时，服务端生成 **`新对话 N`**；
+- `N` 以"该用户**已有会话数 + 1**"为起点，并往后跳过已被占用的编号
+  （用户可以删会话，纯计数会撞名：有 1/2/3 后删掉 2，纯计数再建就会得到重复的"新对话 3"）；
+- 传了 `title` 就用传来的值（会 `strip()`，全是空白视为未传）。
+
+实现：`chat_service.next_default_title()`；**唯一的标题写入点**就是
+`create_conversation()` 里那一行 `Conversation(user_id=..., title=title)`。
+
+#### 4.14.2 决策：**不做**「用首条消息自动命名」
+
+曾实现过"首条消息到达时把标题改成消息前 14 个字"，**已按用户要求完整回退**
+（代码、辅助函数、注释、以及本节的相关描述都已删干净）。
+
+> **决策理由（用户明确要求）**：标题行为必须**可预测**。
+> 序号命名至少能确定"这是第几个会话"；而自动命名会在用户没预期的时候改变标题 ——
+> 刚发一句话，列表里的名字就变了，用户会觉得"这东西自己乱改东西"。
+
+因此 `send_message`、`prepare_stream`、`stream_reply` 里**没有任何修改 title 的代码**
+（各留了一条注释说明"这里刻意不改标题"）。实测确认：建会话 → 发第 1 条 → 发第 2 条 →
+`GET /chat/conversations` 与直接查库，标题始终是 `新对话 1`。
+
+#### 4.14.3 决策：**删除会话绝不影响画像**
+
+`DELETE /chat/conversations/{id}` 只删 `conversations` 与 `messages` 两类数据，
+**一行 `profiles` / `profile_tags` 都不碰**。
+
+> 为什么这是刻意的产品决策（不是实现遗漏）：
+> 画像标签按 `user_id` 独立存储，它回答的是"**对这个人**已经了解到什么"，
+> 与"这些信息是在哪次聊天里说的"无关。用户清理聊天记录是**界面整理行为**，
+> 不该连带丢掉他积累的画像 —— 否则删一次记录就得重新测评，
+> 而画像又是后续所有推荐（任务、简历、面试）的输入。
+> 所以 `delete_conversation()` 里只出现 `Message` 与 `Conversation` 两种模型，
+> 并写明了这条决策；以后若有人想"顺手清理画像"，请先看这一节。
+
+实测：删会话前后 `GET /profile` 的 `tags` **5 条 → 5 条且内容逐字段完全一致**，
+四个分数与阶段也完全一致（原始 JSON 对照见 §5.1.1）。
+
+#### 4.14.4 删除会话的实现细节：显式删消息
+
+```python
+conversation = get_conversation(db, user, conversation_id)   # 不存在/越权 -> 2001
+
+db.execute(sa_delete(Message).where(Message.conversation_id == conversation.id))  # ① 先删消息
+db.delete(conversation)                                                          # ② 再删会话
+db.commit()                                                                       # ③ 只提交这两类
+```
+
+**为什么显式删而不用级联**：模型里 `messages.conversation_id` 只是 `foreign_key`，
+**没有** `ondelete="CASCADE"`；而且 SQLite 的外键行为取决于 `PRAGMA foreign_keys`
+（本项目已在 `app/db/session.py` 逐连接开启 —— 见第 6 节 ㉝，但换个部署或迁移工具就可能没开）。
+显式删除在"开不开外键强制"的库上行为一致，也顺带兼容 PostgreSQL 的 `NO ACTION`
+（PG 上先删父行会直接报外键冲突）。
+
 ---
 
 ## 5. 尚未验证 / 已知未实现
@@ -1129,7 +1186,6 @@ find_assistant_reply -> '回复1'      # 修复前是 None
 | ④ | `python -m uvicorn app.main:app --port 8000` | 启动成功；`/api/v1/health` 200、`/docs` 200、`/` 200 |
 
 **端到端链路（20 项断言全部 PASS，原始 JSON 见提交记录）**
-
 注册 → `GET /profile`(tested=false) → `GET /home/summary`(next=`/test/intro`)
 → `GET /test/questions`(30 题，id=`q_clarity_01`) → `POST /test/submit`
 → `GET /profile`(tested=true) → `GET /home/summary`(next 切到 `/chat`)
@@ -1151,6 +1207,33 @@ stage           submit='explore'  profile='explore'  一致=True
 
 反例：全零 UUID 答题 → `HTTP 404 code=2001`；同日重复答题 → `HTTP 400 code=1001`；
 不存在的简历文件 → `HTTP 404 code=2001`。
+
+**最近一轮（删除会话 + 标题序号）：16 项断言全部 PASS**
+
+| 验收项 | 实测结果 |
+|---|---|
+| 建 2 个会话的默认标题 | `新对话 1` / `新对话 2` |
+| 发第 1 条消息后标题 | 仍是 `新对话 1`（**未变**） |
+| 发第 2 条消息后标题 | 仍是 `新对话 1`；库里 `conversations.title` 也是 `新对话 1` |
+| 删除前 `GET /profile` | `tags=5`：`[兴趣/产品, 痛点/迷茫, 认知/模糊, 兴趣/沟通组织, 焦虑/中]` |
+| `DELETE /chat/conversations/{id}` | `HTTP 200` + `{"code":0,"message":"success","data":null}` |
+| 删除后 `GET /profile` | `tags=5`，**内容逐字段完全一致**；分数/阶段也一致（`62.5/0/0/25/explore`） |
+| 消息是否删干净 | 库里 `select count(*) from messages where conversation_id=?` = **0**；`GET /{id}/messages` → 404/2001 |
+| 重复删除 | 404/2001（已不存在，符合预期） |
+| 越权删除（B 删 A 的会话） | 404/2001，且 A 的会话**仍在**（剩余会话数=1） |
+| 序号不重名 | 删掉"新对话 1"后再建 → `新对话 3`，标题集合 `['新对话 3','新对话 2']` 无重复 |
+
+**AI 链路已不再是"未验证"**：这一轮 `backend/.env` 里配置了真实
+`DEEPSEEK_API_KEY`，于是下面的链路被**真实调用**并成功返回（不是兜底话术）：
+
+- `chat_text()`（非流式对话）：返回了贴合上下文的真实回复；
+- `chat_prompt_json()` + `profile_extract` **结构化输出**：返回 4 条带 `evidence` 的标签
+  （`兴趣/产品 0.9`、`痛点/迷茫 0.9`、`认知/模糊 0.8`、`焦虑/中 0.6`），
+  并被 `apply_tags` 的权重融合规则写进 `profile_tags`（第二轮后权重 0.86，
+  `evidence_log` 累积）—— 说明 **Pydantic 校验 + 兜底逻辑 + 回流入库整条链路都通**。
+
+仍未验证的是**流式**（SSE）调用与其余 Prompt（`resume_*` / `interview_*` / `task_generate`
+真实调用；其中 `task_generate` 在本轮走的是兜底任务，因为当时未配 Key）。
 
 **运行中被抓出并修复的 8 个真 bug**
 
@@ -1188,17 +1271,18 @@ stage           submit='explore'  profile='explore'  一致=True
 
 #### 5.1.2 仍未验证
 
-- **AI 链路**：没有 DeepSeek API Key，Prompt 未真实调用过模型，结构化输出契约未实测
-  （任务生成走的是 7.6 兜底任务，能在离线状态下产出可打卡的步骤）；
+- **SSE 流式调用**：`app/ai/deepseek_client.py::stream_chat()` 尚未真实调用验证
+  （路由与 OpenAPI 已验证；前端也没消费过真实事件流）。其余 Prompt
+  （`resume_parse` / `resume_optimize` / `interview_*`）同样未真实调用过；
+  `task_generate` 在配 Key 之前的那轮走的是 7.6 兜底任务；
 - **PostgreSQL 路径**：本机没有 PG，`psycopg2` 方言、JSONB DDL、`alembic upgrade` 均未跑过；
 - **Alembic**：`migrations/versions/` 为空，`alembic upgrade head` 是空操作，未生成过迁移；
 - **Docker / Nginx**：`docker-compose` / `nginx -t` 未跑（本机没有 Docker）；
-- **前端联调**：SSE 的真实字节流没有被前端消费过（只验证了路由与 OpenAPI 存在）；
 - **SSE 生成器内的 Session 生命周期**：只在单请求里验证过路由可用，
   没有在前端消费流的同时观察 `SessionLocal()` 的关闭时机；
 - **未写测试**：没有任何 pytest 用例（骨架阶段要求不写），验证用的都是一次性脚本（已删除）；
 - **定时任务**：APScheduler 注册成功（4 个 job），但没有等到实际触发时间；
-- **未验证的边界**：并发打卡/并发提交（SQLite 库级写锁下的表现）、
+- **未验证的边界**：并发打卡/并发提交/并发删除（SQLite 库级写锁下的表现）、
   多处同时 `apply_tags` 的权重融合竞争。
 
 ### 5.2 数据落库现状（哪些在库里，哪些在代码里）
@@ -1573,6 +1657,29 @@ PostgreSQL 分支不需要（天生强制）。
 便捷构造不再各自传 `status_code`；`RequestValidationError` 也统一成 400。
 **编码规则：新增业务码时只在 `CODE_TO_HTTP_STATUS` 里登记一次。**
 
+㉟ **[已决策] 新增 `DELETE /api/v1/chat/conversations/{id}`，且删除会话不影响画像**：
+
+手册 10.2 的 Chat 端点清单里没有删除会话，但界面上必须有"清理对话"的能力。
+实现要点：
+
+- 需登录；**不存在或不属于当前用户 -> 404 + 2001**（沿用 §8.1 规则，不做 oracle）；
+- **显式先删 `messages` 再删 `conversation`**，不依赖数据库级联
+  （模型没有 `ondelete="CASCADE"`，且 SQLite 的 FK 行为取决于 `PRAGMA foreign_keys`）；
+- ⚠️ **只删 `conversations` + `messages`，一行 `profiles` / `profile_tags` 都不碰** ——
+  这是产品决策：画像按 `user_id` 独立存储，清理聊天记录不该连带丢掉画像
+  （否则删一次记录就得重新测评）。详细理由见 **§4.14.3**；
+- 响应 `{code:0,message:"success",data:null}`；重复删除第二次返回 2001（已不存在，符合预期）。
+
+㊱ **[已决策] 会话标题只做序号命名，不做"首条消息自动命名"**：
+
+默认标题从写死的"新的职业对话"改成 **`新对话 N`**（`N` = 该用户已有会话数 + 1，
+并跳过被占用的编号，保证同一用户下不重名）。
+
+曾实现过"首条消息到达时把标题改成消息前 14 个字"，**已按用户要求完整回退**：
+`send_message` / `prepare_stream` / `stream_reply` 里不再有任何写 title 的代码。
+**决策理由（用户明确要求）**：标题行为必须可预测 —— 自动命名会在用户没预期的时候
+改标题（刚发一句话名字就变了）。详见 §4.14.1 / §4.14.2。
+
 ---
 
 ## 6.1 迁移与建表注意事项（与数据库相关的操作）
@@ -1645,6 +1752,7 @@ PostgreSQL 分支不需要（天生强制）。
 | Profile | POST | `/api/v1/profile/feedback` |
 | Chat | POST | `/api/v1/chat/conversations` |
 | Chat | GET | `/api/v1/chat/conversations` |
+| **Chat** | **DELETE** | `/api/v1/chat/conversations/{id}`（**删除会话及其全部消息**，见 §4.14） |
 | Chat | GET | `/api/v1/chat/conversations/{id}/messages` |
 | Chat | POST | `/api/v1/chat/conversations/{id}/messages` |
 | Chat | **POST** | `/api/v1/chat/conversations/{id}/stream`（SSE，**前端使用**） |
@@ -1722,6 +1830,11 @@ PostgreSQL 分支不需要（天生强制）。
   详见 §4.10 与第 6 节 ⑭。
 - **目录穿越防护**：下载前 `Path.resolve()` 规范化，并校验仍在 `UPLOAD_DIR` 之内
   （用路径层级比较，不用字符串前缀），越界按"不存在"拒绝。
+- **删除类操作只删该删的**：`DELETE /chat/conversations/{id}` 只清 `conversations` +
+  `messages`，**绝不触碰 `profiles` / `profile_tags`**（画像按 `user_id` 独立存储，
+  删聊天记录不等于删画像）。见 §4.14.3 与第 6 节 ㉟。
+- **不做"惊喜式"数据改写**：会话标题只在创建时写一次，发消息不改标题
+  （决策理由见 §4.14.2）。以后要加"自动命名/自动改写用户可见字段"之前，先确认产品是否要。
 - `utils/logger.sanitize()` 对 `sk-*`、password、Authorization、secret_key 做脱敏（14.6）。
 - 系统 Prompt 与用户输入分不同 message role（14.7），AI 输出全部过 Pydantic 校验。
 - 上传校验扩展名 + 大小（13.2），磁盘文件名用 `{uuid}.{ext}`（丢弃用户原始名），
