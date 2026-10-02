@@ -53,6 +53,23 @@
   --warning: hsl(35 55% 45%);
   --info: hsl(213 25% 50%);
 
+  /* 奖章配色（「我的奖章」专用语义 token）
+     纪律：这里就是金色的**唯一出处**，组件里只允许引用 var(--medal-*)，
+     不出现任何 Tailwind 默认色板类（amber/yellow/orange…）。
+     亮色取「做旧黄铜」，暗色取「提亮黄金」，靠层叠与高光出金属感。 */
+  --medal-gold: hsl(40 62% 52%);
+  --medal-gold-deep: hsl(32 58% 34%);
+  --medal-gold-soft: hsl(44 58% 82%);
+  --medal-ring: hsl(38 30% 72%);
+  /* 未获得（铸模）态：中性灰，不能糊成一团 —— 仍要看得清是枚奖章 */
+  --medal-mute: hsl(36 12% 62%);
+  --medal-mute-deep: hsl(30 12% 38%);
+  --medal-mute-soft: hsl(40 18% 86%);
+  /* 高光/受光条（白色微暖）：两套主题都成立的一个"提亮"色 */
+  --medal-sheen: hsl(44 60% 97%);
+  /* 奖章底影：不用彩色阴影 */
+  --medal-shadow: 0 2px 6px rgba(28, 25, 23, 0.16);
+
   /* 暖褐低透明阴影（不用彩色阴影 / 发光） */
   --shadow-card: 0 1px 2px rgba(28, 25, 23, 0.05);
   --shadow-pop: 0 8px 24px rgba(28, 25, 23, 0.1);
@@ -90,6 +107,16 @@
   --success: hsl(95 22% 48%);
   --warning: hsl(35 55% 55%);
   --info: hsl(213 25% 62%);
+  /* 奖章配色（暗色）：同色相提亮，保证在深底上仍有金属层次与对比度 */
+  --medal-gold: hsl(42 68% 62%);
+  --medal-gold-deep: hsl(30 50% 26%);
+  --medal-gold-soft: hsl(46 40% 38%);
+  --medal-ring: hsl(38 22% 42%);
+  --medal-mute: hsl(34 10% 40%);
+  --medal-mute-deep: hsl(30 12% 20%);
+  --medal-mute-soft: hsl(32 12% 32%);
+  --medal-sheen: hsl(44 55% 94%);
+  --medal-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
@@ -127,6 +154,16 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-info: var(--info);
+
+  /* 奖章类名：fill-medal-gold / text-medal-gold-deep / stroke-medal-ring ... */
+  --color-medal-gold: var(--medal-gold);
+  --color-medal-gold-deep: var(--medal-gold-deep);
+  --color-medal-gold-soft: var(--medal-gold-soft);
+  --color-medal-ring: var(--medal-ring);
+  --color-medal-mute: var(--medal-mute);
+  --color-medal-mute-deep: var(--medal-mute-deep);
+  --color-medal-mute-soft: var(--medal-mute-soft);
+  --color-medal-sheen: var(--medal-sheen);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);

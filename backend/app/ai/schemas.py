@@ -31,7 +31,16 @@ class ProfileTagItem(BaseModel):
     dimension: str = Field(description="兴趣/能力/技能/痛点/焦虑/认知")
     label: str = Field(max_length=100)
     weight: float = Field(default=0.5, ge=0.0, le=1.0)
-    evidence: Optional[str] = Field(default=None, max_length=500, description="支撑该标签的原文片段")
+    evidence: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description=(
+            "支撑该标签的原文片段 —— **必须是学生自己写过的原话**（从输入里原样复制），"
+            "不是 AI 说的话、不是 AI 的提问、不是 AI 的安慰。没有学生原话就不要输出这条标签。"
+            "服务端读侧还会拿它去 messages.role='user' 里做子串核对"
+            "（见 profile_service.evidence_for_tags），对不上的一律不进 Prompt。"
+        ),
+    )
 
 
 class ProfileExtractResult(BaseModel):
@@ -146,6 +155,48 @@ class TaskGenerateResult(BaseModel):
     steps: List[TaskStepItem] = Field(default_factory=list)
 
 
+# ---------- 11.4 新会话开场白（JSON 结构化 + 声明依据） ----------
+
+class OpeningResult(BaseModel):
+    """开场白的结构化输出：**一句话 + 它依据了哪条素材**。
+
+    ⚠️ **2026-11 语义已变（第三次报同一个问题后）**：新会话的第一句话
+    **只聊日常**（"你今年大几啦？"），所以这一轮**不给模型任何素材**
+    （标签 / 任务 / 用户原话 / stage 一律不进 Prompt）。
+
+    于是 ``used`` 的角色从"申报依据"变成了**自证字段**：
+
+    - 正常情况**恒为空数组** —— 第一句不依据任何素材；
+    - 任何非空的 ``used`` 都会被 ``chat_service._validate_opening`` 判违规
+      （本轮素材清单恒为空，申报的依据必然对不上）→ 换成本地日常模板；
+    - 服务端另外**无条件**扫"用户事实引导语"（``_USER_FACT_HINTS``）：``text`` 里
+      只要出现关于用户的具体事实（"你之前说过…""你提过…""你标签里…"），同样判违规。
+
+    为什么还要保留 ``used`` 这个字段：它是"模型有没有偷偷加事实"的**可校验载体**，
+    接口契约（``{text, used}`` 两个字段）不变，服务端校验逻辑也不用重写。
+
+    ⚠️ **不要**给 ``used`` 加 ``max_length``/枚举校验器：允许空列表，
+    而"非空即违规"这条业务判断留给服务端（``_validate_opening``），Pydantic 层判不了。
+
+    （历史：最初加 ``used`` 是因为纯文本开场白无法检查"关于用户的陈述有没有依据"，
+    实测模型会把素材加工成新事件：「帮同学修电脑」-> 「你上次说帮同学修电脑，那次是哪出问题？」。
+    现在第一句连素材都没有了，这条防线改为"任何用户事实都拦"。）
+    """
+
+    text: str = Field(
+        default="",
+        description="开场白本身：一句话 ≤60 字，口语，无引号/JSON/Markdown/换行",
+    )
+    used: List[str] = Field(
+        default_factory=list,
+        description=(
+            "**恒为空数组**：第一句话只聊日常，不依据任何素材。"
+            "非空（标签/任务标题/用户原话）会被服务端判违规并换成日常模板；"
+            "它现在只用来自证「没有偷偷加关于用户的事实」"
+        ),
+    )
+
+
 # ---------- 11.11 结论卡片 ----------
 
 class ConclusionCardResult(BaseModel):
@@ -211,6 +262,7 @@ __all__ = [
     "InterviewReviewResult",
     "TaskStepItem",
     "TaskGenerateResult",
+    "OpeningResult",
     "ConclusionCardResult",
     "empty_profile_extract",
     "empty_resume_parsed",

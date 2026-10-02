@@ -14,12 +14,12 @@ import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
 import { PageShell } from '@/components/PageShell'
 import { interviewApi } from '@/api/interview'
+import { interviewDimensionLabel } from '@/constants/interview'
 import type { InterviewQuestionReview, InterviewReview, ProfileRadarItem } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -80,8 +80,9 @@ export default function InterviewReviewPage() {
     )
   }
 
+  // 维度名一律过中文映射（AI 偶发英文键时不能直接渲染到雷达图上）
   const dimensions: ProfileRadarItem[] = Object.entries(review.dimension_scores ?? {}).map(
-    ([dimension, score]) => ({ dimension, score }),
+    ([dimension, score]) => ({ dimension: interviewDimensionLabel(dimension), score }),
   )
   const questionReviews = (review.question_reviews ?? []).filter(
     (item): item is InterviewQuestionReview => Boolean(item),
@@ -96,7 +97,6 @@ export default function InterviewReviewPage() {
       <Card data-print="card">
         <CardHeader>
           <CardTitle className="text-base">整体表现</CardTitle>
-          <CardDescription>单系列雷达，颜色只表示维度强弱</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="flex items-baseline gap-2">

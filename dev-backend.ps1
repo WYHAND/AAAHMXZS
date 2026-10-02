@@ -49,7 +49,10 @@ try {
 
     Write-Host ''
     Write-Host '[2/2] 启动 uvicorn：http://localhost:8000    接口文档：/docs' -ForegroundColor Green
-    & $venvPy -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+    # prompt 是 .txt 文件：uvicorn 默认只监听 .py，改 .txt 不会触发重启，
+    # 而 app/ai/parser.py 的 load_prompt 是 lru_cache 的 —— 表现为"改了 prompt 但没生效"
+    # （这个坑实际踩过两次）。把 .txt 也纳入监听，改完立即重启、缓存自然刷新。
+    & $venvPy -m uvicorn app.main:app --reload --reload-include '*.txt' --host 127.0.0.1 --port 8000
 }
 finally {
     Pop-Location

@@ -1,4 +1,4 @@
-﻿"""schemas：Pydantic 请求/响应模型（《开发手册》6.3 命名规范）。
+"""schemas：Pydantic 请求/响应模型（《开发手册》6.3 命名规范）。
 
 命名约定：
 - 请求 ``XxxRequest``
@@ -6,7 +6,12 @@
 - 内部 ``XxxCreate`` / ``XxxUpdate``
 """
 
-from app.schemas.badge import BadgeResponse, UserBadgeResponse
+from app.schemas.badge import (
+    BadgeItemResponse,
+    BadgeOverviewResponse,
+    BadgeProgress,
+    BadgeResponse,
+)
 from app.schemas.chat import (
     ChatConclusionCard,
     ChatRequest,
@@ -59,7 +64,15 @@ from app.schemas.profile import (
     ProfileTagResponse,
     ProfileUpdate,
 )
-from app.schemas.report import ReportResponse
+from app.schemas.report import (
+    GrowthReportContent,
+    GrowthReportResponse,
+    GrowthSuggestion,
+    ReportResponse,
+    ReportSaveRequest,
+    ReportScoreDelta,
+    USER_NOTE_MAX_LENGTH,
+)
 from app.schemas.resume import (
     ResumeCreate,
     ResumeOptimizeRequest,
@@ -69,6 +82,7 @@ from app.schemas.resume import (
     ResumeUpdate,
 )
 from app.schemas.task import (
+    TaskDeleteResponse,
     TaskDetailResponse,
     TaskGenerateRequest,
     TaskResponse,
@@ -133,6 +147,7 @@ __all__ = [
     "TaskStepResponse",
     "TaskDetailResponse",
     "TaskStepCompleteRequest",
+    "TaskDeleteResponse",
     # daily
     "DailyQuestionResponse",
     "TodayQuestionResponse",
@@ -140,9 +155,17 @@ __all__ = [
     "DailyAnswerResponse",
     # report
     "ReportResponse",
+    "GrowthReportResponse",
+    "GrowthReportContent",
+    "GrowthSuggestion",
+    "ReportScoreDelta",
+    "ReportSaveRequest",
+    "USER_NOTE_MAX_LENGTH",
     # badge
     "BadgeResponse",
-    "UserBadgeResponse",
+    "BadgeProgress",
+    "BadgeItemResponse",
+    "BadgeOverviewResponse",
     # home（设计说明书 5.4 补实现）
     "HomeSummaryResponse",
     "HomeProfileSummary",

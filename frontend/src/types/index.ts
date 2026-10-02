@@ -7,9 +7,11 @@
  *
  * 约定：
  * - 所有 id 后端是 UUID，前端一律按 string 处理。
- * - 列表接口的 data 是**裸数组**（后端 PageData 定义了但一处未用），
+ * - 列表接口的 data 多数仍是**裸数组**（后端 PageData 定义了但一处未用），
  *   故列表类型统一用 `ListPayload<T> = T[] | PageData<T>`，读取一律走
  *   `utils/list.ts` 的 normalizeList()。
+ *   ⚠️ 例外：GET /badge 已改成 BadgeOverview **对象**（见文件末尾），
+ *   不要再拿 normalizeList 去套它。
  * - 阶段/状态/难度等枚举在后端是**中文**字符串，前端按 string 兜底 + 常量映射。
  */
 
@@ -108,14 +110,11 @@ export interface Profile {
   user?: User | null
 }
 
-/** 后端 schemas/profile.ProfileFeedbackRequest */
-export interface ProfileFeedbackPayload {
-  tag_id?: string | null
-  approved?: boolean
-  comment?: string | null
-}
-
-/** 画像雷达（前端派生，不是后端字段） */
+/**
+ * 单根雷达轴（前端派生，不是后端字段）。
+ * ⚠️ 个人中心/首页的六轴画像雷达**不用**它（见 components/ProfileRadar.tsx）；
+ * 现在只有面试复盘页拿它装后端 `dimension_scores`。
+ */
 export interface ProfileRadarItem {
   dimension: string
   score: number
@@ -183,10 +182,6 @@ export interface Conversation {
   updated_at: string
   message_count: number
   conclusion?: Record<string, unknown> | null
-  /** 7.7 追问计数器：当前挖掘维度 */
-  followup_direction?: string | null
-  /** 同方向已追问轮数，1 起 */
-  followup_round: number
 }
 
 /** 后端 schemas/chat.MessageResponse */
@@ -238,10 +233,6 @@ export interface SSEPayload {
   conversation_id?: string
   /** 本轮 assistant 消息 id，仅 done 有值 */
   message_id?: string
-  /** 追问轮次：start/delta 是本轮开始前的值，done 是本轮更新后的值；null = 隐藏进度环 */
-  followup_round?: number | null
-  /** 当前挖掘维度；与上一轮不同表示已换维度 */
-  followup_direction?: string | null
   /** 仅 done：是否有结论卡片可拉取 */
   conclusion_ready?: boolean | null
   /** 扩展数据；tag 事件的新标签在 data.data.tags */
@@ -294,6 +285,22 @@ export interface TaskDetail extends Task {
   steps: TaskStep[]
 }
 
+/**
+ * 后端 schemas/task.TaskGenerateResponse —— 只给「生成任务」这一个接口用。
+ *
+ * reused 描述的是**这次调用的结果**，不是任务本身的属性：
+ *   reused === true   服务端命中了已有同题任务、没有新建，上面就是那条**已有**任务
+ *   reused === false  本次真的新建了任务
+ *   reused 缺失       旧后端（字段还没上线）——调用方必须按「新建」处理
+ *
+ * 所以它挂在独立的响应类型上，而不是写进 Task / TaskDetail：
+ * 详情、打卡、放弃、列表这些接口不会因此多出一个永远为 undefined 的字段。
+ * 判定一律看 `reused === true`，不要去匹配 message 里的中文。
+ */
+export interface TaskGenerateResponse extends TaskDetail {
+  reused?: boolean
+}
+
 /** 后端 schemas/task.TaskGenerateRequest */
 export interface TaskGeneratePayload {
   /** 为空则由服务端从画像标签里挑 */
@@ -303,6 +310,24 @@ export interface TaskGeneratePayload {
 /** 后端 schemas/task.TaskStepCompleteRequest：只有 feedback 一个字段 */
 export interface TaskStepCompletePayload {
   feedback?: string | null
+}
+
+/**
+ * 后端 schemas/task.TaskDeleteResponse —— 「删除任务」的返回（硬删除，不可恢复）。
+ *
+ * completed_steps 是**这次真被删掉的已打卡步骤数**：行动力分数就是按"打过卡的步骤"
+ * 累积的，所以删带打卡的任务分数会真的下降。列表页拿不到已打卡步数，
+ * 点删除时要先拉一次详情把这个数字问准，再据此说清后果。
+ */
+export interface TaskDeleteResponse {
+  /** 被删掉的任务 id */
+  id: string
+  /** 任务标题（删除后列表里就没有了，提示语里要用） */
+  title: string
+  /** 被删掉的步骤总数（含没打卡的） */
+  deleted_steps: number
+  /** 其中已打卡的步骤数 */
+  completed_steps: number
 }
 
 /* ------------------------------- 每日一问 ------------------------------- */
@@ -340,6 +365,30 @@ export interface DailyAnswerResponse {
   answered_at: string
   profile_refreshed: boolean
   extracted_tags: Record<string, unknown>[]
+}
+
+/** 后端 schemas/daily_question.DailyHistoryItem（GET /daily/history 的一条） */
+export interface DailyHistoryItem {
+  id: string
+  question_id: string
+  /** 题干原文；题目已不可用（脏数据/题库重建）时后端给空串，条目不丢 */
+  content: string
+  /** 如「兴趣」「能力」；题目已不可用时为 null */
+  dimension: string | null
+  answer: string
+  /** 后端是 naive UTC，收口时补成带 Z 的 ISO（见 api/daily.ts） */
+  answered_at: string
+}
+
+/** 后端 schemas/daily_question.DailyHistoryResponse */
+export interface DailyHistory {
+  /** 用户答过的**真实总条数**（items 被服务端截断时也不会变小） */
+  total: number
+  /**
+   * 后端已按 answered_at 倒序（最新在前），服务端硬上限 100 条。
+   * 前端**不排序、不截断、不翻页**（后端目前不返回分页游标）。
+   */
+  items: DailyHistoryItem[]
 }
 
 /* ------------------------------- 简历 ------------------------------- */
@@ -552,9 +601,56 @@ export interface InterviewReview {
 
 /* ------------------------------- 成长报告 ------------------------------- */
 
-/** 后端 schemas/report.GrowthReportContent（放在 ReportResponse.content 里） */
+/**
+ * 后端 schemas/report.ReportSuggestion（★ 由 List[str] 改成对象数组）
+ * pain_point 为 null 时前端不显示「去做」按钮（不能发空痛点请求）。
+ */
+export interface ReportSuggestion {
+  text: string
+  pain_point: string | null
+}
+
+/**
+ * GET /report 与 POST /report/save 的返回体（**扁平结构**，每次实时计算，不读快照）。
+ *
+ * ⚠️ 这些英文字段名只允许出现在数据层；渲染一律走 constants/score.ts 的中文 label。
+ */
+export interface GrowthReportData {
+  stage: string
+  stage_label?: string | null
+  stage_changed: boolean
+  clarity_score: number
+  action_score: number
+  resume_score: number
+  total_score: number
+  /** 与"最近一次保存的里程碑"相比的变化：{ clarity_score, action_score, resume_score, total_score } */
+  score_delta: Record<string, number>
+  completed_tasks: number
+  completed_steps: number
+  active_days: number
+  highlights: string[]
+  suggestions: ReportSuggestion[]
+  /** 最近一次保存的时间；从没保存过 → null */
+  last_saved_at: string | null
+  /** 最近一次保存的报告里的「我的补充」 */
+  user_note: string
+  /** 是否至少保存过一份（为 false 时不要显示一排 +0） */
+  saved: boolean
+}
+
+/** POST /report/save 的请求体：只允许提交「我的补充」（分数由行为算出，用户改不了） */
+export interface ReportSavePayload {
+  /** 可选，最多 500 字 */
+  user_note?: string
+}
+
+/**
+ * 旧版 schemas/report.ReportResponse { id, user_id, type, content, created_at }。
+ * 后端改造期间可能还在返回这个形状，api/report.ts 的 normalizeReport 会兼容它。
+ */
 export interface GrowthReportContent {
   stage: string
+  stage_label?: string | null
   stage_changed: boolean
   clarity_score: number
   action_score: number
@@ -566,10 +662,14 @@ export interface GrowthReportContent {
   completed_steps: number
   active_days: number
   highlights: string[]
-  suggestions: string[]
+  /** 旧版是纯字符串数组；新版是 { text, pain_point } */
+  suggestions: Array<ReportSuggestion | string>
+  last_saved_at?: string | null
+  user_note?: string
+  saved?: boolean
 }
 
-/** 后端 schemas/report.ReportResponse */
+/** 旧版 schemas/report.ReportResponse */
 export interface GrowthReport {
   id: string
   user_id: string
@@ -581,13 +681,40 @@ export interface GrowthReport {
 
 /* ------------------------------- 奖章 ------------------------------- */
 
-/** 后端 schemas/badge.UserBadgeResponse */
-export interface UserBadge {
-  id: string
-  badge_id: string
+/**
+ * 后端 schemas/badge —— GET /badge 的 data 已从「裸数组」改成 BadgeOverview 对象。
+ *
+ * 旧的 UserBadgeResponse（{ id, badge_id, name, condition, obtained_at }）**已废弃并删除**：
+ * 保留它只会让后来人照着旧形状写。若后端改动还没落地（响应仍是裸数组），
+ * 兜底在 `utils/badge.ts` 的 normalizeBadgeOverview() 里做 —— 类型层不再出现旧形状。
+ *
+ * 约定：
+ * - `items` 顺序由**后端**定（门槛从低到高），前端不排序、不补位。
+ * - `key` 是稳定机器标识，只用来挑奖章美术；取不到已知值时走默认纹样（见 BadgeMedallion）。
+ * - `obtained_at` 可为 null（未获得）。
+ */
+export interface BadgeProgress {
+  current: number
+  target: number
+}
+
+/** first_task / five_steps / profile_shape（以后会有新的，不要再做联合类型收口） */
+export interface BadgeItem {
+  key: string
   name: string
-  condition?: Record<string, unknown> | null
-  obtained_at: string
+  /** 「完成第一个成长任务」 */
+  description: string
+  /** 未获得 = 怎么拿到；已获得 = 一句庆祝 / 意义 */
+  hint: string
+  obtained: boolean
+  obtained_at: string | null
+  progress: BadgeProgress
+}
+
+export interface BadgeOverview {
+  total: number
+  obtained_count: number
+  items: BadgeItem[]
 }
 
 /* ------------------------------- 首页聚合 ------------------------------- */

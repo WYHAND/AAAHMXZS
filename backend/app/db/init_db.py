@@ -150,9 +150,18 @@ def seed_job_keywords() -> int:
 
 
 def seed_badges() -> int:
-    """奖章定义落库（手册 5.4「起步行动家」+ 11.12）。
+    """奖章定义落库（手册 5.4 + 11.12）；返回**新增**枚数。
 
-    幂等：按 ``name`` 判重。``condition`` 是跨方言 JSON 列，整体赋值即可。
+    幂等 **upsert**（不是"按名字跳过已存在"）：按 ``name`` 找，
+    - 不存在 -> 插入；
+    - 存在但 ``condition`` 变了 -> **只更新 condition 这一列**（不动 id / name，
+      所以 ``user_badges`` 里指向它的行一条都不会丢，已获得的奖章不会因为重灌种子而失效）。
+
+    为什么必须更新而不是跳过：真实库里那两枚旧奖章是"没有 key 的旧定义"
+    （``{"event": ..., "threshold": ..., "description": ...}``），
+    前端要靠 ``condition["key"]`` 选奖章美术；只跳过的话它们**永远补不上 key**。
+
+    ``condition`` 是跨方言 JSON 列，整体赋值即可（SQLAlchemy 不追踪 JSON 内部就地修改）。
     """
     from sqlmodel import Session, select
 
@@ -160,23 +169,36 @@ def seed_badges() -> int:
     from app.models.badge import Badge
 
     created = 0
+    updated = 0
     with Session(engine) as db:
-        existing = set(db.exec(select(Badge.name)).all())
+        existing = {badge.name: badge for badge in db.exec(select(Badge)).all()}
         for item in BADGES:
-            if item["name"] in existing:
+            condition = item.get("condition")
+            badge = existing.get(item["name"])
+            if badge is None:
+                db.add(Badge(name=item["name"], condition=condition))
+                created += 1
                 continue
-            db.add(Badge(name=item["name"], condition=item.get("condition")))
-            created += 1
+            if badge.condition != condition:
+                badge.condition = condition
+                db.add(badge)
+                updated += 1
         db.commit()
         total = len(db.exec(select(Badge.id)).all())
-    logger.info("seed_badges: 新增 %s 枚，共 %s 枚（手册 5.4 / 11.12）", created, total)
+    logger.info(
+        "seed_badges: 新增 %s 枚，更新 %s 枚，共 %s 枚（手册 5.4 / 11.12）",
+        created,
+        updated,
+        total,
+    )
     return created
 
 
 def seed_all() -> int:
     """一次性灌入全部种子数据，返回**新增**条数合计。
 
-    幂等：重复执行不会重复插入（各类数据按 code / content / name 判重）。
+    幂等：重复执行不会重复插入（各类数据按 code / content / name 判重；
+    奖章按 name **upsert**，定义变了会更新 ``condition``）。
     """
     total = (
         seed_test_questions()

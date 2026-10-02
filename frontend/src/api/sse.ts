@@ -9,12 +9,12 @@
  * （早期版本的 `/chat/stream` 兜底已删除）。
  *
  * 事件是**具名事件**，每个 data 恒为 {code,message,data} 信封，data.type 与 event: 行一致：
- *   start   data:{type:"start",conversation_id,followup_round?,followup_direction?}
- *   delta   data:{type:"delta",content,conversation_id,followup_round?,followup_direction?}
+ *   start   data:{type:"start",conversation_id}
+ *   delta   data:{type:"delta",content,conversation_id}
  *   tag     data:{type:"tag",data:{tags:[...]}}      ← 标签嵌在 data.data.tags
  *   pending data:{type:"pending",user_message_id} 或 {type:"pending",replay_message_id}
  *           或 {type:"pending",pending:true}          ← 幂等命中，不是错误
- *   done    data:{type:"done",message_id,conversation_id,conclusion_ready,followup_round,...}
+ *   done    data:{type:"done",message_id,conversation_id,conclusion_ready,...}
  *   error   data:null, code=3001/5000 等
  *   end     data:[DONE]（不要 JSON.parse）
  *

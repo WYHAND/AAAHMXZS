@@ -60,6 +60,13 @@ interface InterviewState {
   reset: () => void
 }
 
+/**
+ * 换号世代：`reset()` 每跑一次 +1（登出 / 登录 / 注册都会走到）。
+ * 它挡的是"迟到的响应"：上一个账号在途的 loadQuestions/fetchReview 回来时
+ * 会把**别人的面试题目/复盘**写进新账号的内存。发请求前记下世代、落地前比一次即可。
+ */
+let fetchGeneration = 0
+
 /** 后端 extra.current_followup 平铺出来的待答追问 */
 function followupOf(question: InterviewQuestion | undefined): PendingFollowup | null {
   if (!question?.current_followup) return null
@@ -104,9 +111,12 @@ export const useInterviewStore = create<InterviewState>((set) => ({
   },
 
   async loadQuestions(interviewId) {
+    const generation = fetchGeneration
     set({ loading: true })
     try {
       const data = await interviewApi.questions(interviewId)
+      // 期间换过号 → 这批题目属于上一个账号，丢弃（见 fetchGeneration）
+      if (generation !== fetchGeneration) return
       const questions = data?.questions ?? []
       const currentIndex = Math.min(
         Math.max(data?.current_index ?? 1, 1),
@@ -119,9 +129,10 @@ export const useInterviewStore = create<InterviewState>((set) => ({
         pendingFollowup: followupOf(questions[currentIndex - 1]),
       })
     } catch {
+      if (generation !== fetchGeneration) return
       set({ questions: [], currentIndex: 1, pendingFollowup: null })
     } finally {
-      set({ loading: false })
+      if (generation === fetchGeneration) set({ loading: false })
     }
   },
 
@@ -193,24 +204,37 @@ export const useInterviewStore = create<InterviewState>((set) => ({
   },
 
   async fetchReview(id) {
+    const generation = fetchGeneration
     set({ loading: true })
     try {
       const review = await interviewApi.review(id)
+      if (generation !== fetchGeneration) return
       set({ review: review ?? null })
     } catch {
+      if (generation !== fetchGeneration) return
       set({ review: null })
     } finally {
-      set({ loading: false })
+      if (generation === fetchGeneration) set({ loading: false })
     }
   },
 
+  /**
+   * 换号时必须调（见 store/reset.ts）。
+   * 清掉：进行中的面试 session（含它的 id —— 最重要的一个，页面上所有请求都拿它当参数）、
+   * 已拉到的题目 questions、当前题号 currentIndex、待回答的追问 pendingFollowup、
+   * 复盘 review、loading 标志；并且把 sessionStorage 里的 interview_id 一并删掉
+   * （InterviewSessionPage 刷新后会从那里恢复场次，不删就会去拉上一个账号的面试）。
+   */
   reset() {
+    // 世代 +1：上一个账号在途的 loadQuestions/fetchReview 回来时会被丢掉
+    fetchGeneration += 1
     set({
       session: null,
       questions: [],
       currentIndex: 1,
       pendingFollowup: null,
       review: null,
+      loading: false,
     })
     storage.session.remove(STORAGE_KEY.interviewId)
   },

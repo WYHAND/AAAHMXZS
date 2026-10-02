@@ -8,15 +8,13 @@ from __future__ import annotations
 
 import random
 import re
+import unicodedata
 from typing import Iterable, List, Optional
 
 # 7.7 输出 ≤300 字：后端兜底截断
 MAX_ASSISTANT_CHARS = 300
 
-# 7.7 追问 ≤3 轮：同一方向最多追问次数
-MAX_FOLLOWUP_ROUNDS = 3
-
-# 7.7 对话超过 5 轮无新信息时切换挖掘维度
+# 7.7 对话超过 5 轮无新信息时切换挖掘维度（口径由 chat_system.txt 的规则落地，本常量仅备注）
 MAX_ROUNDS_WITHOUT_NEW_INFO = 5
 
 
@@ -116,6 +114,38 @@ def random_transition(exclude: Optional[str] = None) -> str:
     """随机取一条过渡语（7.7）。"""
     pool = [p for p in TRANSITION_PHRASES if p != exclude] or TRANSITION_PHRASES
     return random.choice(pool)
+
+
+def normalize_for_match(text: str) -> str:
+    """把文本压成"只留内容"的形式，用于**宽松但机械**的子串比对。
+
+    做三件事（都是实测必需的，不是洁癖）：
+    1. **去所有空白**：用户写"我其实会 java 和 C 语言"、模型抄成"我其实会java和C语言"，
+       只差空格；模型改写时几乎一定会动空白。
+    2. **全角 -> 半角**（NFKC）：用户/模型混用全角英数与标点（"ＡＩ" / "AI"、"１" / "1"）。
+    3. **小写化**：ASCII 大小写不该影响命中（实测有用户两次分别写"ai"和"AI"）。
+
+    ⚠️ 只做这层归一化，**不做**同义改写/分词/编辑距离 —— 本函数的所有调用点都用来判断
+    "这段文本到底有没有原样出现过"，模糊化会直接把"没说过"判成"说过"。
+    """
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFKC", str(text))
+    normalized = re.sub(r"\s+", "", normalized)
+    return normalized.lower()
+
+
+def contains_text(haystack: str, needle: str) -> bool:
+    """``needle`` 是否**原样出现**在 ``haystack`` 里（按 :func:`normalize_for_match` 归一化）。
+
+    用于两处方向相反的判断：
+    - 证据归属：用户原话（needle）是否出现在某条用户消息（haystack）里；
+    - 开场白/对话校验：素材（needle）是否出现在模型写的那句话（haystack）里。
+    """
+    key = normalize_for_match(needle)
+    if not key:
+        return False
+    return key in normalize_for_match(haystack)
 
 
 def build_history_text(messages: Iterable[object], limit: int = 20) -> str:

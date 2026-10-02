@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
+from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
 from sqlmodel import Session, select
@@ -21,11 +21,14 @@ from app.models.user import User
 from app.schemas.daily_question import (
     DailyAnswerRequest,
     DailyAnswerResponse,
+    DailyHistoryItem,
+    DailyHistoryResponse,
     DailyQuestionResponse,
     TodayQuestionResponse,
 )
 from app.services import profile_service
 from app.utils.logger import get_logger, sanitize
+from app.utils.time import current_local_date, local_date_of, local_day_range_utc
 
 logger = get_logger(__name__)
 
@@ -166,6 +169,75 @@ def should_refresh_profile(total_answers: int) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# 历史（GET /daily/history）
+# ---------------------------------------------------------------------------
+
+# 服务端硬上限：**不是分页**（10.2 没有分页约定，不自创 offset/cursor）。
+# 用户每天最多答 1 题，正常一年也就 365 条；这里压到 100 条纯粹是"极端脏数据
+# 情况下别一次吐爆响应体"的兜底。`total` 仍返回真实总条数，前端据此提示
+# "仅显示最近 100 条"。要真正分页必须走手册 10.2 的变更流程。
+HISTORY_MAX_ITEMS = 100
+
+# 题目被删/改后 join 不到时的占位（**不静默丢条目**）
+_HISTORY_MISSING_CONTENT = ""
+
+
+def get_history(db: Session, user: User) -> DailyHistoryResponse:
+    """GET /daily/history：当前用户答过的每日一问，``answered_at`` 倒序（最新在前）。
+
+    - 只查"当前 token 的用户"（不接收任何 id），因此不存在越权/2001 的场景；
+    - ``items`` 用 ``daily_answers`` join ``daily_questions`` 取题干与维度；
+    - **容错**：外键虽然指向 ``daily_questions``，但历史脏数据/题库重建可能让某条
+      回答找不到题目。此时 ``content`` 给空字符串、``dimension`` 给 ``null``，
+      **条目照样返回**（绝不静默丢 —— 用户会以为打卡记录消失）。
+      这也保证接口不会因为一条脏数据 500 掉整个历史；
+    - 标题信息一次查出（``IN`` 批量），不做 N+1。
+    """
+    total = count_answers(db, user.id)
+
+    statement = (
+        select(DailyAnswer)
+        .where(DailyAnswer.user_id == user.id)
+        .order_by(
+            DailyAnswer.answered_at.desc(),  # type: ignore[union-attr]
+            DailyAnswer.id.desc(),  # 次级键：时间戳并列时保证顺序稳定（同 README §4.13.8）
+        )
+        .limit(HISTORY_MAX_ITEMS)
+    )
+    answers = list(db.exec(statement).all())
+
+    # 一次批量取题目，避免逐条 db.get 的 N+1
+    question_ids = {row.question_id for row in answers}
+    questions: Dict[Any, DailyQuestion] = {}
+    if question_ids:
+        rows = db.exec(select(DailyQuestion).where(DailyQuestion.id.in_(question_ids))).all()  # type: ignore[union-attr]
+        questions = {q.id: q for q in rows}
+
+    items: List[DailyHistoryItem] = []
+    for row in answers:
+        question = questions.get(row.question_id)
+        if question is None:
+            logger.warning(
+                "每日一问历史：题目已不可用（脏数据），按占位返回 answer_id=%s question_id=%s user_id=%s",
+                row.id, row.question_id, user.id,
+            )
+        items.append(
+            DailyHistoryItem(
+                id=row.id,
+                question_id=row.question_id,
+                content=question.content if question is not None else _HISTORY_MISSING_CONTENT,
+                dimension=question.dimension if question is not None else None,
+                answer=row.answer,
+                answered_at=row.answered_at,
+            )
+        )
+
+    if total > len(items):
+        logger.info("每日一问历史：user_id=%s total=%s 仅返回最近 %s 条", user.id, total, len(items))
+    return DailyHistoryResponse(total=total, items=items)
+
+
+# ---------------------------------------------------------------------------
 # 统计
 # ---------------------------------------------------------------------------
 
@@ -174,9 +246,17 @@ def count_answers(db: Session, user_id) -> int:
 
 
 def _find_answer_today(db: Session, user_id) -> Optional[DailyAnswer]:
-    """今天（服务器本地日期）是否已答。"""
-    start = datetime.combine(datetime.now().date(), time.min)
-    end = start + timedelta(days=1)
+    """今天（**用户本地日历日**）是否已答。
+
+    ``answered_at`` 是 ``utcnow()`` 写的 naive UTC，而"今天"是用户所在时区的
+    日历日，所以窗口必须先在本地日历日上取好、再换算回 UTC 才能和这一列直接比较
+    （换算集中在 ``app/utils/time.py``，不要在这里自己拼 ``datetime.now()``）。
+
+    历史 bug：原先用 ``datetime.combine(datetime.now().date(), time.min)`` 取本地
+    日期当窗口边界，直接和 UTC 列比较，等于窗口整体前移 8 小时 —— 本地
+    00:00–08:00 答的题被判成"不是今天"，页面于是显示未答（见 utils/time.py 注释）。
+    """
+    start, end = local_day_range_utc()
     statement = select(DailyAnswer).where(
         DailyAnswer.user_id == user_id,
         DailyAnswer.answered_at >= start,
@@ -186,7 +266,12 @@ def _find_answer_today(db: Session, user_id) -> Optional[DailyAnswer]:
 
 
 def count_consecutive_days(db: Session, user_id) -> int:
-    """连续打卡天数（骨架实现：从今天往前数连续日期）。"""
+    """连续打卡天数（从**用户本地的今天**往前数连续日期）。
+
+    去重/游标都必须用"本地日历日"：``answered_at`` 是 UTC，直接 ``.date()`` 得到
+    UTC 日历日，和 ``datetime.now().date()``（本地日历日）混用，会在本地
+    00:00–08:00 这段把前一天的答题算到"今天"，连续天数偏大。
+    """
     statement = select(DailyAnswer).where(DailyAnswer.user_id == user_id).order_by(
         DailyAnswer.answered_at.desc()  # type: ignore[union-attr]
     )
@@ -194,9 +279,9 @@ def count_consecutive_days(db: Session, user_id) -> int:
     if not answers:
         return 0
 
-    days = {a.answered_at.date() for a in answers if a.answered_at}
+    days = {local_date_of(a.answered_at) for a in answers if a.answered_at}
     streak = 0
-    cursor = datetime.now().date()
+    cursor = current_local_date()
     if cursor not in days:
         cursor = cursor - timedelta(days=1)
     while cursor in days:

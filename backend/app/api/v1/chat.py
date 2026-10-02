@@ -86,6 +86,47 @@ async def delete_conversation(
     return ApiResponse.ok(None)
 
 
+@router.post(
+    "/conversations/{conversation_id}/opening",
+    response_model=ApiResponse[MessageResponse],
+    summary="获取/生成 AI 开场白（让 AI 先开口）",
+)
+async def ensure_opening(
+    conversation_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ApiResponse[MessageResponse]:
+    """新建会话后调用：确保会话里有一句 AI 开场白，并返回那条消息。
+
+    为什么由后端生成、并且**落库成一条真正的 assistant 消息**：
+    前端自己拼一句"你好，我是你的就业助手"会带来三个问题 ——
+    它不在数据库里（刷新/换设备就没了）、不进 LLM 上下文（模型不知道自己说过这句）、
+    也不算进 ``message_count``（列表里显示 0 条）。落库后这些都自然成立。
+
+    行为约定（三种情况）：
+
+    1. **已有开场白** -> 回放同一条（幂等）。前端"进入会话就调一次"的写法
+       会反复命中这里，永远不会产生第二条开场白。
+    2. **会话没有任何消息** -> 生成开场白：**只聊日常**（年级、今天上什么课、最近在忙什么……），
+       **一句人话、不超过 60 字、只问一件事**，绝不出现 A/B/C 这类选项；
+       ⚠️ **一个字都不提**画像标签 / 进行中任务 / 用户原话 / 阶段
+       （开场白路径不给模型任何画像素材，见 ``chat_service._opening_context``）；
+       画像素材最早从**第 2 轮**起才可以用（``chat_system.txt`` 规则 20）。
+       AI 不可用时给开场专用的**日常**本地模板（7.6）。
+    3. **会话已有消息但没有开场白**（用户先说了话，例如前端没调本接口）
+       -> 返回 ``{code:0, message:"会话已有消息，未生成开场白", data:null}``。
+       这时补一句开场白会插在用户消息**之后**，变成 AI 在自言自语，所以不做。
+
+    生成的这条消息 ``role`` 是 ``assistant``，``client_msg_id`` 是系统保留值
+    ``sys:opening``（详见 ``chat_service.OPENING_CLIENT_MSG_ID`` 的说明）；
+    它不会写任何画像标签 —— 没有任何用户输入，就没有可回流的信息（"声称 ≠ 证据"）。
+    """
+    message = await chat_service.ensure_opening_message(db, current_user, conversation_id)
+    if message is None:
+        return ApiResponse.ok(None, "会话已有消息，未生成开场白")
+    return ApiResponse.ok(message)
+
+
 @router.get(
     "/conversations/{conversation_id}/messages",
     response_model=ApiResponse[List[MessageResponse]],
@@ -118,19 +159,15 @@ async def send_message(
 SSE_DESCRIPTION = (
     "SSE 事件流（事件契约的完整说明见 backend/README.md「SSE 契约」）。\n\n"
     "每个事件的 data 恒为 10.1 的信封，内部 data.type 与 ``event:`` 行一致：\n"
-    'start:   {"code":0,"message":"success","data":{"type":"start","conversation_id":"...",'
-    '"followup_round":2,"followup_direction":"兴趣"}}\n'
+    'start:   {"code":0,"message":"success","data":{"type":"start","conversation_id":"..."}}\n'
     'delta:   {"code":0,"message":"success","data":{"type":"delta","content":"增量文本",'
-    '"conversation_id":"...","followup_round":2,"followup_direction":"兴趣"}}\n'
+    '"conversation_id":"..."}}\n'
     'tag:     {"code":0,"message":"success","data":{"type":"tag","data":{"tags":[...]}}}\n'
     'pending: {"code":0,"message":"正在生成","data":{"type":"pending","user_message_id":"..."}}\n'
     'done:    {"code":0,"message":"success","data":{"type":"done","message_id":"...",'
-    '"conversation_id":"...","conclusion_ready":false,"followup_round":3,"followup_direction":"兴趣"}}\n'
+    '"conversation_id":"...","conclusion_ready":false}}\n'
     'error:   {"code":3001,"message":"AI调用失败","data":null}\n'
     "流末尾固定补一个 ``event: end`` + ``data: [DONE]``。\n\n"
-    "followup_round 语义：start/delta 是**这一轮开始前**的值，done 是**本轮更新后**的值；\n"
-    "相邻两轮方向不同（followup_direction 变化）时数值会重置为 1；\n"
-    "只有拿不到画像标签且会话尚未开始计数时才会是 null（前端此时隐藏进度环）。\n\n"
     "两个端点（POST 与 GET）共用同一个事件生成器，事件序列完全一致。"
 )
 
@@ -262,7 +299,6 @@ def _event_generator(prep: "chat_service.StreamPreparation", user_id: UUID) -> A
                 prep.conversation_id,
                 prep.llm_messages,
                 prep.shortcut,
-                prep.followup,
             ):
                 payload = _to_sse_payload(event)
                 yield f"event: {event.get('type', 'message')}\ndata: {_sse_data(payload)}\n\n"

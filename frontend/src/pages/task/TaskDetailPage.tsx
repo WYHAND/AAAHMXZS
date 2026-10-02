@@ -1,21 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, ExternalLink, ListChecks } from 'lucide-react'
+import { ArrowLeft, ExternalLink, ListChecks, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { EmptyState } from '@/components/EmptyState'
 import { StepList } from '@/components/StepList'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
+import { TaskAbandonDialog } from '@/components/TaskAbandonDialog'
+import { TaskDeleteDialog } from '@/components/TaskDeleteDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -38,12 +29,10 @@ import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageShell } from '@/components/PageShell'
-import { taskProgress, useTaskStore } from '@/store/taskStore'
+import { ONGOING_STATUS, taskProgress, useTaskStore } from '@/store/taskStore'
 import type { TaskStep } from '@/types'
 import { toResourceLink } from '@/utils/resourceLink'
 import { cn } from '@/lib/utils'
-
-const ABANDON_REASONS = ['太难了，做不下去', '不感兴趣了', '时间不够', '方向变了']
 
 /** 打卡表单选项：全部是"点一下"就能答完的，不需要用户组织语言 */
 const STEP_PROGRESS = ['做完了', '做了一半', '还没开始'] as const
@@ -94,21 +83,15 @@ function ChoiceRow({
  * - 每一步有「行动指引 (action) + 资源链接 (resource)」
  * - 打卡弹窗：这一步花了多久 / 卡在哪 —— 后端只有一个 feedback 字段，
  *   前端把两栏拼成一段文本提交
- * - 放弃任务：AlertDialog 二次确认 + 原因选择；后端 abandon 接口**不接受 body**，
- *   原因只通过 track('task_abandon') 记录为本地埋点信号
+ * - 放弃任务：AlertDialog 二次确认 + 原因选择（与列表页共用 TaskAbandonDialog）；
+ *   后端 abandon 接口**不接受 body**，原因只通过 track('task_abandon') 记录为本地埋点信号
+ * - 删除任务：与列表页共用 TaskDeleteDialog（硬删除 + 先数清打卡步数再说后果）——
+ *   用户从列表点进来之后也必须能删，不该"进了详情反而找不到"
  */
 export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const {
-    activeTask: task,
-    steps,
-    loading,
-    error,
-    fetchTask,
-    completeStep,
-    abandon,
-  } = useTaskStore()
+  const { activeTask: task, steps, loading, error, fetchTask, completeStep } = useTaskStore()
 
   const [activeStepId, setActiveStepId] = useState<string | null>(null)
   const [checkInOpen, setCheckInOpen] = useState(false)
@@ -117,8 +100,10 @@ export default function TaskDetailPage() {
   const [stepProgress, setStepProgress] = useState<string>(STEP_PROGRESS[0])
   const [stepFeeling, setStepFeeling] = useState<string>(STEP_FEELING[0])
   const [note, setNote] = useState('')
-  const [reason, setReason] = useState(ABANDON_REASONS[0])
   const [submitting, setSubmitting] = useState(false)
+  /** 二次确认弹窗（放弃 / 删除）的开关 */
+  const [abandonOpen, setAbandonOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   useEffect(() => {
     if (id) void fetchTask(id)
@@ -185,18 +170,8 @@ export default function TaskDetailPage() {
     }
   }
 
-  const handleAbandon = async () => {
-    if (!id) return
-    const ok = await abandon(id, reason)
-    if (ok) {
-      toast.success('已放弃这个任务，我不会再催你')
-      navigate('/task')
-    } else {
-      toast.error('操作失败，请稍后再试')
-    }
-  }
-
   const percent = taskProgress(task)
+  const canAbandon = task.status === ONGOING_STATUS
 
   return (
     <PageShell
@@ -318,44 +293,39 @@ export default function TaskDetailPage() {
         </Card>
       ) : null}
 
-      {/* 放弃任务：弱化入口 + 二次确认 */}
-      <div className="flex justify-center pt-2">
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="sm" className="text-muted-foreground">
-              放弃这个任务
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>确定要放弃吗？</AlertDialogTitle>
-              <AlertDialogDescription>
-                放弃不会扣分，但我会把它记成一次信号，下次少推类似的。
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="flex flex-col gap-2">
-              {ABANDON_REASONS.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setReason(item)}
-                  className={
-                    reason === item
-                      ? 'rounded-md border border-primary bg-primary-soft px-3 py-2 text-left text-sm'
-                      : 'rounded-md border px-3 py-2 text-left text-sm hover:bg-secondary'
-                  }
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-            <AlertDialogFooter>
-              <AlertDialogCancel>再想想</AlertDialogCancel>
-              <AlertDialogAction onClick={() => void handleAbandon()}>确认放弃</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+      {/* 放弃 / 删除：两个弱化入口 + 二次确认（与列表页共用同一套确认弹窗） */}
+      <div className="flex items-center justify-center gap-2 pt-2">
+        {canAbandon ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground"
+            onClick={() => setAbandonOpen(true)}
+          >
+            放弃这个任务
+          </Button>
+        ) : null}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1.5 text-muted-foreground hover:text-destructive"
+          onClick={() => setDeleteOpen(true)}
+        >
+          <Trash2 className="size-4" />
+          删除这个任务
+        </Button>
       </div>
+
+      <TaskAbandonDialog
+        task={abandonOpen ? task : null}
+        onOpenChange={(open) => setAbandonOpen(open)}
+        onAbandoned={() => navigate('/task')}
+      />
+      <TaskDeleteDialog
+        task={deleteOpen ? task : null}
+        onOpenChange={(open) => setDeleteOpen(open)}
+        onDeleted={() => navigate('/task')}
+      />
 
       {/* 打卡弹窗：做题式表单（点选为主，最多 30 字可选补充），不让用户写小作文 */}
       <Dialog open={checkInOpen} onOpenChange={setCheckInOpen}>

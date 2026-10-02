@@ -41,14 +41,17 @@ async def submit(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ApiResponse[TestResultResponse]:
-    """11.2/11.3：提交答案 -> 计算初始画像 -> 生成阶段。
+    """11.2/11.3：提交答案 -> 计算初始画像 -> 生成阶段 -> 文字补充抽标签（7.8）。
 
     - 整个流程（test_results + profiles + profile_tags）是**一个事务**，失败整体回滚；
     - 响应里的 ``clarity_score / action_score / resume_score / total_score / stage``
       与随后 ``GET /profile`` **逐字段一致**（都取自重算落库后的 profile）；
-    - ``answers`` 的 key 是 ``GET /test/questions`` 返回的题目 ``id``（形如 ``q_clarity_01``）。
+    - ``answers`` 的 key 是 ``GET /test/questions`` 返回的题目 ``id``（形如 ``q_clarity_01``）；
+    - 落库**之后**再把 ``free_text`` 交给 ``source="test"`` 的 AI 抽标签
+      （11.2 第 4 步）：这一步 await 在事务之外，AI 不可用时提交仍然成功（细节见
+      ``profile_service.submit_test`` 的 docstring）。
     """
-    return ApiResponse.ok(profile_service.submit_test(db, current_user, payload))
+    return ApiResponse.ok(await profile_service.submit_test(db, current_user, payload))
 
 
 @router.get("/result", response_model=ApiResponse[Optional[TestResultResponse]], summary="获取结果")

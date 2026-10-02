@@ -2,6 +2,7 @@ import { create } from 'zustand'
 
 import { authApi } from '@/api/auth'
 import { registerAuthBridge } from '@/api/client'
+import { resetUserScopedStores } from '@/store/reset'
 import { STORAGE_KEY, storage } from '@/utils/storage'
 import type { LoginPayload, RegisterPayload, User } from '@/types'
 
@@ -39,6 +40,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const data = await authApi.login(payload)
       storage.set(STORAGE_KEY.token, data.access_token)
       set({ token: data.access_token, user: data.user ?? null, bootstrapped: true })
+      /*
+       * ⚠️ 换了账号就必须丢掉**所有**按用户缓存的前端状态（画像只是其中一个）：
+       * 以前这里只 reset 了 profileStore，chatStore 里上一个账号的 activeId
+       * 就会活到新账号的会话里 → 拿别人的会话 id 去拉历史/开场白 → code 2001
+       * 「内容不存在」，而开场白簿记又说"拉过了" → 界面永远转圈。
+       * 统一入口见 store/reset.ts（那里的纪律注释是这类 bug 的总结）。
+       */
+      resetUserScopedStores()
     } finally {
       set({ loading: false })
     }
@@ -51,6 +60,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const data = await authApi.register(payload)
       storage.set(STORAGE_KEY.token, data.access_token)
       set({ token: data.access_token, user: data.user ?? null, bootstrapped: true })
+      // 注册即换号（新账号），与 login 同一条纪律
+      resetUserScopedStores()
     } finally {
       set({ loading: false })
     }
@@ -58,9 +69,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout() {
     storage.remove(STORAGE_KEY.token)
-    storage.session.remove(STORAGE_KEY.testProgress)
-    storage.session.remove(STORAGE_KEY.interviewId)
     set({ token: null, user: null, bootstrapped: true })
+    /*
+     * ⚠️ 必须一并清掉所有按用户缓存的前端状态。
+     * 这里只清 token 是不够的：token 没了只是"下次请求带不上身份"，
+     * 而内存里的会话 id / 画像 / 任务 / 简历 / 面试场次不会自己消失 ——
+     * 下一个账号登录后会沿用它们（profileStore 里定义了很久的 reset() 此前
+     * **从没被调用过**，导致登出后 fetched/tested 残留，守卫拿旧值分流，
+     * 把已完成测评的老用户推进 /test/intro 重做 30 题；chatStore 更彻底，
+     * 连 reset() 都没人调过，于是有了「新号打开 AI 对话永远转圈」）。
+     * 测试答题进度、面试 id 这两个 sessionStorage 键也在统一入口里一起清。
+     */
+    resetUserScopedStores()
   },
 
   async fetchMe() {

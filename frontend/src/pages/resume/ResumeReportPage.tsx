@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { PageShell } from '@/components/PageShell'
+import { resumeSectionLabel } from '@/constants/resume'
 import { useResumeStore } from '@/store/resumeStore'
 import { track } from '@/utils/track'
 import { cn } from '@/lib/utils'
@@ -26,6 +27,9 @@ import { cn } from '@/lib/utils'
  * 对齐后端 ResumeOptimizeResponse：
  *   ats_score / completeness / matched_keywords[] / missing_keywords[] /
  *   suggestions: [{section, problem, suggestion, example}] / summary / generated_at
+ *
+ * ⚠️ suggestion.section 是英文枚举（basic/education/experience/project/skill/summary），
+ *    渲染必须过 constants/resume.ts 的 resumeSectionLabel，不能出现「1. project」。
  *
  * 后端**没有**「采纳/忽略建议」接口，所以「忽略」只上报埋点 advice_ignore，
  * 采纳状态仅在前端会话内标记（不落库）。
@@ -198,7 +202,7 @@ export default function ResumeReportPage() {
             >
               <CardHeader className="gap-1 px-4">
                 <CardTitle className="text-base">
-                  {index + 1}. {item.section || '整体'}
+                  {index + 1}. {resumeSectionLabel(item.section)}
                 </CardTitle>
                 {item.problem ? <CardDescription>问题：{item.problem}</CardDescription> : null}
               </CardHeader>

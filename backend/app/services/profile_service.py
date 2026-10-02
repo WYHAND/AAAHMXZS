@@ -1,4 +1,4 @@
-﻿"""画像与基础测试表业务逻辑。
+"""画像与基础测试表业务逻辑。
 
 覆盖《开发手册》：
 - 11.2 基础测试表（获取题目 / 提交答案 / 取结果）
@@ -19,6 +19,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence
 from sqlmodel import Session, select
 
 from app.core.errors import BusinessException, ErrorCode
+from app.models.conversation import Conversation, Message
 from app.models.profile import Profile, ProfileTag
 from app.models.resume import Resume
 from app.models.task import Task, TaskStep
@@ -26,7 +27,7 @@ from app.models.test import TestQuestion, TestResult
 from app.models.user import User, utcnow
 from app.schemas.profile import ProfileFeedbackRequest, ProfileResponse, ProfileTagResponse
 from app.schemas.test import TestOption, TestQuestionResponse, TestResultResponse, TestSubmitRequest
-from app.utils.logger import get_logger
+from app.utils.logger import get_logger, sanitize
 from app.utils.stage import (
     STAGE_EXPLORE,
     STAGE_PREPARE,
@@ -36,6 +37,7 @@ from app.utils.stage import (
     calc_total_score,
     clamp_score,
 )
+from app.utils.text import normalize_for_match
 
 logger = get_logger(__name__)
 
@@ -98,10 +100,10 @@ def get_test_questions(db: Optional[Session] = None) -> List[TestQuestionRespons
     ]
 
 
-def submit_test(db: Session, user: User, payload: TestSubmitRequest) -> TestResultResponse:
-    """POST /test/submit：算分 → 写 test_results → 生成初始画像（11.3）。
+async def submit_test(db: Session, user: User, payload: TestSubmitRequest) -> TestResultResponse:
+    """POST /test/submit：算分 → 写 test_results → 生成初始画像（11.3）→ 文字补充抽标签（7.8）。
 
-    **原子性**：整个流程（写 ``test_results`` + 写 ``profiles`` + 写 ``profile_tags``）
+    **原子性**：算分到落库这一段（写 ``test_results`` + 写 ``profiles`` + 写 ``profile_tags``）
     在**一个事务**里完成，任何一步失败都整体回滚。
     之前每步各自 ``commit``，实测出现过"接口返回 500，但 ``tested`` 已变 true、
     标签已落库"的半成品状态 —— 用户看到失败、重试又会产生重复的 ``test_results``。
@@ -110,6 +112,17 @@ def submit_test(db: Session, user: User, payload: TestSubmitRequest) -> TestResu
     因此与随后 ``GET /profile`` 逐字段一致。
     之前返回的是"测试原始分"（新用户可能是 clarity/action/resume 全 100、冲刺期），
     而 ``GET /profile`` 是"按实际行为重算过的"（没有任务与简历就是 0），两处打架。
+
+    **为什么是 ``async def``**：11.2 第 4 步要把 ``free_text`` 交给
+    ``extract_tags_from_text()``（AI 抽取，必须 await）。该调用放在
+    **提交事务之后**，所以抽标签不是这个事务的一部分：
+
+    - AI 失败（无 Key / 401 / 超时 / 返回不是 JSON）由
+      ``extract_tags_from_text`` 内部兜底成空列表（照 ``daily_question_service`` 的写法），
+      **提交照样成功**，只是画像里少几条标签 —— 抽标签是加分项，不是提交的前提；
+    - ``free_text`` 为空/全空白直接短路，省一次 AI 调用；
+    - 这一段只会**新增/融合 ``profile_tags``**：``recompute_stage()`` 的
+      ``clarity_score`` 是沿用值（见该函数注释），所以分数与阶段口径不变。
     """
     if not payload.answers:
         raise BusinessException(ErrorCode.PARAM_ERROR, "答案不能为空")
@@ -164,19 +177,26 @@ def submit_test(db: Session, user: User, payload: TestSubmitRequest) -> TestResu
         raise
 
     db.refresh(result)
+    response = TestResultResponse.model_validate(result)
 
-    # 11.2 第 4 步：文字补充交给 DeepSeek 抽标签（异步，需要时由调用方 await）
+    # 11.2 第 4 步：文字补充交给 DeepSeek 抽标签（7.8 画像回流，source="test"）。
+    # 放在 commit 之后 = 与上面那个事务解耦：抽标签失败绝不能让"已经提交成功的测评"变成失败。
     if payload.free_text and payload.free_text.strip():
-        logger.info("test free_text 已保存，等待 AI 抽取标签 user_id=%s", user.id)
-        # TODO: 在异步上下文中调用 extract_tags_from_text（见 app/services/profile_service.py
-        #       的 extract_tags_from_text）；当前 router 是同步 route，需要时改 async + await。
+        try:
+            extracted = await extract_tags_from_text(db, user.id, payload.free_text, source="test")
+            logger.info("测试文字补充抽标签完成 user_id=%s tags=%s", user.id, len(extracted))
+        except Exception as exc:  # noqa: BLE001 - 兜底：抽标签异常不影响已提交的测评
+            logger.warning("测试文字补充抽标签异常（已忽略，不影响提交）user_id=%s err=%s", user.id, sanitize(exc))
+    else:
+        # 空/全空白：不调 AI（省一次调用）
+        logger.info("测试文字补充为空，跳过 AI 抽标签 user_id=%s", user.id)
 
     logger.info(
         "测试提交完成 user_id=%s clarity=%s action=%s resume=%s total=%s stage=%s",
-        user.id, result.clarity_score, result.action_score,
-        result.resume_score, result.total_score, result.stage,
+        user.id, response.clarity_score, response.action_score,
+        response.resume_score, response.total_score, response.stage,
     )
-    return TestResultResponse.model_validate(result)
+    return response
 
 
 def get_test_result(db: Session, user: User) -> Optional[TestResultResponse]:
@@ -579,6 +599,25 @@ async def extract_tags_from_text(
     - ``task_service.complete_step``：打卡反馈后
     - ``daily_question_service.answer_question``：累计 7 题后
 
+    ⚠️⚠️ **``text`` 必须只包含"用户自己写的东西"**（本期踩过的坑，别再踩）：
+
+    ``ProfileTag.extra.evidence`` 的语义是**用户原话**，服务端读侧会拿它去
+    ``messages.role='user'`` 里做子串核对（见 :func:`evidence_for_tags`）。
+    曾经 ``chat_service._extract_round_tags`` 传进来的是
+    ``build_history_text(最近 8 条消息)`` 拼出来的**整段 transcript**（"学生：… / AI：…"
+    都在一起），于是模型把 **AI 自己说过的话**当成用户原话写进了 evidence，真实脏数据：
+
+    - 能力/学习 <- ``会Java和C，说明你编程底子不算白纸``（AI 的话）
+    - 兴趣/产品 <- ``AI：你之前提过对技术/产品有点兴趣``（AI 的话，连 ``AI：`` 前缀都在）
+    - 痛点/缺项目 <- ``有没有做过完整的小项目？``（AI 的提问）
+    - 焦虑/中 <- ``比空焦虑强多了``（AI 的安慰）
+
+    后果是把这种"原话"喂给模型时，它会说「你上次说'有没有做过完整的小项目？'」——
+    **把 AI 的话安到用户头上**，正是用户明令禁止的那类杜撰（只是形式更隐蔽）。
+    所以：**对话路径只传用户侧文本**；本函数对 ``source="chat"`` 会自己做一次兜底
+    （见下面 ``_user_side_text``），即使调用方哪天又传了整段 transcript 也不会污染画像。
+    测评文字补充/每日一答/任务反馈这些调用点传进来的本来就是用户写的那一段，不受影响。
+
     失败时返回空列表（7.6 兜底），绝不打断主流程。
     """
     from app.ai import deepseek_client
@@ -588,10 +627,12 @@ async def extract_tags_from_text(
     if not text or not text.strip():
         return []
 
+    extract_input = _user_side_text(db, user_id, text, source)
+
     try:
         result = await deepseek_client.chat_prompt_json(
             prompt_name="profile_extract",
-            variables={"history": text, "last_user_message": text[-200:]},
+            variables={"history": extract_input, "last_user_message": extract_input[-200:]},
             schema=ProfileExtractResult,
             default=empty_profile_extract(),
         )
@@ -614,3 +655,146 @@ async def extract_tags_from_text(
     apply_tags(db, user_id, payload, source=source)
     logger.info("画像回流成功 user_id=%s source=%s tags=%s", user_id, source, len(payload))
     return payload
+
+
+# ---------------------------------------------------------------------------
+# 证据归属：evidence 只能是"用户自己说过的话"（写入端防不住历史脏数据，读侧再机械过滤）
+# ---------------------------------------------------------------------------
+#
+# 为什么读侧还要再来一道：**历史脏数据无法追溯来源**。上表中那 4 条（AI 的话 / AI 的提问 /
+# AI 的安慰）在库里已经躺着了，改写入端只能保证"以后不再产生"。而只要它们被喂进 Prompt，
+# 模型就会回述成"你上次说……"，用户看到的就是杜撰。所以所有**准备进 Prompt 的 evidence**
+# 都必须先过 :func:`evidence_for_tags`：要求它能在**该用户自己发过的消息**里原样找到。
+#
+# 判据刻意只认 ``messages.role='user'``：
+# - 对话路径：用户消息就是 messages 表里的 user 行；
+# - 测评文字补充 / 每日一答 / 任务反馈：确实是用户写的，但存在别的表（test_results.free_text
+#   / daily_answers.answer / task_steps.feedback）。它们**不在本函数的认可范围内** ——
+#   宁可漏掉（标签照旧只给标签，开场白退化成聊标签本身）也不放宽：真实库里这三类
+#   ``free_text`` 全是 NULL、每日一答只有 4 条，放宽换不来可引用原话，却会重新打开
+#   "非用户消息也能当证据"的口子。
+# - 测评/每日一答/任务来源的标签目前**没有一条**带 evidence，本过滤对它们是无操作。
+
+# 读侧过滤时最多扫多少条用户消息。用户每天都在聊，全表扫没有意义；
+# 最近的 2000 条足以覆盖任何还没被删掉的 evidence（真被删掉的会话本就不该再被引用）。
+EVIDENCE_POOL_MESSAGE_LIMIT = 2000
+
+# 对话路径重新取用户消息时的条数上限（比 chat_service.HISTORY_LIMIT 宽，
+# 因为这里只为了"给抽取模型足够的用户原话"，不占用发给对话模型的 token 预算）。
+CONVERSATION_USER_TEXT_LIMIT = 200
+
+
+def _user_side_text(db: Session, user_id, text: str, source: str) -> str:
+    """把**准备喂给抽取 Prompt 的文本**收敛到"用户侧"（对话路径专用兜底）。
+
+    为什么需要它：``chat_service._extract_round_tags`` 曾经拼的是整段 transcript
+    （``build_history_text`` 把 ``学生：…`` 和 ``AI：…`` 写在一起），模型于是把 AI 的
+    提问/安慰当成了用户原话（见 :func:`extract_tags_from_text` 的脏数据清单）。
+
+    现在的做法（**只有对话来源才动**，其它来源传进来的本来就是用户写的那一段）：
+
+    - ``source == "chat"``：直接从库里取该用户**全部** ``role='user'`` 消息，按时间正序
+      拼成"学生：…"多行文本。**AI 的话一个字都不进去**，模型没有可误解的材料。
+      刻意从库里取而不是解析调用方传进来的字符串：字符串形态千变万化
+      （``build_history_text`` 的转义、有人把 ``【最近一轮】`` 拼进来），
+      按 ``AI：`` 做正则切分迟早会漏；从库里取是"只可能包含用户写的字"这一件事的
+      唯一可靠实现。
+    - 其它来源（test / daily / task / resume / interview）：原样使用调用方给的文本，
+      它们是"用户在某个表单里写的那一段"（``payload.free_text`` / ``payload.answer`` /
+      ``feedback``），本来就是用户侧内容。
+    - 库里一条用户消息都没有（极端：消息刚被删）时退回原文本 —— 宁可让模型看到
+      调用方给的文本（抽出来的 evidence 之后照样要过读侧过滤），也不要空跑一次 AI。
+    """
+    if source != "chat":
+        return text
+
+    rows = db.exec(
+        select(Message.content)
+        .join(Conversation, Message.conversation_id == Conversation.id)  # type: ignore[arg-type]
+        .where(Conversation.user_id == user_id, Message.role == "user")
+        .order_by(Message.created_at.asc(), Message.id.asc())  # type: ignore[union-attr]
+        .limit(CONVERSATION_USER_TEXT_LIMIT)
+    ).all()
+    lines = [f"学生：{(row or '').strip()}" for row in rows if row and row.strip()]
+    if not lines:
+        logger.warning(
+            "对话路径没取到任何用户消息，退回调用方文本（evidence 仍会被读侧过滤）user_id=%s",
+            user_id,
+        )
+        return text
+    return "\n".join(lines)
+
+
+def _user_messages(db: Session, user_id, exclude_conversation_id=None) -> List[str]:
+    """取该用户**自己发的**消息正文（新的在前，已去掉空串）。
+
+    ``exclude_conversation_id``：把某个会话排除在外（当前会话自己会另走"最近 N 条"注入，
+    重复给没有收益，还会让 evidence 变成"刚说过的话"）。
+    """
+    statement = (
+        select(Message.content)
+        .join(Conversation, Message.conversation_id == Conversation.id)  # type: ignore[arg-type]
+        .where(Conversation.user_id == user_id, Message.role == "user")
+    )
+    if exclude_conversation_id is not None:
+        statement = statement.where(Message.conversation_id != exclude_conversation_id)
+    statement = statement.order_by(
+        Message.created_at.desc(), Message.id.desc()  # type: ignore[union-attr]
+    ).limit(EVIDENCE_POOL_MESSAGE_LIMIT)
+    return [text for text in db.exec(statement).all() if text and text.strip()]
+
+
+def _evidence_pool(db: Session, user_id, exclude_conversation_id=None) -> List[str]:
+    """把用户消息归一化成"证据比对池"（见 ``app.utils.text.normalize_for_match``）。"""
+    return [normalize_for_match(text) for text in _user_messages(db, user_id, exclude_conversation_id)]
+
+
+def evidence_for_tags(
+    db: Session,
+    user_id,
+    tags: Sequence[ProfileTag],
+    *,
+    exclude_conversation_id=None,
+    pool: Optional[List[str]] = None,
+) -> Dict[Any, str]:
+    """挑出每个标签**唯一一条**可引用的用户原话（找不到就不返回这个标签）。
+
+    返回 ``{tag.id: 原话}``。命中规则：``extra["evidence"]`` 归一化后必须是某条
+    用户消息的子串（对话路径下"用户消息"= ``messages.role='user'``）。
+
+    - **只认 ``extra["evidence"]``，不认 ``extra["evidence_log"]``**：后者是历次追加的
+      证据流水（``apply_tags`` 保留最近 5 条），里面混着大量 AI 措辞的改写
+      （实测 ``用 Java 或 C 写个命令行版`` / ``现在突然不想搞了`` 都只是**模型对用户原话的
+      转述**，用户自己打的是别的话）。首条 evidence 是模型当时"最像原话"的那一条，
+      过不了过滤就说明这个标签本来就没有可引用的原话 —— 那就只给标签，不许编。
+    - 过不了的 evidence **一律丢弃并留痕**（``logger.info`` 一条汇总 + 每条一条 debug），
+      带上 user_id / 标签 / 被丢弃的片段，便于回头查是哪来的脏数据。
+      **本函数不改任何历史数据**（只读）。
+
+    ⚠️ ``pool`` 参数只是给批量调用省一次查询（同一批标签共用同一个池）。
+    """
+    evidence_pool = pool if pool is not None else _evidence_pool(db, user_id, exclude_conversation_id)
+
+    found: Dict[Any, str] = {}
+    dropped: List[str] = []
+    for tag in tags:
+        raw = str((tag.extra or {}).get("evidence") or "").strip()
+        if not raw:
+            continue
+        key = normalize_for_match(raw)
+        if key and any(key in message for message in evidence_pool):
+            found[tag.id] = raw
+        else:
+            dropped.append(f"{tag.dimension}/{tag.label} <- {raw[:40]!r}")
+
+    if dropped:
+        # 汇总一条 INFO（"这个用户本轮有多少条证据被挡了"一眼可见）+ 逐条 DEBUG
+        logger.info(
+            "证据过滤：user_id=%s 丢弃 %s 条无法在用户消息里原样找到的 evidence"
+            "（不进 Prompt，也不改库）",
+            user_id, len(dropped),
+        )
+        for item in dropped:
+            logger.debug("证据过滤明细：user_id=%s %s", user_id, item)
+    return found
+

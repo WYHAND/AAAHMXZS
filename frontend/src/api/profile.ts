@@ -6,11 +6,13 @@
  *   GET  /profile/tags       标签（可按 dimension 过滤）
  *   POST /profile/feedback   标签反馈（**后端唯一的画像写端点**）
  *
+ * ⚠️ POST /profile/feedback 前端已不再调用（2026-xx 起标签整块不给用户看，
+ *    认可/否定入口一并移除）。后端端点保留，前端如需再启用参照上面路径。
  * ⚠️ 没有 PATCH /profile。设计说明书 5.4 提的 next_action 后端也没实现。
  */
 
-import { get, post } from '@/api/client'
-import type { ListPayload, Profile, ProfileFeedbackPayload, ProfileTag } from '@/types'
+import { get } from '@/api/client'
+import type { ListPayload, Profile, ProfileTag } from '@/types'
 
 export const profileApi = {
   get: () => get<Profile>('/profile'),
@@ -20,7 +22,4 @@ export const profileApi = {
     get<ListPayload<ProfileTag>>('/profile/tags', {
       params: dimension ? { dimension } : undefined,
     }),
-
-  /** 用户对标签认可/否定；后端会调权重并重算阶段 */
-  feedback: (payload: ProfileFeedbackPayload) => post<Profile>('/profile/feedback', payload),
 }

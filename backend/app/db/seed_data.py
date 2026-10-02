@@ -6,7 +6,7 @@
 |---|---|---|---|
 | 基础测试题 | 30 | ``test_questions`` | 5.4「基础测试题 30-50 题，纯选择题，四维度」 |
 | 每日一问题库 | 30 | ``daily_questions`` | 5.4「每日一问题库 30 题，四维度轮换」 |
-| 奖章 | 2 | ``badges`` | 5.4「奖章：起步行动家」+ 11.12 |
+| 奖章 | 3 | ``badges`` | 5.4「奖章：起步行动家」+ 11.12（定义源在 ``badge_service.BADGE_RULES``） |
 
 **仍然留在代码里的两组数据**（不落库，理由见 README §5.2）：
 
@@ -30,6 +30,11 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List
+
+# 奖章定义源的唯一出处（见文件末尾「奖章」一节）。
+# 方向是 seed_data -> badge_service：奖章规则属于业务逻辑，种子只是它的投影；
+# ``badge_service`` 不反向 import 本模块，所以没有循环导入。
+from app.services.badge_service import BADGE_RULES
 
 # ---------------------------------------------------------------------------
 # 基础测试题（30 题：clarity 8 + action 8 + resume 7 + interest 7）
@@ -688,18 +693,19 @@ DAILY_QUESTIONS: List[Dict[str, Any]] = [
 
 # ---------------------------------------------------------------------------
 # 奖章（5.4「奖章：起步行动家」+ 11.12）
-# condition 的结构由 badge_service.check_and_award 解释：{event, threshold}
+#
+# **定义源是 ``app/services/badge_service.py::BADGE_RULES``**，这里只做投影。
+# 为什么不在这份种子里另抄一遍：历史 bug 就是"种子里有、引擎里没有"——
+# 「坚持打卡者」曾经在 ``BADGES`` 里有定义，但 ``check_and_award`` 只处理
+# ``task_completed``，于是它成了**永远发不出去的死数据**。两份定义并存迟早再犯，
+# 所以奖章名 / 阈值 / 文案（condition 的 event、threshold、key、art、order、
+# description、hint、earned_hint）全部只在 ``BADGE_RULES`` 里写一次。
+#
+# 注意 condition 里**不新增数据库列**：``init_db`` 走
+# ``SQLModel.metadata.create_all``，它不会给已存在的表加列，所以前端要用的
+# ``key``（奖章美术标识）就存在这个已有的 JSON 列里。
 # ---------------------------------------------------------------------------
 
 BADGES: List[Dict[str, Any]] = [
-    {
-        "name": "起步行动家",
-        "condition": {"event": "task_completed", "threshold": 1,
-                      "description": "完成第一个成长任务"},
-    },
-    {
-        "name": "坚持打卡者",
-        "condition": {"event": "steps_completed", "threshold": 5,
-                      "description": "累计打卡 5 个任务步骤"},
-    },
+    {"name": name, "condition": dict(rule)} for name, rule in BADGE_RULES.items()
 ]

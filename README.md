@@ -94,7 +94,7 @@ python -m venv venv && venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env          # 填入 DATABASE_URL 与 DEEPSEEK_API_KEY
 alembic upgrade head
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --reload-include '*.txt' --port 8000
 ```
 
 API 文档：http://localhost:8000/docs

@@ -41,6 +41,7 @@ PROMPT_FILES: Dict[str, str] = {
     # 手册 7.4 未列出、但 11.4 / 11.11 需要，骨架补充
     "chat_conclusion": "chat_conclusion.txt",
     "test_free_text": "profile_extract.txt",  # 11.2 文字补充复用画像抽取模板
+    "chat_opening": "chat_opening.txt",  # 新会话 AI 先开口（11.4 扩展）
 }
 
 _CODE_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL | re.IGNORECASE)

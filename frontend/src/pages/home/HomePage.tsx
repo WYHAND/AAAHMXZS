@@ -1,19 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { Lightbulb, MessageSquare, Sparkles } from 'lucide-react'
-import {
-  PolarAngleAxis,
-  PolarGrid,
-  Radar,
-  RadarChart,
-  ResponsiveContainer,
-} from 'recharts'
 
 import { AIThinking } from '@/components/AIThinking'
 import { EmptyState } from '@/components/EmptyState'
 import { NextActionButton } from '@/components/NextActionButton'
+import { ProfileRadar } from '@/components/ProfileRadar'
 import { StageBadge } from '@/components/StageBadge'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -28,8 +21,9 @@ import { normalizeStage } from '@/constants/stage'
 import { toTaskDetail } from '@/constants/routes'
 import { useResponsive } from '@/hooks/useResponsive'
 import { useStage } from '@/hooks/useStage'
+import { useChatStore } from '@/store/chatStore'
 import { useProfileStore } from '@/store/profileStore'
-import type { HomeSummary, ProfileRadarItem } from '@/types'
+import type { HomeSummary } from '@/types'
 import { cn } from '@/lib/utils'
 
 /**
@@ -45,17 +39,8 @@ import { cn } from '@/lib/utils'
  * next_action 是产品「AI 主动性」的落点，**前端不做推荐逻辑**（设计说明书 5.4）。
  */
 
-/** 后端 profile 三项分数 → 雷达图数据（前端派生） */
-function scoresToRadar(summary: HomeSummary | null): ProfileRadarItem[] {
-  if (!summary) return []
-  return [
-    { dimension: '方向清晰度', score: summary.profile.clarity_score },
-    { dimension: '行动力', score: summary.profile.action_score },
-    { dimension: '简历准备度', score: summary.profile.resume_score },
-  ]
-}
-
 export default function HomePage() {
+  const navigate = useNavigate()
   const { isDesktop } = useResponsive()
   const { stage, label, fallbackCta } = useStage()
   const version = useProfileStore((s) => s.version)
@@ -64,6 +49,10 @@ export default function HomePage() {
   const [summary, setSummary] = useState<HomeSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
+  /** 「让 AI 先开口」请求在途：三个空态共用一个状态，防止连点建出多个空会话 */
+  const [opening, setOpening] = useState(false)
+  /** 同步重入闸：state 要等下一次渲染才生效，同一拍内的第二次点击靠它拦住 */
+  const openingRef = useRef(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -86,12 +75,35 @@ export default function HomePage() {
     void load()
   }, [load, version])
 
+  /**
+   * 三个空态统一的主动入口：**先让 AI 开口，再带用户进对话页**。
+   *
+   * 为什么不是简单跳 /chat：那样用户落地时看到的是一个空输入框，还得自己想话题 ——
+   * 这正是产品要改掉的被动姿态。先 `newConversation()` 把空会话备好，
+   * ChatPage 的 `useEffect([activeId])` 会紧接着 ensureOpening，
+   * 所以用户抵达对话页时 AI 的第一个问题已经在路上了。
+   *
+   * `newConversation()` 失败返回 null（失败文案由 store 内部统一 toast）：
+   * 这时**不导航**，页面原样保留，按钮在 finally 里恢复可点。
+   */
+  const handleLetAiSpeak = useCallback(async () => {
+    if (openingRef.current) return
+    openingRef.current = true
+    setOpening(true)
+    try {
+      const conversationId = await useChatStore.getState().newConversation()
+      if (conversationId) navigate('/chat')
+    } finally {
+      openingRef.current = false
+      setOpening(false)
+    }
+  }, [navigate])
+
   // CTA：后端 next_action 优先，拿不到时回落到阶段固定文案
   const action = summary?.next_action
     ? { text: summary.next_action.text, route: summary.next_action.route, reason: summary.next_action.reason }
     : { text: fallbackCta.text, route: fallbackCta.route, reason: '' }
 
-  const radar = scoresToRadar(summary)
   const tags = summary?.tags ?? []
   const tasks = summary?.ongoing_tasks ?? []
   const daily = summary?.daily_question ?? null
@@ -189,12 +201,15 @@ export default function HomePage() {
           </div>
         ) : (
           <EmptyState
-            title="我还没看出明显的卡点"
-            description="和我多聊几轮，聊完能生成结论卡片，我就能说出你卡在哪。"
+            title="我还没看到你的卡点"
+            description="让我先问你一句，你的回答会变成这里的第一条发现。"
             action={
-              <Button variant="outline" asChild>
-                <Link to="/chat">和 AI 聊聊</Link>
-              </Button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <AskAiButton pending={opening} onClick={() => void handleLetAiSpeak()} />
+                <Button variant="ghost" asChild>
+                  <Link to="/chat">和 AI 聊聊</Link>
+                </Button>
+              </div>
             }
           />
         )}
@@ -242,17 +257,20 @@ export default function HomePage() {
         ) : (
           <EmptyState
             title="现在没有进行中的任务"
-            description="任务来自我们的对话结论，先聊一轮就能生成。"
+            description="任务要有对话结论才能生成，我先问你第一个问题。"
             action={
-              <Button variant="outline" asChild>
-                <Link to="/task">去任务列表看看</Link>
-              </Button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <AskAiButton pending={opening} onClick={() => void handleLetAiSpeak()} />
+                <Button variant="ghost" asChild>
+                  <Link to="/task">去任务列表看看</Link>
+                </Button>
+              </div>
             }
           />
         )}
       </section>
 
-      {/* ④ 我的画像速览（分数雷达 + 3 个标签） */}
+      {/* ④ 我的画像速览（六轴画像雷达）。标签不给用户看：见 ProfilePage 的产品决定注释 */}
       <Card data-print="card">
         <CardHeader className="flex-row items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
@@ -266,26 +284,23 @@ export default function HomePage() {
           </Button>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {radar.length ? (
-            <ProfileRadar data={radar} />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              画像还没长出来。做完测评、聊过几轮之后这里会出现你的能力雷达。
-            </p>
-          )}
-          {tags.length ? (
-            <div className="flex flex-wrap gap-2">
-              {tags.slice(0, 3).map((tag) => (
-                <Badge
-                  key={`${tag.dimension}-${tag.label}`}
-                  variant="outline"
-                  className="rounded-full"
-                >
-                  {tag.label}
-                </Badge>
-              ))}
-            </div>
-          ) : null}
+          <ProfileRadar
+            tags={tags}
+            empty={
+              /* 画像空态：保留事实（画像是聊出来的、测评会给一份初始画像），
+                 但必须带一个可点的动作，不能停在纯告知 */
+              <div className="flex flex-col items-start gap-3">
+                <p className="text-sm text-muted-foreground">
+                  画像要靠聊天一点点长出来，做完基础测评也会有一份初始画像。我先问你第一个问题。
+                </p>
+                <AskAiButton
+                  pending={opening}
+                  size="sm"
+                  onClick={() => void handleLetAiSpeak()}
+                />
+              </div>
+            }
+          />
           {summary && !summary.profile.tested ? (
             <p className="text-xs text-warning">
               还没做过基础测评，做完之后画像会更准。
@@ -312,25 +327,28 @@ export default function HomePage() {
   )
 }
 
-/** 画像雷达图：单系列，主色 + 20% 透明填充（6.2 图表纪律，不用彩虹） */
-function ProfileRadar({ data }: { data: ProfileRadarItem[] }) {
+/**
+ * 空态里的统一主动入口「让 AI 先开口」。
+ *
+ * 三个空态（AI 发现 / 进行中的任务 / 画像）共用同一个组件，
+ * 保证同一屏里不会出现三种不同说法的同一个动作。
+ *
+ * 用色纪律：固定 `outline`。整屏唯一的实心 bg-primary 按钮是底部
+ * 「下一步建议」（NextActionButton），空态不能再抢一个实心按钮。
+ * `pending` 由父级传入（请求在途时 disabled），点不动就不会建出第二个空会话。
+ */
+function AskAiButton({
+  pending,
+  size = 'default',
+  onClick,
+}: {
+  pending: boolean
+  size?: 'default' | 'sm'
+  onClick: () => void
+}) {
   return (
-    <div className="h-60 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <RadarChart data={data} outerRadius="72%">
-          <PolarGrid stroke="var(--border)" />
-          <PolarAngleAxis
-            dataKey="dimension"
-            tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
-          />
-          <Radar
-            dataKey="score"
-            stroke="var(--primary)"
-            fill="var(--primary)"
-            fillOpacity={0.2}
-          />
-        </RadarChart>
-      </ResponsiveContainer>
-    </div>
+    <Button variant="outline" size={size} disabled={pending} onClick={onClick}>
+      {pending ? '正在让 AI 开口…' : '让 AI 先开口'}
+    </Button>
   )
 }

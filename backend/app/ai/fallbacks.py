@@ -9,7 +9,8 @@
 
 from __future__ import annotations
 
-from typing import Final, List
+import random
+from typing import Final, List, Optional
 
 from app.utils.text import random_transition
 
@@ -65,3 +66,49 @@ def fallback_reply() -> str:
 def fallback_tags() -> List[dict]:
     """7.6：结构化输出完全失败时的标签默认值（空列表，不做无根据的画像写入）。"""
     return []
+
+
+# ---------- 新会话「AI 先开口」的模板开场白（7.6 兜底在开场场景的落地） ----------
+# 开场白比普通回复更怕模型失败：用户第一眼看到的就是它，
+# 所以这里给本地模板，保证 AI 不可用时开场仍然是「像人随口问的一句话」。
+#
+# ⚠️ 历史（三段，别再退回去）：
+# 1. 最早是「A 还没开始 / B 做了一半 / C 已经完成，直接回字母就行」那种**选择题腔**，
+#    被用户明确否掉（"这和让用户做选择题有什么区别"）；
+# 2. 之后改成"有进行中任务 > 有画像标签 > 全新用户"三档，**引用任务标题/标签**——
+#    用户又否掉了这一版：新对话的**第一句话坚决不可以问画像里的东西**
+#    （他截图的现场就是「新对话｜你之前说想学ai，这块是怎么来的？」）。
+#    原话：「可以问，但是坚决不可以直接在第一句话的时候问」「第一个问题可以随便聊聊天，
+#    比如你今年大几了、你今天上的什么课啊」「要重视新对话这个问题」。
+# 3. **现在这三条全部是日常搭话**，一个字都不涉及用户的画像/任务/原话（与
+#    ``chat_opening.txt`` 同一套约束：一句话、≤60 字、只问一件事、绝不出现选项、不聊职业向话题）。
+#    因此 ``opening_fallback()`` 不再接受任何素材参数 —— 开场白本来就没有素材可用。
+# 改这里的文案前请先看 app/ai/prompts/chat_opening.txt。
+
+OPENING_FALLBACK_GREETING: Final[str] = "嗨，今天过得咋样？"
+
+OPENING_FALLBACK_CLASS: Final[str] = "你今天上什么课了呀？"
+
+OPENING_FALLBACK_GRADE: Final[str] = "你今年大几啦？"
+
+# 三档 = 三条**等价**的日常开场（选哪条与用户背景无关，只为了让重试/多次兜底不至于一模一样）。
+OPENING_FALLBACK_VARIANTS: Final[tuple] = (
+    OPENING_FALLBACK_GREETING,
+    OPENING_FALLBACK_CLASS,
+    OPENING_FALLBACK_GRADE,
+)
+
+
+def opening_fallback(variant: Optional[int] = None) -> str:
+    """AI 不可用时的开场白模板（**纯日常搭话**，不含任何画像素材）。
+
+    ⚠️ 刻意**不接受** ``task_title`` / ``tag_label`` 之类的素材参数：
+    第一句话不许涉及画像标签、进行中任务、用户原话（见 ``chat_opening.txt``）。
+    传进来的素材只会被"顺口念出来"，而那正是用户明确禁止的行为。
+
+    :param variant: 指定第几档（0/1/2，越界取模）；不给就随机选一条 ——
+        三条都是等价的日常开场，随机只为让"同一台机器上连开几个新会话"不至于完全相同。
+    """
+    if variant is None:
+        return random.choice(OPENING_FALLBACK_VARIANTS)
+    return OPENING_FALLBACK_VARIANTS[variant % len(OPENING_FALLBACK_VARIANTS)]

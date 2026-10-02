@@ -7,13 +7,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Dict, List
 
 from sqlmodel import select
 
 from app.db.session import SessionLocal
 from app.models.task import Task, TaskStep
+from app.models.user import utcnow
 from app.utils.logger import get_logger, sanitize
 
 logger = get_logger(__name__)
@@ -30,7 +31,12 @@ def remind_unfinished_tasks() -> List[Dict[str, str]]:
     reminders: List[Dict[str, str]] = []
     try:
         with SessionLocal() as db:
-            threshold = datetime.now() - timedelta(days=STALE_DAYS)
+            # 这里比的是"**过了多久**"（经过时长），不是"哪个日历日"，所以基准必须是
+            # UTC，和 ``completed_at`` / ``created_at``（``utcnow()`` 写的 UTC）同源。
+            # 原先用 ``datetime.now()``（本地时间，UTC+8）会比 UTC 快 8 小时，
+            # 阈值整体后移 —— 任务要"多晾" 8 小时才会被提醒。
+            # 注意：经过时长的比较**不需要**也不该用 app/utils/time.py 的日历日工具。
+            threshold = utcnow() - timedelta(days=STALE_DAYS)
             statement = select(Task).where(Task.status == "进行中")  # type: ignore[union-attr]
             tasks = list(db.exec(statement).all())
 

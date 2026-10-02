@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { testApi } from '@/api/test'
+import { SCORE_ITEMS } from '@/constants/score'
 import { useProfileStore } from '@/store/profileStore'
 import { useStage } from '@/hooks/useStage'
 import type { TestResult } from '@/types'
@@ -17,7 +18,8 @@ import { formatDate } from '@/utils/format'
  *
  * 后端 TestResultResponse 字段：clarity_score / action_score / resume_score /
  * total_score / stage / created_at —— **没有 tags/summary/radar**，
- * 所以这里展示三项分数 + 阶段，画像标签去个人中心看。
+ * 所以这里展示三项分数 + 阶段。
+ * 画像标签不再对用户展示（产品决定，见 ProfilePage 顶部注释），这里也不要再引导用户去看标签。
  */
 export default function TestResultPage() {
   const navigate = useNavigate()
@@ -59,12 +61,9 @@ export default function TestResultPage() {
 
   if (loading) return <AIThinking text="正在算你的阶段…" lines={3} />
 
+  // 维度中文 label 统一来自 constants/score.ts
   const metrics = result
-    ? [
-        { label: '方向清晰度', value: result.clarity_score },
-        { label: '行动力', value: result.action_score },
-        { label: '简历准备度', value: result.resume_score },
-      ]
+    ? SCORE_ITEMS.map((item) => ({ label: item.label, value: result[item.key] ?? 0 }))
     : []
 
   return (

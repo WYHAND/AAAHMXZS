@@ -39,13 +39,6 @@ class ConversationResponse(BaseModel):
     updated_at: datetime
     message_count: int = Field(default=0, description="消息数，列表页展示用")
     conclusion: Optional[Dict[str, Any]] = Field(default=None, description="结论卡片（11.11）")
-    # 7.7 追问计数器（会话级状态，手册 5.3 缺，授权补列）
-    followup_direction: Optional[str] = Field(
-        default=None, description="当前挖掘维度（兴趣/能力/技能/痛点/焦虑/认知）"
-    )
-    followup_round: int = Field(
-        default=0, description="同方向已追问轮数，1 起；达到 3 后下一轮会主动换维度"
-    )
 
 
 class MessageResponse(BaseModel):
@@ -118,7 +111,7 @@ class SSEEvent(BaseModel):
     线格式（每组事件以空行结尾）::
 
         event: delta
-        data: {"code":0,"message":"success","data":{"type":"delta","content":"你","conversation_id":"...","followup_round":2,"followup_direction":"兴趣"}}
+        data: {"code":0,"message":"success","data":{"type":"delta","content":"你","conversation_id":"..."}}
 
     外层恒为 10.1 的 ``{code,message,data}``；``event:`` 行与 ``data.data.type`` 一致，
     前端任选其一分派即可。
@@ -131,20 +124,6 @@ class SSEEvent(BaseModel):
     )
     message_id: Optional[UUID] = Field(
         default=None, description="本轮 assistant 消息 id，仅 done 有值"
-    )
-    # 7.7 追问计数器（会话级状态，存在 conversations 表上）：
-    #   start / delta 带「这一轮开始前」的值；done 带「本轮更新后」的值。
-    #   前端进度环按 done 的值前进；相邻两轮方向不同时数值会重置为 1。
-    followup_round: Optional[int] = Field(
-        default=None,
-        description=(
-            "同方向追问轮次（1 起）。start/delta 是这一轮开始前的值，done 是本轮更新后的值；"
-            "null 仅出现在拿不到画像标签且会话还没开始计数时（此时前端隐藏进度环）"
-        ),
-    )
-    followup_direction: Optional[str] = Field(
-        default=None,
-        description="当前挖掘维度；done 事件里是更新后的维度，与上一轮不同表示已换维度",
     )
     conclusion_ready: Optional[bool] = Field(
         default=None,

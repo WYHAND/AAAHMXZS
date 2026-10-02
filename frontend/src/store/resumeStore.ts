@@ -33,6 +33,13 @@ interface ResumeState {
   reset: () => void
 }
 
+/**
+ * 换号世代：`reset()` 每跑一次 +1（登出 / 登录 / 注册都会走到）。
+ * 它挡的是"迟到的响应"：上一个账号在途的 fetchList/fetchDetail/fetchReport
+ * 回来时会把**别人的简历/报告**写进新账号的内存。发请求前记下世代、落地前比一次即可。
+ */
+let fetchGeneration = 0
+
 export const useResumeStore = create<ResumeState>((set, get) => ({
   list: [],
   active: null,
@@ -40,38 +47,47 @@ export const useResumeStore = create<ResumeState>((set, get) => ({
   loading: false,
 
   async fetchList() {
+    const generation = fetchGeneration
     set({ loading: true })
     try {
       const list = normalizeList(await resumeApi.list())
+      if (generation !== fetchGeneration) return
       set({ list })
     } catch {
+      if (generation !== fetchGeneration) return
       set({ list: [] })
     } finally {
-      set({ loading: false })
+      if (generation === fetchGeneration) set({ loading: false })
     }
   },
 
   async fetchDetail(id) {
+    const generation = fetchGeneration
     set({ loading: true })
     try {
       const resume = await resumeApi.detail(id)
+      if (generation !== fetchGeneration) return
       set({ active: resume ?? null })
     } catch {
+      if (generation !== fetchGeneration) return
       set({ active: null })
     } finally {
-      set({ loading: false })
+      if (generation === fetchGeneration) set({ loading: false })
     }
   },
 
   async fetchReport(id) {
+    const generation = fetchGeneration
     set({ loading: true })
     try {
       const report = await resumeApi.report(id)
+      if (generation !== fetchGeneration) return
       set({ report: report ?? null })
     } catch {
+      if (generation !== fetchGeneration) return
       set({ report: null })
     } finally {
-      set({ loading: false })
+      if (generation === fetchGeneration) set({ loading: false })
     }
   },
 
@@ -117,7 +133,15 @@ export const useResumeStore = create<ResumeState>((set, get) => ({
     set({ report: null })
   },
 
+  /**
+   * 换号时必须调（见 store/reset.ts）。
+   * 清掉：简历列表 list、当前选中的简历 active（含详情）、诊断报告 report、
+   * loading 标志。三份都是按 user_id 存在后端、按账号拉回来的数据，
+   * 跨账号留着会让新账号第一眼看到别人的简历。
+   */
   reset() {
-    set({ list: [], active: null, report: null })
+    // 世代 +1：上一个账号在途的 fetchList/fetchDetail/fetchReport 回来时会被丢掉
+    fetchGeneration += 1
+    set({ list: [], active: null, report: null, loading: false })
   },
 }))

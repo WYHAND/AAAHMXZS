@@ -1,8 +1,29 @@
 # 《高校学生AI就业辅助系统 开发手册》
 
-版本：V1.0  
-日期：2026-09-18  
-适用技术栈：FastAPI + PostgreSQL + DeepSeek + React + Electron
+版本：V2.0  
+日期：2026-09-18（V2.0 修订日期见 0.3）  
+适用技术栈：FastAPI + SQLite（可切 PostgreSQL） + DeepSeek + React 19 + Electron（M3）
+
+---
+
+## V2.0 修订说明
+
+本版把此前一直单独维护的《开发手册 勘误与决策记录》中**属于规格的部分**并回正文：勘误文档的第 1、4、5、6、9 节（手册内部冲突、技术选型偏差、手册遗漏、前后端集成对账、用户验收后的新决定）已逐条落到下面的对应章节，正文不再与实现分叉。勘误文档继续保留，作为「为什么这么定」的历史记录。
+
+本版 10 条要点：
+
+1. **技术栈按实际实现改定**（2.1 / 2.3 / 2.6 / 3.x）：React 19 + React Router v7 + TypeScript 6 + Vite 8；UI 层 **shadcn/ui（Radix）+ Tailwind CSS v4（CSS-first，无 `tailwind.config.js`）**，不再使用 Ant Design；图表库 **Recharts**，不再使用 ECharts；包管理器 **npm**，不再是 pnpm。
+2. **数据库由 PostgreSQL 改为 SQLite**（2.3 / 3.4 / 3.5 / 5.1 / 5.5 / 16.2 / 16.5）：默认 `sqlite:///./data/app.db`，PostgreSQL 路径保留为生产可选项（连接串一换即切回）。
+3. **UI 规范与主题定稿**（8.5）：浅米黄底 `#FAF7EE`（`--background: hsl(43 44% 96%)`）+ 低饱和克制蓝主色 `#4E6D92`（`--primary: hsl(213 30% 44%)`），替代原「主色蓝紫 `#6366f1` + 白灰辅色」。
+4. **奖章由 1 枚扩到 3 枚**（1.5 / 5.4 / 11.12）：`first_task` 起步行动家 / `five_steps` 坚持打卡者 / `profile_shape` 方向初现，条件必须由真实行为证据驱动。这是用户验收界面后对「砍掉奖章墙」的正式推翻。
+5. **接口契约补齐**（10.2 / 10.3）：新增 `POST /chat/conversations/{id}/opening`（AI 先开口）、`DELETE /chat/conversations/{id}`、`POST /report/save`、`GET /resume/{id}/file`、`GET /home/summary`、`POST /events`；`GET /badge` 由裸数组改为 `{total, obtained_count, items[]}` 总览；`POST /task/generate` 增加 `reused`。
+6. **统一信封与错误分层定案**（6.2 / 6.5 / 6.6 / 10.1）：所有 JSON 接口统一 `{code,message,data}`（失败时 `data` 恒为 `null`）；HTTP 状态码由 `CODE_TO_HTTP_STATUS` 唯一推导，`3001` 刻意保持 200。
+7. **私有资源「不存在」与「不属于你」统一 `code 2001`**（6.6 / 6.8 / 10.4）：禁止用 `1003` 区分归属，避免错误码本身成为可枚举的 oracle。
+8. **SSE 流式对话改为 `POST` + `fetch/ReadableStream`**（7.2 / 8.4）：`EventSource` 既不能带 `Authorization` 头也不能带 body；事件仍是具名事件，每个事件的 `data` 是完整信封。
+9. **成长报告语义**（11.10）：`GET /report` 每次实时计算、不落库；`POST /report/save` 才写里程碑快照并成为下一次 `score_delta` 的基线；无基线时不得渲染「＋0」。
+10. **若干工程纪律与放宽**（7.4 / 7.7 / 8.4 / 12.2 / 13.2 / 14.5 / 16.2 / 16.4）：`POST /task/generate` 服务端按标题相似度去重；打卡区只支持点选 + ≤30 字文本，**不支持截图/上传/拍照/录屏/附件**；简历只支持 `.docx`（不支持二进制 `.doc`）；改 prompt 必须重启或带 `--reload-include '*.txt'`；compose 的 uploads 路径统一为 `./backend/uploads`，建表步骤写进启动命令。
+
+> **不在本版范围**：Electron 桌面端（第 9 章）仍是 M3 待做；对 5 条已有打卡的老任务步骤的改写已明确**不做**（保持历史打卡与新要求一致，见勘误 9.6），本手册不将它列为待办。
 
 ---
 
@@ -31,6 +52,7 @@
 | 版本 | 日期 | 修订内容 | 修订人 |
 |---|---|---|---|
 | V1.0 | 2026-09-18 | 初始版本，覆盖项目概述、技术栈、环境搭建、数据库、后端、AI、前端、Electron、部署等 | 项目组 |
+| V2.0 | 见开篇《V2.0 修订说明》 | 并入勘误与决策记录第 1、4、5、6、9 节：技术栈改定、数据库改 SQLite、奖章扩到 3 枚、接口契约与错误码分层、SSE 改造、报告语义、任务去重等 | 项目组 |
 
 ### 0.4 相关文档索引
 
@@ -39,6 +61,8 @@
 - 《API接口文档》（FastAPI自动生成）
 - 《Prompt模板全集》
 - 《页面原型与路由表》
+- 《高校学生AI就业辅助系统 前端设计说明书》
+- 《开发手册 勘误与决策记录》——**规格部分已并入本手册 V2.0**，该文档继续作为「为什么这么定」的历史记录保留
 
 ### 0.5 术语表
 
@@ -123,12 +147,12 @@
 
 1. 简单成长报告（画像变化 + 完成任务数）
 2. 对话结论卡片
-3. 一个轻量奖章（完成第一个任务）
+3. 三枚奖章（起步行动家 / 坚持打卡者 / 方向初现）
 4. 基础站内提醒
 
 **明确砍掉或延后的功能（P2）：**
 
-- 奖章墙、5种奖章、庆祝动画
+- 奖章墙（大量奖章的陈列墙与庆祝动画）——**注意：奖章本身不在此列**，「P1 只保留一枚奖章、砍掉奖章墙」已被用户验收后推翻，改为三枚，见 11.12
 - 双月自动复盘、能力成长曲线、阶段跃迁时间线
 - 画像衰减、人工抽检、复杂校准
 - 云ASR/TTS、语音输入、语音播报
@@ -166,7 +190,8 @@
                             ▼
 ┌─────────────────────────────────────────────────────────┐
 │                      数据层                              │
-│  PostgreSQL  │  本地磁盘（简历文件）  │  APScheduler     │
+│  SQLite（默认）│  本地磁盘（简历文件）  │  APScheduler     │
+│  （生产可切 PostgreSQL，连接串一换即切回）                │
 └─────────────────────────────────────────────────────────┘
                             │
                             ▼
@@ -184,15 +209,18 @@
 
 | 技术 | 选型 | 说明 |
 |---|---|---|
-| 框架 | React 18+ | 组件化、生态成熟、与Electron兼容好 |
-| 语言 | TypeScript | 类型安全，与后端Schema对齐 |
-| 构建工具 | Vite | 快速冷启动、HMR |
+| 框架 | React 19 | 组件化、生态成熟、与Electron兼容好 |
+| 语言 | TypeScript 6 | 类型安全，与后端Schema对齐。TS 6 废弃 `baseUrl`，如沿用旧写法需加 `"ignoreDeprecations": "6.0"` |
+| 构建工具 | Vite 8 | 快速冷启动、HMR。`@tailwindcss/vite` 插件接入 Tailwind |
 | 状态管理 | Zustand | 轻量、无样板代码 |
-| UI组件库 | Ant Design | 企业级组件丰富，适合中后台与工具类产品 |
-| 样式 | Tailwind CSS | 原子化CSS，快速布局 |
-| 图表 | ECharts | 雷达图、成长曲线（简化版） |
-| 请求 | axios | 拦截器、统一错误处理 |
-| 路由 | React Router v6 | 声明式路由 |
+| UI组件库 | shadcn/ui（Radix 底座） | 组件即源码，配色/圆角/密度完全可控。产品是「陪伴型」而非中后台，不用 Ant Design |
+| 样式 | Tailwind CSS v4 | 原子化CSS + CSS-first 配置（v4 无 `tailwind.config.js`，主题写在 `index.css`） |
+| 图表 | Recharts | 与 shadcn Chart 同源，设计语言统一；成长曲线能力弱于 ECharts |
+| 请求 | axios | 拦截器、统一错误处理（成功/失败两条路径都要解信封，见 8.3） |
+| 路由 | React Router v7 | 声明式路由 + 路由守卫 |
+| 提示 | sonner | 统一 toast 提示 |
+
+> 选型纪律：**颜色只用语义类名**（`bg-primary` / `text-muted-foreground` / `bg-stage-*`），禁止 Tailwind 默认色板类（如 `bg-blue-500`）；一屏最多一个实心主按钮。
 
 ### 2.2 桌面端
 
@@ -212,26 +240,27 @@
 |---|---|---|
 | 语言 | Python 3.12+ | AI生态原生 |
 | 框架 | FastAPI | 异步、流式、OpenAPI、Pydantic原生 |
-| 数据校验 | Pydantic v2 | 结构化输出、AI JSON校验 |
+| 数据校验 | Pydantic v2 | 结构化输出、AI JSON校验；配置读 `.env` 用 `pydantic-settings` |
 | ORM | SQLModel | SQLAlchemy + Pydantic合体，简洁 |
-| 数据库 | PostgreSQL | 单库够用，JSONB灵活 |
+| 数据库 | SQLite（默认），PostgreSQL（生产可选） | 默认 `sqlite:///./data/app.db`，开箱即跑；生产换连接串即可切回 PG，代码不用改 |
 | 鉴权 | JWT | python-jose + passlib |
 | 定时任务 | APScheduler | 单机定时足够 |
-| 文件解析 | pdfplumber + python-docx | 简历PDF/Word解析 |
+| 文件解析 | pdfplumber + python-docx | 简历PDF解析 + `.docx` 解析 |
 | 文件上传 | python-multipart | FastAPI文件上传 |
 | HTTP客户端 | httpx | 调用DeepSeek API |
-| 部署 | Docker Compose + Nginx + Uvicorn | 三容器编排 |
+| 数据库迁移 | Alembic | 开发用 `python -m app.db.init_db` 建表；迁移脚本用 Alembic（SQLite 下开 `render_as_batch`） |
+| 部署 | Docker Compose + Nginx + Uvicorn | 默认两容器（app + nginx），PG 在 `postgres` profile 下可选 |
 
 ### 2.4 AI
 
 | 技术 | 选型 | 说明 |
 |---|---|---|
-| 模型 | DeepSeek API | 只接一家，deepseek-chat |
+| 模型 | DeepSeek API | 只接一家，`deepseek-chat` |
 | 调用方式 | httpx 直接调用 | 不引入LangChain，减少抽象层 |
-| 流式输出 | SSE | 对话、面试追问流式返回 |
+| 流式输出 | SSE | 对话流式返回；事件具名 `start/delta/tag/pending/done/error`，`end` 收尾 |
 | 结构化输出 | Pydantic + JSON Schema | 画像标签、诊断卡、面试评分等 |
-| Prompt管理 | 本地模板文件 | 版本化管理 |
-| 兜底策略 | 模板回复 + 重试 | 调用失败不报错 |
+| Prompt管理 | 本地模板文件（`.txt`） | 版本化管理；`load_prompt` 带 `lru_cache`，**改动后必须重启进程**（见 3.6） |
+| 兜底策略 | 模板回复 + 重试 | 调用失败不报错；开场白另有专用的分档模板（见 11.4） |
 
 ### 2.5 明确不引入的依赖及原因
 
@@ -245,7 +274,7 @@
 | MinIO / OSS | 简历文件存本地磁盘，数据库存路径 |
 | PaddleOCR / OCR | 学生简历绝大多数是电子版，扫描件概率极低 |
 | 云ASR/TTS | 面试语音用浏览器Web Speech API，后端零依赖（后期可加） |
-| Elasticsearch / MongoDB | PostgreSQL的JSONB足够 |
+| Elasticsearch / MongoDB | 单库 SQLite（生产可切 PostgreSQL）足够；扩展字段用 JSON 列承载 |
 | 微服务拆分 | 模块化单体足够，FastAPI内部按模块拆router |
 | 复杂监控 / 日志系统 | 标准logging + 控制台足够 |
 
@@ -255,12 +284,16 @@
 
 ```text
 fastapi
-uvicorn
+uvicorn[standard]
 pydantic
+pydantic-settings        # 手册原清单遗漏；3.5/6.4 的 .env 配置必需
 sqlmodel
-psycopg2-binary
+# sqlite3 是 Python 自带，SQLite 下不需要额外驱动
+# psycopg2-binary        # 可选：只有 DATABASE_URL 切回 postgresql:// 时才需要
+alembic                  # 手册原清单遗漏；5.5/17.6 的迁移必需
 python-jose[cryptography]
 passlib[bcrypt]
+bcrypt
 httpx
 pdfplumber
 python-docx
@@ -272,20 +305,23 @@ apscheduler
 
 ```text
 react
+react-dom
 typescript
 vite
+tailwindcss @tailwindcss/vite
 zustand
-antd
-tailwindcss
+radix-ui
+sonner
+recharts
 axios
-echarts
 react-router-dom
 ```
 
 **数据库：**
 
 ```text
-PostgreSQL
+SQLite（默认，零配置、零依赖）
+PostgreSQL（生产可选，属于切换项而非默认项）
 ```
 
 **部署：**
@@ -305,7 +341,7 @@ Uvicorn
 - 操作系统：Windows 10/11、macOS 12+、Ubuntu 20.04+
 - Python：3.12+
 - Node.js：20 LTS+
-- PostgreSQL：16+
+- 数据库：**SQLite（Python 自带，无需安装，无需建库）**；生产可选 PostgreSQL 16+
 - Docker：24+（可选，用于部署）
 - Git：2.40+
 
@@ -330,33 +366,46 @@ pip install -r requirements.txt
 ### 3.3 Node.js环境
 
 ```bash
-# 安装 pnpm（推荐）
-npm install -g pnpm
-
-# 安装依赖
-pnpm install
+# 安装依赖（本项目统一用 npm）
+npm install
 ```
 
-### 3.4 PostgreSQL
+> 早期文档示例用 pnpm，实际本机只用 npm，故统一为 npm。
+
+### 3.4 数据库（SQLite，默认）
+
+**不需要安装、不需要建库、不需要建用户。** 库文件由应用启动或建表时自动创建：
 
 ```bash
-# 创建数据库
-createdb ai_career
+# 建表 + 灌种子（幂等，可反复执行）
+cd backend
+python -m app.db.init_db
 
-# 或使用 psql
-psql -U postgres
-CREATE DATABASE ai_career;
-CREATE USER ai_user WITH PASSWORD 'your_password';
-GRANT ALL PRIVILEGES ON DATABASE ai_career TO ai_user;
+# 常用参数：--no-seed 只建表 / --drop 先删表再建（危险）
 ```
+
+- 库文件位置：`backend/data/app.db`（由 `DATABASE_URL=sqlite:///./data/app.db` 决定）；
+- 想看/改数据：任何 SQLite 客户端直接打开该文件即可。
+
+**切回 PostgreSQL（生产可选）**：
+
+```bash
+# 1) 改 .env
+DATABASE_URL=postgresql://ai_user:your_password@localhost:5432/ai_career
+# 2) 取消 requirements.txt 里 psycopg2-binary 的注释并安装
+# 3) 建表改用迁移
+alembic upgrade head
+```
+
+代码侧不需要任何改动（JSON 列用 `with_variant` 同时兼容 PG 的 JSONB 与 SQLite 的 JSON）。
 
 ### 3.5 环境变量
 
-在项目根目录创建 `.env`：
+在项目根目录或 `backend/` 下创建 `.env`：
 
 ```env
-# 数据库
-DATABASE_URL=postgresql://ai_user:your_password@localhost:5432/ai_career
+# 数据库（默认 SQLite；生产可换成 postgresql://...）
+DATABASE_URL=sqlite:///./data/app.db
 
 # JWT
 SECRET_KEY=your-secret-key
@@ -378,25 +427,34 @@ DEBUG=true
 ### 3.6 启动后端
 
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+cd backend
+uvicorn app.main:app --reload --reload-include '*.txt' --host 0.0.0.0 --port 8000
 ```
 
 访问 `http://localhost:8000/docs` 查看自动生成的API文档。
+
+> **`--reload-include '*.txt'` 不是可选项**：所有 prompt 都是 `.txt`，而 `--reload` 默认只监听 `.py`；不加这个参数时改了 prompt 进程不会重启，`load_prompt` 的 `lru_cache` 会一直返回旧文本，表现为「改了 prompt 但输出没变」，很容易误判成 prompt 写得不对。手工用别的方式起 uvicorn 时，改完 prompt 请手动重启。
 
 ### 3.7 启动前端
 
 ```bash
 cd frontend
-pnpm dev
+npm install
+npm run dev
 ```
 
-访问 `http://localhost:5173`。
+访问 `http://localhost:5173`。dev 环境由 Vite 代理把 `/api` 转发到 `http://localhost:8000`，因此本地联调不需要配 CORS。
+
+> `npm run preview` 默认只监听 IPv6 `[::1]`，用 `http://127.0.0.1:4173` 连不上，请用 `http://localhost:4173`。
 
 ### 3.8 启动Electron
 
+**M3 阶段实现，当前仓库尚无 `electron/` 目录**，第 9 章为规划。M3 落地后按第 9 章的结构创建工程，启动方式为：
+
 ```bash
 cd electron
-pnpm dev
+npm install
+npm run dev
 ```
 
 ### 3.9 Docker Compose一键启动
@@ -411,10 +469,12 @@ docker-compose up -d
 
 | 问题 | 解决 |
 |---|---|
-| psycopg2安装失败 | 安装 `psycopg2-binary` 或系统依赖 `libpq-dev` |
-| DeepSeek调用超时 | 检查网络、API Key、超时设置 |
-| 前端跨域 | 后端配置CORS，允许 `http://localhost:5173` |
-| 数据库连接失败 | 检查 `.env` 中 `DATABASE_URL` |
+| `SQLite objects created in a thread can only be used in that same thread` | 连接参数必须带 `check_same_thread=False`（FastAPI 同步路由跑在线程池里） |
+| 改了 prompt 但输出没变 | 启动加 `--reload-include '*.txt'`，或手动重启后端（`load_prompt` 有 `lru_cache`） |
+| DeepSeek调用超时 | 检查网络、API Key、超时设置；AI 失败会走兜底话术而不是报错 |
+| 前端跨域 | 本地用 Vite 代理；直连后端时确认后端 CORS 允许 `http://localhost:5173` |
+| 数据库连接失败 | 检查 `.env` 中 `DATABASE_URL`；SQLite 需确认 `data/` 目录可写 |
+| 表不存在 / 数据为空 | 先执行 `python -m app.db.init_db`（建表 + 灌种子，幂等） |
 
 ---
 
@@ -427,7 +487,9 @@ backend/
 ├── app/
 │   ├── main.py                 # FastAPI入口
 │   ├── core/
-│   │   ├── config.py           # 配置
+│   │   ├── config.py           # 配置（pydantic-settings）
+│   │   ├── api_response.py     # 统一信封 ApiResponse[T] / PageData[T]
+│   │   ├── errors.py           # 错误码、BusinessException、CODE_TO_HTTP_STATUS
 │   │   ├── security.py         # JWT、密码
 │   │   └── deps.py             # 依赖注入
 │   ├── models/                 # SQLModel模型
@@ -440,7 +502,8 @@ backend/
 │   │   ├── task.py
 │   │   ├── daily_question.py
 │   │   ├── report.py
-│   │   └── badge.py
+│   │   ├── badge.py
+│   │   └── types.py            # 跨库通用列类型（JSON/JSONB variant 等）
 │   ├── schemas/                # Pydantic Schema
 │   │   ├── user.py
 │   │   ├── profile.py
@@ -448,6 +511,8 @@ backend/
 │   │   ├── resume.py
 │   │   ├── interview.py
 │   │   ├── task.py
+│   │   ├── home.py
+│   │   ├── event.py
 │   │   └── ...
 │   ├── api/                    # 路由
 │   │   ├── v1/
@@ -460,8 +525,10 @@ backend/
 │   │   │   ├── task.py
 │   │   │   ├── daily_question.py
 │   │   │   ├── report.py
-│   │   │   └── badge.py
-│   │   └── router.py
+│   │   │   ├── badge.py
+│   │   │   ├── home.py         # GET /home/summary（补实现，见 10.2）
+│   │   │   └── events.py       # POST /events（补实现，见 10.2）
+│   │   └── router.py           # 总路由，统一前缀 /api/v1
 │   ├── services/               # 业务逻辑
 │   │   ├── auth_service.py
 │   │   ├── profile_service.py
@@ -471,36 +538,53 @@ backend/
 │   │   ├── task_service.py
 │   │   ├── daily_question_service.py
 │   │   ├── report_service.py
-│   │   └── badge_service.py
+│   │   ├── badge_service.py
+│   │   ├── home_service.py     # 首页聚合 + next_action 判定
+│   │   ├── event_service.py    # 埋点只落结构化日志
+│   │   └── idempotency.py      # client_msg_id 幂等
 │   ├── ai/                     # AI集成
 │   │   ├── deepseek_client.py
+│   │   ├── schemas.py          # AI 输出模型 + 岗位关键词库
+│   │   ├── fallbacks.py        # 兜底话术（含开场白三档模板）
 │   │   ├── prompts/
 │   │   │   ├── chat_system.txt
+│   │   │   ├── chat_opening.txt        # AI 开场白（11.4）
+│   │   │   ├── chat_conclusion.txt     # 结论卡片（11.11）
 │   │   │   ├── profile_extract.txt
 │   │   │   ├── resume_parse.txt
 │   │   │   ├── resume_optimize.txt
 │   │   │   ├── interview_question.txt
+│   │   │   ├── interview_followup.txt
 │   │   │   ├── interview_review.txt
 │   │   │   ├── task_generate.txt
 │   │   │   └── daily_question.txt
-│   │   └── parser.py           # 输出解析与校验
+│   │   └── parser.py           # 输出解析与校验（load_prompt 带 lru_cache）
 │   ├── tasks/                  # APScheduler任务
 │   │   ├── scheduler.py
 │   │   ├── daily_question_job.py
 │   │   ├── reminder_job.py
-│   │   └── badge_job.py
+│   │   ├── badge_job.py
+│   │   └── cleanup_job.py      # 12.2「数据清理」
 │   ├── utils/
 │   │   ├── file.py
 │   │   ├── text.py
+│   │   ├── stage.py            # 阶段 slug/label 转换（唯一出处）
+│   │   ├── similarity.py       # 任务标题相似度（bigram Jaccard）
 │   │   └── logger.py
 │   └── db/
-│       ├── session.py
-│       └── init_db.py
+│       ├── session.py          # 引擎/SessionLocal（SQLite 逐连接 PRAGMA）
+│       ├── init_db.py          # 建表 + 灌种子
+│       └── seed_data.py        # 题库/每日一问/奖章种子
+├── migrations/                 # Alembic（versions/ 目前为空，首次 autogenerate 生成）
+├── scripts/                    # 一次性运维脚本（清重复任务、修老步骤等）
+├── data/                       # SQLite 库文件（app.db），不入版本库
 ├── uploads/                    # 简历文件存储
 ├── tests/
 ├── requirements.txt
 └── .env
 ```
+
+> **与手册 V1.0 的差异**：`layouts/`、`router/guards.tsx`、`constants/`、`lib/`、`components/ui/` 属于前端（见 4.2）；后端新增了 `utils/similarity.py`、`utils/stage.py`、`tasks/cleanup_job.py`、`services/home_service.py`、`services/event_service.py`、`services/idempotency.py`、`db/seed_data.py`、`prompts/chat_opening.txt`、`prompts/chat_conclusion.txt`、`migrations/`、`scripts/`。
 
 ### 4.2 前端目录
 
@@ -509,76 +593,55 @@ frontend/
 ├── src/
 │   ├── main.tsx
 │   ├── App.tsx
+│   ├── index.css               # Tailwind v4 CSS-first 主题（@theme + 设计 token）
 │   ├── router/
-│   │   └── index.tsx
+│   │   ├── index.tsx           # 路由表
+│   │   └── guards.tsx          # 登录/测评守卫
+│   ├── layouts/
+│   │   ├── AppLayout.tsx       # 登录后主框架（导航 + 内容区）
+│   │   └── BlankLayout.tsx     # 登录/注册等无框架页
 │   ├── pages/
-│   │   ├── auth/
-│   │   │   ├── Login.tsx
-│   │   │   └── Register.tsx
-│   │   ├── test/
-│   │   │   ├── TestIntro.tsx
-│   │   │   ├── TestQuestion.tsx
-│   │   │   └── TestResult.tsx
-│   │   ├── home/
-│   │   │   └── Home.tsx
-│   │   ├── chat/
-│   │   │   └── Chat.tsx
-│   │   ├── resume/
-│   │   │   ├── ResumeList.tsx
-│   │   │   ├── ResumeCreate.tsx
-│   │   │   ├── ResumeEdit.tsx
-│   │   │   └── ResumeReport.tsx
-│   │   ├── interview/
-│   │   │   ├── InterviewSelect.tsx
-│   │   │   ├── InterviewPrepare.tsx
-│   │   │   ├── InterviewSession.tsx
-│   │   │   └── InterviewReview.tsx
-│   │   ├── task/
-│   │   │   ├── TaskList.tsx
-│   │   │   └── TaskDetail.tsx
-│   │   ├── daily/
-│   │   │   └── DailyQuestion.tsx
-│   │   ├── report/
-│   │   │   └── Report.tsx
-│   │   └── profile/
-│   │       └── Profile.tsx
+│   │   ├── auth/               # LoginPage / RegisterPage
+│   │   ├── test/               # TestIntroPage / TestQuestionPage / TestResultPage
+│   │   ├── home/               # HomePage
+│   │   ├── chat/               # ChatPage
+│   │   ├── resume/             # ResumeListPage / ResumeCreatePage / ResumeEditPage / ResumeReportPage
+│   │   ├── interview/          # InterviewSelectPage / InterviewPreparePage / InterviewSessionPage / InterviewReviewPage
+│   │   ├── task/               # TaskListPage / TaskDetailPage
+│   │   ├── daily/              # DailyPage
+│   │   ├── report/             # GrowthReportPage
+│   │   ├── profile/            # ProfilePage
+│   │   └── error/              # NotFoundPage
 │   ├── components/
-│   │   ├── Layout.tsx
+│   │   ├── ui/                 # shadcn/ui 组件（组件即源码）
 │   │   ├── ChatBubble.tsx
-│   │   ├── ProfileCard.tsx
-│   │   ├── TaskCard.tsx
-│   │   └── ...
-│   ├── store/
-│   │   ├── authStore.ts
-│   │   ├── chatStore.ts
-│   │   ├── profileStore.ts
-│   │   └── taskStore.ts
-│   ├── api/
+│   │   ├── StepList.tsx
+│   │   ├── StageBadge.tsx
+│   │   ├── NextActionButton.tsx
+│   │   ├── AIThinking.tsx
+│   │   ├── EmptyState.tsx
+│   │   ├── PageShell.tsx
+│   │   └── ErrorBoundary.tsx
+│   ├── store/                  # Zustand：auth / chat / profile / task / resume / interview
+│   ├── api/                    # client.ts（axios + 拦截器）+ 按模块拆分的接口封装
 │   │   ├── client.ts
-│   │   ├── auth.ts
 │   │   ├── chat.ts
-│   │   ├── resume.ts
-│   │   ├── interview.ts
-│   │   ├── task.ts
-│   │   └── daily.ts
-│   ├── types/
-│   │   ├── user.ts
-│   │   ├── profile.ts
-│   │   ├── chat.ts
-│   │   ├── resume.ts
-│   │   ├── interview.ts
-│   │   └── task.ts
-│   ├── hooks/
-│   │   ├── useSSE.ts
-│   │   └── useAuth.ts
-│   └── utils/
-│       ├── format.ts
-│       └── storage.ts
+│   │   ├── sse.ts              # fetch + ReadableStream 消费 SSE
+│   │   └── ...
+│   ├── hooks/                  # useSSE / useAuth / useStage / useResponsive
+│   ├── constants/              # routes / nav / stage / errorCode / interview / resume 等常量
+│   ├── lib/                    # utils.ts（cn 等）
+│   ├── types/                  # 与后端 schema 对齐的类型
+│   ├── utils/                  # format / storage / list（normalizeList）/ markdown / track
+│   └── styles/                 # print.css（成长报告打印样式）
 ├── package.json
-├── vite.config.ts
-├── tailwind.config.js
-└── tsconfig.json
+├── vite.config.ts              # react + tailwindcss 插件、@ 别名、/api 代理
+├── components.json             # shadcn/ui 配置
+├── tsconfig.json / tsconfig.app.json / tsconfig.node.json
+└── .env.development
 ```
+
+> **没有 `tailwind.config.js`**：Tailwind v4 走 CSS-first，主题（颜色、圆角、阴影）全部写在 `src/index.css` 的 `:root` + `@theme inline` 里。
 
 ### 4.3 Electron目录
 
@@ -601,11 +664,13 @@ electron/
 
 ### 5.1 设计原则
 
-- 单库 PostgreSQL，不引入额外数据库。
-- 常用字段独立列，扩展字段用 JSONB。
+- 单库：**默认 SQLite**（生产可切 PostgreSQL），不引入额外数据库。
+- 常用字段独立列，扩展字段用 JSON 列；**方言差异用 `with_variant` 处理**（PostgreSQL 走 `JSONB`，SQLite 退回通用 `JSON`），**不要在模型里散写 `JSONB`**。
 - 所有表带 `created_at`、`updated_at`。
 - 软删除：`deleted_at` 为空表示未删除。
 - 主键统一用 UUID 或自增 BIGINT（推荐 UUID，便于分布式扩展）。
+- SQLite 注意事项：连接参数需 `check_same_thread=False`；外键约束需**逐连接** `PRAGMA foreign_keys=ON`（SQLite 默认不强制外键）；Alembic 需开 `render_as_batch=True`；`DateTime(timezone=True)` 在 SQLite 下退化为字符串，不要依赖时区语义。
+- JSON 列**只做整体赋值，不做就地修改**：SQLAlchemy 默认不追踪 JSON 列的内部变更，就地改（`tag.extra["x"] = ...`）flush 不出 UPDATE，会静默丢数据。
 
 ### 5.2 表清单
 
@@ -614,6 +679,7 @@ electron/
 | users | 用户 |
 | profiles | 画像主表 |
 | profile_tags | 画像标签 |
+| test_questions | 基础测试题库（种子数据落库） |
 | test_results | 测试表结果 |
 | conversations | 对话记录 |
 | messages | 对话消息 |
@@ -624,8 +690,8 @@ electron/
 | task_steps | 任务步骤 |
 | daily_questions | 每日一问题库 |
 | daily_answers | 每日一问回答 |
-| reports | 成长报告 |
-| badges | 奖章 |
+| reports | 成长报告（保存的里程碑快照） |
+| badges | 奖章定义 |
 | user_badges | 用户奖章 |
 
 ### 5.3 核心表结构
@@ -654,7 +720,7 @@ electron/
 | action_score | FLOAT | 求职行动进度 0-100 |
 | resume_score | FLOAT | 简历完整度 0-100 |
 | total_score | FLOAT | 加权总分 |
-| stage | VARCHAR(20) | 探索期/准备期/冲刺期 |
+| stage | VARCHAR(20) | 阶段（库内存中文：探索期/准备期/冲刺期；**接口层统一转 slug**，见 10.4） |
 | updated_at | TIMESTAMP | 更新时间 |
 
 #### profile_tags
@@ -667,7 +733,7 @@ electron/
 | label | VARCHAR(100) | 标签名 |
 | weight | FLOAT | 权重 0-1 |
 | source | VARCHAR(50) | 来源：test/chat/resume/interview/daily/task |
-| extra | JSONB | 扩展信息 |
+| extra | JSONB / JSON | 扩展信息 |
 | updated_at | TIMESTAMP | 更新时间 |
 
 #### conversations
@@ -676,10 +742,16 @@ electron/
 |---|---|---|
 | id | UUID | 主键 |
 | user_id | UUID | 外键 |
-| title | VARCHAR(200) | 对话主题 |
-| conclusion | JSONB | 结论卡片 |
+| title | VARCHAR(200) | 对话标题（创建时确定，未传则服务端取 `新对话 N`） |
+| conclusion | JSONB / JSON | 结论卡片 |
 | created_at | TIMESTAMP | 创建时间 |
 | updated_at | TIMESTAMP | 更新时间 |
+
+> 本表**没有**追问计数字段。7.7 原有的「同一方向连续追问 ≤3 轮后换维度」计数器
+> （以"当前挖掘维度 + 同方向已追问轮数"两个会话级字段实现）**已整体移除**，
+> 那两个字段在真实库中也已物理删除（见 7.7）。
+> 注意与 11.9 面试的追问区分：那套（每题后追问 1-2 轮，字段名为 `followups` /
+> `current_followup`）保留在 `interview_questions` 上，未受影响。
 
 #### messages
 
@@ -688,8 +760,11 @@ electron/
 | id | UUID | 主键 |
 | conversation_id | UUID | 外键 |
 | role | VARCHAR(20) | user/assistant/system |
-| content | TEXT | 消息内容 |
+| content | TEXT | 消息内容（**纯文本，不含任何幂等标记**） |
+| client_msg_id | VARCHAR(64) | 客户端幂等 id（仅用户消息有值）；与 `conversation_id` 组成唯一约束。AI 开场白固定用系统保留值 `sys:opening` |
 | created_at | TIMESTAMP | 创建时间 |
+
+> **唯一约束 `UNIQUE (conversation_id, client_msg_id)` 是幂等的实现基础**：同一 `client_msg_id` 重复提交不会产生第二条用户消息，也不会再调一次 AI。并发下靠数据库唯一约束挡第二次插入，捕获冲突后回滚并回放已落库的那条。
 
 #### resumes
 
@@ -699,7 +774,7 @@ electron/
 | user_id | UUID | 外键 |
 | title | VARCHAR(200) | 简历标题 |
 | file_path | VARCHAR(500) | 文件路径 |
-| parsed_data | JSONB | 解析后结构化数据 |
+| parsed_data | JSONB / JSON | 解析后结构化数据 |
 | ats_score | FLOAT | ATS评分 |
 | completeness | FLOAT | 完整度 |
 | target_job | VARCHAR(100) | 目标岗位 |
@@ -715,7 +790,7 @@ electron/
 | mode | VARCHAR(50) | 小测试/全真 |
 | scene | VARCHAR(50) | HR/项目/技术 |
 | status | VARCHAR(20) | 进行中/已完成 |
-| report | JSONB | 复盘报告 |
+| report | JSONB / JSON | 复盘报告 |
 | created_at | TIMESTAMP | 创建时间 |
 | updated_at | TIMESTAMP | 更新时间 |
 
@@ -756,7 +831,7 @@ electron/
 | id | UUID | 主键 |
 | dimension | VARCHAR(50) | 维度 |
 | content | TEXT | 题目 |
-| options | JSONB | 选项 |
+| options | JSONB / JSON | 选项 |
 | created_at | TIMESTAMP | 创建时间 |
 
 #### daily_answers
@@ -775,9 +850,11 @@ electron/
 |---|---|---|
 | id | UUID | 主键 |
 | user_id | UUID | 外键 |
-| type | VARCHAR(50) | 成长报告 |
-| content | JSONB | 报告内容 |
-| created_at | TIMESTAMP | 创建时间 |
+| type | VARCHAR(50) | 报告类型：`growth` / `conclusion` / `resume` |
+| content | JSONB / JSON | 报告快照内容（成长报告 = 实时算出的字段 + `user_note` + `saved_at`） |
+| created_at | TIMESTAMP | 创建（保存）时间；它同时是下一次 `score_delta` 的基线时间 |
+
+> `reports` 只在 `POST /report/save` 时写行；`GET /report` **不落库**（见 11.10）。
 
 #### badges
 
@@ -785,8 +862,10 @@ electron/
 |---|---|---|
 | id | UUID | 主键 |
 | name | VARCHAR(100) | 奖章名 |
-| condition | JSONB | 触发条件 |
+| condition | JSONB / JSON | 触发条件 + 展示元数据（`event`/`threshold`/`key`/`art`/`order`/`description`/`hint`/`earned_hint`） |
 | created_at | TIMESTAMP | 创建时间 |
+
+> 奖章的**唯一定义源是代码**（`badge_service.BADGE_RULES`），种子表只做投影；`key`（前端选美术用）不新增列，就存在 `condition` 这个已有 JSON 列里。
 
 #### user_badges
 
@@ -799,21 +878,36 @@ electron/
 
 ### 5.4 初始化种子数据
 
-- 基础测试题：30-50题，纯选择题，四维度。
-- 每日一问题库：30题，四维度轮换。
-- 成长任务模板：6个任务，每个3-5步。
-- 岗位关键词库：产品经理、前端开发、数据分析。
-- 奖章：起步行动家。
+由 `python -m app.db.init_db` 落库（幂等，可反复执行）：
+
+- 基础测试题：30 题，纯选择题，四维度（clarity 8 / action 8 / resume 7 / interest 7）。
+- 每日一问题库：30 题，六维度各 5 题。
+- 奖章：**3 枚**（起步行动家 / 坚持打卡者 / 方向初现），定义源见 11.12。
+
+**仍以代码常量承载、不落库的两项**（属于内部参考数据，不是用户可见数据，手册 5.2 也没有对应表）：
+
+- 成长任务模板（附录E）：`task_service.TASK_TEMPLATES`，作为 `task_generate` 的参考样例喂给模型；
+- 岗位关键词库（附录F）：`ai/schemas.py::JOB_KEYWORDS`，用于 ATS 评分。
+
+> 若要让这两项支持在线维护，需要新增 `task_templates` / `job_keywords` 两张表并把常量搬成种子数据（范围扩张，未做）。
 
 ### 5.5 数据库迁移
 
-使用 Alembic 或手动 SQL 脚本。推荐 Alembic：
+**开发（SQLite 默认路径）**：用 `python -m app.db.init_db` 建表 + 灌种子（`create_all`，幂等，不写 `alembic_version`）。
+
+**正式 / 需要迁移管理时**用 Alembic：
 
 ```bash
 alembic init migrations
 alembic revision --autogenerate -m "init"
 alembic upgrade head
 ```
+
+- SQLite 下必须开 `render_as_batch=True`（SQLite 的 `ALTER TABLE` 能力弱）；
+- `migrations/versions/` 目前为空，首次 `--autogenerate` 生成；
+- **不要混用**两种方式：先 `create_all` 再 Alembic，autogenerate 会看不到表而重复建表；
+- 首次迁移会带上 5.3 里补的列（`messages.client_msg_id`）与 `test_questions` 表，无需手写 `ALTER TABLE`。
+  （`conversations` 的追问计数两列已随 7.7 的功能一起移除，不参与迁移。）
 
 ---
 
@@ -839,14 +933,16 @@ api/router → service → model/repository
 示例：
 
 ```python
-@router.post("/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ApiResponse[ChatResponse])
 async def chat(
     req: ChatRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
-    return await chat_service.chat(db, current_user, req)
+) -> ApiResponse[ChatResponse]:
+    return ApiResponse.ok(await chat_service.chat(db, current_user, req))
 ```
+
+> **注意 `response_model` 必须写 `ApiResponse[XxxResponse]`**，不能裸写 `XxxResponse`：前者既统一包了信封，`/docs` 里又能看到 `data` 的真实结构。
 
 ### 6.3 Schema规范
 
@@ -854,6 +950,8 @@ async def chat(
 - 响应：`XxxResponse`
 - 内部：`XxxCreate`、`XxxUpdate`
 - 使用 Pydantic v2，`model_config = ConfigDict(from_attributes=True)`
+- **列表类响应的 `data` 是裸数组**（`ApiResponse[List[XxxResponse]]`），当前**不做分页**；前端用 `normalizeList()` 同时兼容裸数组与 `{items}` 两种形状。等数据量上来（任务/对话历史变长）再按分页体补齐，届时手册与两端一起改。
+- 入参字段一律带 `Field(description=...)`：`/docs` 是前后端唯一共同的事实来源。
 
 ### 6.4 依赖注入
 
@@ -861,27 +959,41 @@ async def chat(
 - `get_current_user`：JWT解析当前用户
 - `get_settings`：配置
 
+> **判断「用户做没做过测评」一律看 `ProfileResponse.tested`**，不要看画像对象是否存在：`GET /profile` 走 `get_or_create_profile`，永远返回一个画像对象。看对象是否存在会让「已登录 + 未测评 → /test/intro」的漏斗永不触发。
+>
+> **流式端点不要沿用请求级 Session**：`StreamingResponse` 的 body 在请求依赖被清理**之后**才被消费，生成器里再 `commit` 会作用在已关闭的 Session 上。生成器内部应自开 Session（只把 `user_id` 这类纯数据传进去，避免 `DetachedInstanceError`）。
+
 ### 6.5 统一响应格式
 
 ```json
-{
-  "code": 0,
-  "message": "success",
-  "data": {}
-}
+// 成功
+{ "code": 0, "message": "success", "data": { "id": "...", "title": "新对话 1" } }
+// 失败（HTTP 状态见下表）
+{ "code": 2001, "message": "资源不存在", "data": null }
 ```
+
+约定：
+
+- **所有** JSON 接口（含 `DELETE`、含 `POST /report/save`）都返回这个信封，路由上写 `response_model=ApiResponse[XxxResponse]`；
+- 成功时 `data` 是业务对象，**失败时 `data` 恒为 `null`**（不是 `{}`）；
+- 列表接口的 `data` 是**裸数组**；
+- 裸数组/分页体两种形状前端都要能吃（见 6.3）。
 
 错误码：
 
-| code | 含义 |
-|---|---|
-| 0 | 成功 |
-| 1001 | 参数错误 |
-| 1002 | 未登录 |
-| 1003 | 权限不足 |
-| 2001 | 资源不存在 |
-| 3001 | AI调用失败 |
-| 5000 | 服务器内部错误 |
+| code | 含义 | HTTP 状态 |
+|---|---|---|
+| 0 | 成功 | 200 |
+| 1001 | 参数错误（含请求体校验失败） | 400 |
+| 1002 | 未登录 | 401 |
+| 1003 | 权限不足 | 403 |
+| 2001 | 资源不存在（**含「存在但不属于你」**） | 404 |
+| 3001 | AI调用失败 | **200**（刻意保持） |
+| 5000 | 服务器内部错误 | 500 |
+
+**这张表的 HTTP 一列由 `app/core/errors.py::CODE_TO_HTTP_STATUS` 唯一推导**：只要业务码相同，HTTP 状态就一定相同。禁止在业务代码里各自传 `status_code` —— 历史上出现过「同码不同状态」（`2001` 有时 404 有时 200、`1002` 有时 401 有时 200），前端表现为「偶发跳不过登录页」，极难排查。
+
+`3001` 刻意保持 HTTP 200：它是「外部依赖抖动的业务结果」，前端按 `code` 提示重试即可；`1002/2001` 必须是真 401/404，否则任何标准中间件、Nginx 与前端拦截器都会失效。
 
 ### 6.6 异常处理
 
@@ -891,10 +1003,21 @@ async def chat(
 @app.exception_handler(BusinessException)
 async def business_exception_handler(request, exc):
     return JSONResponse(
-        status_code=200,
+        status_code=exc.status_code or 200,   # 由 code 推导，见 6.5
         content={"code": exc.code, "message": exc.message, "data": None},
     )
 ```
+
+分层规则：
+
+| 异常 | HTTP | code |
+|---|---|---|
+| `BusinessException`（业务失败） | 按 `CODE_TO_HTTP_STATUS` 推导 | 业务码 |
+| `RequestValidationError`（请求体校验失败） | 400 | 1001（响应体带 `data.errors` 明细） |
+| `HTTPException` | 保留原始状态码 | 按 `HTTP_STATUS_TO_CODE` 映射 |
+| 未捕获 `Exception` | 500 | 5000（细节只进日志，见 14.6） |
+
+**私有资源一律用 `not_found_unless_owner()`**：「不存在」与「不属于你」返回同一个 `2001`，禁止用 `1003` 区分（理由见 6.8）。`1003` 只保留给「与资源归属无关的越权」（管理员接口、被封禁用户等），当前业务里没有这种场景。
 
 ### 6.7 日志
 
@@ -911,6 +1034,7 @@ logger.info("...")
 - 登录返回 access_token
 - 前端在 Header 中携带 `Authorization: Bearer <token>`
 - 后端解析 token 获取 user_id
+- 未登录一律返回 **HTTP 401 + `code 1002`**；前端拦截器对 HTTP 401 与 `code === 1002` **两条路径都要触发登出**（401 可能来自中间件、1002 来自业务层）
 
 ### 6.9 模块划分
 
@@ -926,6 +1050,34 @@ logger.info("...")
 | DailyQuestion | /api/v1/daily | 每日一问 |
 | Report | /api/v1/report | 成长报告 |
 | Badge | /api/v1/badge | 奖章 |
+| Home | /api/v1/home | 首页聚合（`GET /home/summary`） |
+| Events | /api/v1/events | 行为埋点上报（`POST /events`） |
+| System | /api/v1/health | 探活（不带信封） |
+
+### 6.10 私有资源归属规则（编码红线）
+
+> 查私有资源时，「不存在」与「不属于你」必须返回**同一个**错误码 `2001`；禁止用 `1003` 区分，否则错误码本身就是可枚举的 oracle。
+
+- 实现落点：`app/core/errors.py::not_found_unless_owner()`，所有私有资源端点都走它；
+- 适用范围：`resume`（`{id}` / `optimize` / `report` / `file`）、`task`（`{id}` / `abandon` / `steps/{id}/complete`）、`interview`（`questions` / `answer` / `finish` / `review`）、`chat`（`conversations/{id}` 下的 `messages` / `stream` / `conclusion` / `opening`，以及 `DELETE`）；
+- 归属不符时**不记日志**（避免探测行为刷日志），排查时看 404 计数；
+- 文件类资源还要做目录穿越校验：规范化后的路径必须仍在 `UPLOAD_DIR` 内。
+
+### 6.11 字段口径统一：`stage` 一律 slug + label
+
+同一个概念不允许两种编码。**全接口统一**：
+
+- `stage` 一律为英文 slug，枚举固定 `explore` / `prepare` / `sprint`，未知值兜底 `explore`；
+- 另给 `stage_label` 为中文展示名（探索期 / 准备期 / 冲刺期）；
+- 转换只发生在 schema 层（`app/utils/stage.py` 是唯一出处），**不为了改接口去改存量数据编码**。
+
+### 6.12 纪律：不要用「登记式簿记」记录渲染状态
+
+任何「记录某个东西已经渲染过 / 已经处理过」的副本，都必须**能由渲染态本身推导出来**；推导不出来就不要存。
+
+反面案例（真实踩过）：会话页曾用 `openingMessageIds: Map<会话, 消息id>` 记录「这条开场白已经渲染过」。因为登记发生在丢弃之前，切走时会话被永久毒化 —— 加载消息时按这个 id 把服务端真实存在的开场白过滤掉，而补开场白的逻辑又因为「已经有开场白」提前返回，AI 的提问凭空消失且不可自愈。
+
+正确做法：参与判断的字段全是渲染态本身（例如 `messages` 里有没有 `client_msg_id === 'sys:opening'` 的消息）。同类形状的 bug 在本项目出现过三次（两次会话页、一次奖章种子），遇到「需要一个记号/缓存来记住某状态」时先按本条检查。
 
 ---
 
@@ -959,7 +1111,13 @@ async def chat(messages, temperature=0.7, stream=False, max_tokens=2048):
 
 ### 7.2 流式输出
 
-使用 SSE：
+使用 SSE，正式端点是 **`POST`**：
+
+```
+POST /api/v1/chat/conversations/{conversation_id}/stream
+Body: { "content": "...", "client_msg_id": "<uuid>" }
+Response: text/event-stream
+```
 
 ```python
 from fastapi.responses import StreamingResponse
@@ -971,6 +1129,16 @@ async def stream_chat(messages):
                 if line.startswith("data: "):
                     yield line[6:] + "\n\n"
 ```
+
+**为什么不沿用 `EventSource`（GET）**：`EventSource` 既不能带 `Authorization` 头，也不能带请求体，与 6.8 的 Bearer 鉴权、与 `client_msg_id` 幂等直接冲突。因此前端用 `fetch` + `ReadableStream` 消费 `POST` 端点；`GET .../stream?content=...` 仅保留作**调试用**（curl / 手工验证），前端不调用。
+
+事件契约（两个端点共用同一个生成器，事件序列完全一致）：
+
+- 具名事件：`start → delta* → tag? → done → end`；异常时 `error`；幂等命中时 `pending`；
+- **每个事件的 `data` 都是完整信封** `{code,message,data}`，其中 `data.type` 与 `event:` 行一致，前端任选其一派发；
+- 流末尾固定 `event: end` + `data: [DONE]`；
+- 响应头带 `X-Accel-Buffering: no`（否则 Nginx 下 SSE 会被攒着一起发）；
+- 事件负载里的 `UUID` / `datetime` 必须显式转字符串再 `json.dumps`（`_sse_data()` + `_json_default()`）。否则异常发生在流已开始之后，只会被吞成 `event: error` + `code 5000`，日志里也没有堆栈，表现为「流式对话 100% 失败」而极难定位。
 
 ### 7.3 结构化输出
 
@@ -990,6 +1158,8 @@ tag = ProfileTag.model_validate_json(content)
 | Prompt | 用途 |
 |---|---|
 | chat_system.txt | 职业指导对话系统提示 |
+| chat_opening.txt | AI 开场白（11.4） |
+| chat_conclusion.txt | 结论卡片（11.11） |
 | profile_extract.txt | 从对话中抽取画像标签 |
 | resume_parse.txt | 简历解析 |
 | resume_optimize.txt | 简历优化建议 |
@@ -999,32 +1169,56 @@ tag = ProfileTag.model_validate_json(content)
 | task_generate.txt | 成长任务生成 |
 | daily_question.txt | 每日一问口语化 |
 
+> **改 prompt 必须让进程重启才能生效**：`load_prompt` 带 `lru_cache`，而 `--reload` 默认只监听 `.py`。启动命令已加 `--reload-include '*.txt'`（见 3.6）；用别的方式起服务时改完 prompt 请手动重启。
+
 ### 7.5 Prompt示例：职业指导对话系统
 
 ```text
 你是高校学生的AI职业指导助手，像学长学姐一样亲切。
 规则：
 1. 每轮用户回答后，必须回应并主动抛出下一个问题或方向。
-2. 连续追问同一方向不超过3轮。
-3. 每次输出不超过300字，长内容分段。
-4. 语气平等，不说教，可适当使用语气词。
-5. 用户表达迷茫或焦虑时，先共情，再引导到兴趣、经历。
-6. 用户拒绝回答时，立即跳过并切换话题。
-7. 对话超过5轮无新信息时，主动切换挖掘维度。
+2. 每次输出不超过300字，长内容分段。
+3. 语气平等，不说教，可适当使用语气词。
+4. 用户表达迷茫或焦虑时，先共情，再引导到兴趣、经历。
+5. 用户拒绝回答时，立即跳过并切换话题。
+6. 对话超过5轮无新信息时，主动切换挖掘维度。
+7. 【不要重复提问（跨会话）】提问前在三处核对：当前对话历史、"已知画像标签"、
+   以及「你在其它会话里已经问过 / 已经知道的事」区块；已问过的一律不再问，
+   **换个说法也算重复**。
+8. 【先问进展，再挖细节】优先确认"事情做到哪一步了"，不要泛泛地重新问兴趣/性格/专业。
+9. 【绝不让用户写长文本】一次只问一个问题，用户一两句话甚至一两个词就能答完。
+10. 【平时不给选项】默认是一句正常的问话，禁止 A/B/C 或 1/2/3 这类选项。
+11. 【只有真的答不上来才给台阶】仅当用户明确说"不知道"或连续两轮极短内容时，
+    才可以给 2-3 个具体选项当台阶，给完仍要继续往下聊。
+12. 【循序渐进，先聊事再聊职业】先从具体的小事、日常聊起，
+    不要一上来就谈方向、规划、职业目标。
 ```
+
+> 以上为 `app/ai/prompts/chat_system.txt` 的要点摘录；**改动以文件为准**，本节不作为第二份定义源。
 
 ### 7.6 兜底策略
 
-- DeepSeek调用失败：返回模板回复，不报错。
+- DeepSeek调用失败：返回模板回复，不报错（`chat_text()` 的契约就是「不抛异常」）。
 - 结构化输出解析失败：重试1次，仍失败则使用默认值。
 - 用户拒绝回答：跳过，切换话题。
 - 用户答不上来：给提示思路。
+- **开场白有专用的分档兜底模板**（按背景丰度分三档），不能复用「中途断线」那句兜底话术 —— 它放在会话第一句非常突兀（见 11.4）。
 
 ### 7.7 对话边界控制
 
-- 追问≤3轮：在service层维护计数器。
+- **「同一方向连续追问 ≤3 轮后换维度」的追问计数器：该功能已移除。**
+  原实现是在 `conversations` 表上维护两个会话级字段（"当前挖掘维度" + "同方向已追问轮数"），
+  每轮从 `profile_extract` 抽出的标签里取主导 `dimension` 推进计数，满 3 轮时往 Prompt 注入
+  「本轮必须换维度」的硬约束，并在 SSE 的 `start` / `delta` / `done` 事件里下发轮次。
+  **现已整体删除**：模型字段、schema 字段、服务端计数逻辑、Prompt 硬约束、SSE 字段
+  全部不再存在（`chat_system.txt` 里对应那条规则也已删除，其余规则重新编号保持连续）；
+  真实库里的那两个字段也已物理删除。
+  **前端不应再实现「追问进度 1/3」这类进度环，SSE 事件里没有这两个字段。**
 - 输出≤300字：Prompt约束+后端截断。
-- 过渡语模板：本地维护30条，随机选择。
+- 过渡语模板：本地维护，随机选择。
+- **面试追问另有一套上限**：`MAX_FOLLOWUP_PER_QUESTION = 2`（每题最多 1-2 轮追问，见 11.9）。
+  它与上面被移除的聊天计数器**完全无关**，属于模拟面试的核心功能，保留不变。
+- 开场白**禁止给选项**、**≤60 字**、一次只问一件事（见 11.4）。
 
 ### 7.8 AI数据回流画像
 
@@ -1039,93 +1233,149 @@ tag = ProfileTag.model_validate_json(content)
 
 ### 8.1 路由设计
 
-| 路径 | 页面 |
-|---|---|
-| /login | 登录 |
-| /register | 注册 |
-| /test/intro | 测试引导 |
-| /test/question | 测试答题 |
-| /test/result | 测试结果 |
-| / | 首页 |
-| /chat | AI职业指导对话 |
-| /resume | 简历列表 |
-| /resume/create | 新建简历 |
-| /resume/:id/edit | 简历编辑 |
-| /resume/:id/report | 简历优化报告 |
-| /interview | 面试选择 |
-| /interview/prepare | 面试准备 |
-| /interview/session | 面试进行 |
-| /interview/review/:id | 面试复盘 |
-| /task | 任务列表 |
-| /task/:id | 任务详情 |
-| /daily | 每日一问 |
-| /report | 成长报告 |
-| /profile | 个人中心 |
+| 路径 | 页面 | 守卫 / 布局 |
+|---|---|---|
+| /login | 登录 | 已登录则重定向（未测评 → `/test/intro`）；BlankLayout |
+| /register | 注册 | 同上 |
+| /test/intro | 测试引导 | 仅需登录（**不再套「必须已测评」**，否则与「无画像 → /test/intro」互相死循环） |
+| /test/question | 测试答题 | 仅需登录 |
+| /test/result | 测试结果 | 仅需登录 |
+| / | 首页 | 登录 + 已测评；AppLayout |
+| /chat | AI职业指导对话 | 同上 |
+| /task | 任务列表 | 同上 |
+| /task/:id | 任务详情 | 同上 |
+| /profile | 个人中心（含奖章区） | 同上 |
+| /daily | 每日一问 | 同上 |
+| /resume | 简历列表 | 同上 |
+| /resume/create | 新建简历 | 同上 |
+| /resume/:id/edit | 简历编辑 | 同上 |
+| /resume/:id/report | 简历优化报告 | 同上 |
+| /interview | 面试选择 | 同上 |
+| /interview/prepare | 面试准备 | 同上 |
+| /interview/review/:id | 面试复盘 | 同上 |
+| /report | 成长报告 | 同上 |
+| /interview/session | 面试进行 | 登录 + 已测评；**BlankLayout（全屏沉浸，无侧栏）** |
+| /404、* | 未找到 | 无守卫 |
+
+**守卫语义（三态必须分开，不能合并）**：
+
+1. 无 token → `<Navigate to="/login">`；
+2. 有 token 但画像还没拿到 → 显示「正在准备你的工作台…」；
+3. **画像拉取失败 → 显示错误提示 + 重试按钮，绝不跳测评**（否则后端一次抖动就把用户踢去重做测试）；
+4. 已拿到画像且 `tested === false` 且当前不在 `/test` 前缀下 → `<Navigate to="/test/intro">`。
 
 ### 8.2 状态管理
 
-Zustand store：
+Zustand store（`src/store/`），**除 `authStore.token`（localStorage）外均不持久化**：
 
-- `authStore`：用户、token
-- `chatStore`：对话消息、流式状态
-- `profileStore`：画像标签
-- `taskStore`：任务列表
+- `authStore`：token、user、bootstrapped、loading；并在模块初始化时把 `getToken` / `onUnauthorized` 反向注入 api 层（避免 store↔api 循环依赖）
+- `chatStore`：会话列表、当前会话、消息、流式状态、追问轮次、结论卡片
+- `profileStore`：画像、标签、阶段、`tested`、`nextAction`、`version`
+- `taskStore` / `resumeStore` / `interviewStore`：各自的列表与当前对象
+
+**全局失效信号只有 `profileStore.version` 一个**：任何写操作成功后调 `bumpVersion()`，依赖画像的页面 `useEffect(..., [version])` 重拉。不要为每个模块各造一套刷新信号。
 
 ### 8.3 API请求封装
 
 ```typescript
-// src/api/client.ts
+// src/api/client.ts（要点摘录）
 import axios from 'axios';
 
-const client = axios.create({
-  baseURL: '/api/v1',
-  timeout: 30000,
+export const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1';
+
+export const client = axios.create({
+  baseURL: API_BASE,
+  timeout: 20000,
+  headers: { 'Content-Type': 'application/json' },
 });
 
 client.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = authBridge.getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
+// 成功路径：解信封，直接把 data 交给调用方
 client.interceptors.response.use(
-  (res) => res.data,
-  (err) => Promise.reject(err)
+  (res) => {
+    const payload = res.data;
+    if (!isEnvelope(payload)) return payload;        // blob / 裸对象原样透传
+    if (payload.code === 0) return payload.data;
+    return rejectWithEnvelope(payload);
+  },
+  (err) => rejectWithEnvelope(err.response?.data ?? ...),
 );
-
-export default client;
 ```
+
+**两条路径都要解信封**（这是硬要求）：
+
+- 成功路径按 `code` 判错 —— 覆盖 `3001` 这类「HTTP 200 但业务失败」；
+- 错误路径读 `error.response.data` —— 覆盖 400/401/403/404/500 这些带信封的错误响应；
+- 命中 `code === 1002`（或 HTTP 401）→ 触发登出；**登出只清 token，不做 `window.location.href` 硬跳**，跳转交给路由守卫渲染（硬跳会丢掉当前页面状态、也无法被测试）。
+- `normalizeList()`：后端列表 `data` 是裸数组，前端统一收口，裸数组与 `{items}` 两种形状都吃。
+- 个别调用可传 `silent: true` 抑制全局错误 toast（例如删除会话失败由页面自己提示）。
 
 ### 8.4 流式对话
 
-使用 EventSource：
+使用 **`fetch` + `ReadableStream`**（不是 `EventSource`）：
 
 ```typescript
-const es = new EventSource(`/api/v1/chat/stream?conversation_id=${id}`);
-es.onmessage = (e) => {
-  appendMessage(e.data);
-};
+const res = await fetch(`${API_BASE}/chat/conversations/${id}/stream`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Accept: 'text/event-stream',
+    Authorization: `Bearer ${token}`,
+  },
+  body: JSON.stringify({ content, client_msg_id }),
+  signal,      // 支持中途停止
+});
 ```
+
+解析要点：
+
+- 按 `\n\n` 分帧；逐行识别 `event:` 与 `data:`（`:` 开头的心跳行跳过）；
+- 每个 `data` 都是 `{code,message,data}` 信封；派发依据 `data.type ?? event`；
+- `data: [DONE]` 是流结束哨兵，**不做 JSON.parse**；
+- 按事件分发：`start` / `delta`（追加文本）/ `tag` / `pending`（幂等命中，**不是错误**，不弹错误提示）/ `done` / `end`；`error` 或 `code !== 0` 才按失败处理；
+- 服务端直接关连接（没有 `end`）也算正常结束；
+- 失败自动重试 1 次，仍失败才落到模板兜底；
+- **`conversationId` 必填**，没有"无会话也能聊"的兜底路径。
 
 ### 8.5 UI规范
 
-- 组件库：Ant Design
-- 样式：Tailwind CSS
-- 主色：蓝紫 `#6366f1`
-- 辅助色：白、灰
-- 字体：系统默认
+- 组件库：shadcn/ui（Radix 底座），组件即源码放在 `src/components/ui/`
+- 样式：Tailwind CSS v4（CSS-first，**无 `tailwind.config.js`**），主题写 `src/index.css`
+- 主题：**浅米黄底 + 低饱和克制蓝主色**
+
+| token | 值 | 用途 |
+|---|---|---|
+| `--background` | `hsl(43 44% 96%)`（`#FAF7EE`） | 全站底色（纸感） |
+| `--foreground` | `hsl(30 12% 14%)` | 正文 |
+| `--primary` | `hsl(213 30% 44%)`（`#4E6D92`） | **可点的东西**（主按钮、链接、选中态） |
+| `--accent` | `hsl(38 45% 88%)`（赭黄浅底） | **仅**用于 AI 主动类卡片 |
+| `--stage-explore` / `--stage-prepare` / `--stage-sprint` | 赭黄 / 克制蓝 / 砖红 | 阶段标识 |
+| `--medal-*` | 金色系 + 铸模中性灰 | 「我的奖章」专用，组件里只允许引用这些变量 |
+
+- 主色纪律：**蓝是动作色，暖色负责氛围**；颜色只允许语义类名（`bg-primary` / `text-muted-foreground` / `bg-stage-*`），**禁止 Tailwind 默认色板类**（`bg-blue-500`）；一屏最多一个实心主按钮。
+- 字体：系统默认（`PingFang SC` / `Microsoft YaHei` / `Segoe UI`），正文 14px、行高 1.6；数字用等宽（`font-numeric`）。
+- 提示：sonner，4s 自动消失，顶部居中。AI 失败类提示在调用处给「重试」动作。
+- **界面不允许出现英文字段名或设计术语**：所有英文枚举必须先经中文映射（例如分数维度 → 方向清晰度 / 行动力 / 简历完整度 / 综合得分；阶段 slug → 职业探索期 / 求职准备期 / 求职冲刺期；标签来源 → 职业测评 / 和 AI 对话 / 简历 / 模拟面试 / 每日一问 / 成长任务），未知值走兜底文案，**不允许把 `clarity_score`、`pain_point`、`stage` 这类字段名直接渲染给用户**。
 
 ### 8.6 表单与校验
 
-使用 Ant Design Form + 自定义校验。
+使用 react-hook-form + zod（`@hookform/resolvers`）做表单与校验，错误文案用中文写在 schema 的 message 里。
 
 ### 8.7 图表
 
-ECharts 雷达图、简单柱状图。
+Recharts：成长报告的趋势/柱状图、画像维度的雷达图（简化版）。
 
 ### 8.8 错误处理
 
-统一 toast 提示，401 跳转登录。
+- 统一用 sonner 提示，文案中文、说人话；
+- **HTTP 401 与 `code === 1002` 都要触发登出跳登录**（两条路径，见 8.3）；
+- 空态、加载态、失败态三者必须分开渲染，失败态给重试入口；
+- 数值型变化统一用 `formatScoreDelta()`：正数 `+N`、负数 `-N`、**0 显示 `±0`**（0 不是「涨了」，不走 `+0`）。
 
 ---
 
@@ -1134,6 +1384,8 @@ ECharts 雷达图、简单柱状图。
 ### 9.1 定位
 
 先做Web，Web稳定后用Electron包壳。
+
+> **当前状态**：M3 阶段实现，仓库里**尚无 `electron/` 目录**，本章全部是规划（未实现、未验证）。
 
 ### 9.2 主进程与渲染进程
 
@@ -1197,9 +1449,13 @@ linux:
 ### 10.1 通用规范
 
 - 前缀：`/api/v1`
-- 请求：JSON
-- 响应：`{ code, message, data }`
+- 请求：JSON（文件上传除外，用 `multipart/form-data`）
+- 响应：`{ code, message, data }`；成功时 `data` 为业务对象，**失败时恒为 `null`**；列表接口的 `data` 为裸数组
 - 鉴权：`Authorization: Bearer <token>`
+- 阶段字段：一律 `stage`（slug） + `stage_label`（中文），见 6.11
+- 业务错误码与 HTTP 状态的对应由 `CODE_TO_HTTP_STATUS` 唯一推导，见 6.5
+- SSE 端点（`/chat/conversations/{id}/stream`）是唯一例外形态：响应体是事件流，但**每个事件的 `data` 仍是完整信封**
+- `/api/v1/health` 为运维探活端点，不带信封
 
 ### 10.2 接口清单
 
@@ -1217,13 +1473,13 @@ linux:
 |---|---|---|
 | GET | /test/questions | 获取测试题 |
 | POST | /test/submit | 提交答案 |
-| GET | /test/result | 获取结果 |
+| GET | /test/result | 获取结果（未测评时 `data: null`） |
 
 #### Profile
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | /profile | 获取画像 |
+| GET | /profile | 获取画像（含 `tested`，见 6.4） |
 | GET | /profile/tags | 获取标签 |
 | POST | /profile/feedback | 标签反馈 |
 
@@ -1231,11 +1487,14 @@ linux:
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | /chat/conversations | 创建对话 |
+| POST | /chat/conversations | 创建对话（未传 title 取 `新对话 N`） |
 | GET | /chat/conversations | 对话列表 |
-| GET | /chat/conversations/{id}/messages | 消息列表 |
-| POST | /chat/conversations/{id}/messages | 发送消息 |
-| GET | /chat/conversations/{id}/stream | SSE流式 |
+| DELETE | /chat/conversations/{id} | **删除会话及其全部消息**；**不触碰画像**（见 11.4） |
+| GET | /chat/conversations/{id}/messages | 消息列表（`limit` 1-500，默认 100，无分页参数） |
+| POST | /chat/conversations/{id}/messages | 发送消息（非流式） |
+| POST | /chat/conversations/{id}/opening | **获取/生成 AI 开场白**（幂等，见 11.4） |
+| POST | /chat/conversations/{id}/stream | **SSE 流式对话（前端使用）**，body 含 `content` + `client_msg_id` |
+| GET | /chat/conversations/{id}/stream?content=... | SSE 流式（**调试用，前端不调用**） |
 | GET | /chat/conversations/{id}/conclusion | 结论卡片 |
 
 #### Resume
@@ -1246,9 +1505,10 @@ linux:
 | POST | /resume | 新建 |
 | GET | /resume/{id} | 详情 |
 | PUT | /resume/{id} | 更新 |
-| POST | /resume/upload | 上传解析 |
+| POST | /resume/upload | 上传解析（`.pdf` / `.docx`，≤10MB） |
 | POST | /resume/{id}/optimize | 优化建议 |
 | GET | /resume/{id}/report | 优化报告 |
+| GET | /resume/{id}/file | **鉴权下载/预览原文件**（禁止静态目录直出，见 14.5） |
 
 #### Interview
 
@@ -1256,7 +1516,7 @@ linux:
 |---|---|---|
 | POST | /interview/start | 开始面试 |
 | GET | /interview/{id}/questions | 获取题目 |
-| POST | /interview/{id}/answer | 提交回答 |
+| POST | /interview/{id}/answer | 提交回答（响应含 `action`，见 11.9） |
 | POST | /interview/{id}/finish | 结束 |
 | GET | /interview/{id}/review | 复盘报告 |
 
@@ -1264,8 +1524,8 @@ linux:
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | /task | 任务列表 |
-| POST | /task/generate | 生成任务 |
+| GET | /task | 任务列表（可选 `status`） |
+| POST | /task/generate | 生成任务；**命中同题「进行中」任务时不新建**，`data.reused = true` |
 | GET | /task/{id} | 任务详情 |
 | POST | /task/{id}/steps/{step_id}/complete | 打卡 |
 | POST | /task/{id}/abandon | 放弃 |
@@ -1274,32 +1534,58 @@ linux:
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | /daily/today | 今日问题 |
+| GET | /daily/today | 今日问题（题库为空或已答完时 `question` 为 `null`） |
 | POST | /daily/answer | 回答 |
 
 #### Report
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | /report | 成长报告 |
+| GET | /report | 成长报告（**实时计算，不落库**，见 11.10） |
+| POST | /report/save | 保存里程碑快照（body 只有可选 `user_note`，≤500 字） |
 
 #### Badge
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | /badge | 我的奖章 |
+| GET | /badge | 我的奖章总览（`{total, obtained_count, items[]}`，见 11.12） |
+
+#### Home / Events / System
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | /home/summary | 首页聚合：阶段、画像、标签、今日一问、AI 发现、进行中任务、`next_action` |
+| POST | /events | 行为埋点上报（单条或批量；**只落结构化日志，不建表**） |
+| GET | /health | 探活 |
+
+> `/home/summary` 的 `next_action` **由后端按阶段 + 画像 + 任务状态判定**，前端不做推荐逻辑 —— 这是「AI 主动性」这个核心卖点的落点，让前端按几个 if 排序就退化成了静态导航。
 
 ### 10.3 错误码
 
-| code | 含义 |
-|---|---|
-| 0 | 成功 |
-| 1001 | 参数错误 |
-| 1002 | 未登录 |
-| 1003 | 权限不足 |
-| 2001 | 资源不存在 |
-| 3001 | AI调用失败 |
-| 5000 | 服务器内部错误 |
+| code | 含义 | HTTP |
+|---|---|---|
+| 0 | 成功 | 200 |
+| 1001 | 参数错误 | 400 |
+| 1002 | 未登录 | 401 |
+| 1003 | 权限不足（仅限与资源归属无关的越权） | 403 |
+| 2001 | 资源不存在（**含「存在但不属于你」**） | 404 |
+| 3001 | AI调用失败 | 200 |
+| 5000 | 服务器内部错误 | 500 |
+
+### 10.4 接口契约纪律
+
+以下几条是踩过坑之后定下来的编码规则，新增接口时必须遵守：
+
+1. **信封统一**：所有 JSON 接口返回 `{code,message,data}`，路由 `response_model` 写 `ApiResponse[Xxx]`（见 6.2 / 6.5）；失败时 `data` 为 `null`。
+2. **HTTP 状态只由 `CODE_TO_HTTP_STATUS` 推导**：禁止各处自己传 `status_code`，否则会出现同码不同状态（见 6.5）。
+3. **归属统一 `2001`**：私有资源的「不存在」与「不属于你」返回同一个码，禁止用 `1003` 当 oracle（见 6.10）。
+4. **`stage` 统一 slug + label**：不允许某些接口返 slug、另一些返中文（见 6.11）。
+5. **幂等字段必须是正式列，不能内联进正文**：`messages.client_msg_id` 独立成列并加唯一约束。曾被内联在 `content` 前缀（HTML 注释形式），那个标记会跟着响应发给前端，污染用户可见文本、长度统计与搜索。
+6. **列表形状**：`data` 是裸数组；前端用 `normalizeList()` 收口。新增列表接口不要临时改成 `{items}`，要改就两端一起改并回写本节。
+7. **文件访问只走鉴权端点**：任何上传目录都**不许**挂成无鉴权静态目录；越权按「不存在」处理，并做目录穿越校验。
+8. **埋点只落日志不建表**：手册 5.2 没有事件表，擅自建表属于范围扩张；要做行为分析需先新增 `events` 表并回写 5.2/5.3。
+9. **JSON 列只整体赋值**（见 5.1）。
+10. **改 prompt / 改 schema 后要能生效**：prompt 改动需重启（或带 `--reload-include '*.txt'`）；接口契约改动必须**先落到手册或勘误文档，再让两端各自实现** —— 本项目最大的集成事故就是「设计文档要求的接口」与「手册 10.2 的接口」不一致，两端各自按不同来源实现，前端 12 处路径后端根本不存在（其中 `/tasks`、`/report/growth`、`/interview/sessions` 等全是单复数或命名不一致），以及 7 处读 `.items` 导致所有列表恒为空。
 
 ---
 
@@ -1327,34 +1613,96 @@ linux:
 
 ### 11.4 AI职业指导对话
 
-1. 创建对话。
-2. 用户发消息 → 后端调用DeepSeek流式返回。
-3. 每轮抽取画像标签。
-4. 维护追问计数器，超过3轮换维度。
+1. 创建对话（未传 title 时服务端取 `新对话 N`）。
+2. **获取 AI 开场白**：`POST /chat/conversations/{id}/opening`（见下）。
+3. 用户发消息 → 后端调用DeepSeek流式返回（`POST .../stream`，见 7.2）。
+4. 每轮抽取画像标签。
 5. 对话结束生成结论卡片。
+
+> 原来还有一条「维护追问计数器，超过 3 轮换维度」——该计数器**已移除**，见 7.7。
+
+**AI 先开口（`POST /chat/conversations/{id}/opening`）**
+
+原来的流程是「AI 被动应答」：新建会话 → 空白输入框 → 用户先说话。问题出在空白输入框上：本系统的主要用户恰恰是「还没想清楚方向」的学生，面对空框最容易卡住。改成一个具体、好回答的第一句，冷启动成本立刻降下来。
+
+| 情况 | 行为 |
+|---|---|
+| 会话里**已有开场白** | 回放同一条（**幂等**，重复调用不会产生第二条） |
+| 会话**没有任何消息** | 生成开场白并落库，返回这条消息 |
+| 会话**有消息但没有开场白**（用户先说了话） | `{"code":0,"message":"会话已有消息，未生成开场白","data":null}`，**不补开场白** |
+| 会话不存在 / 不属于当前用户 | 404 + `code 2001` |
+
+- **开场白就是一条普通 assistant 消息**，形状与 `/messages` 里的一致，`client_msg_id` 是系统保留值 `sys:opening`。必须落库（而不是前端自己拼一句）：否则刷新/换设备就没了、模型不知道自己说过这句会重复问、会话列表里 `message_count` 还是 0。
+- 「已有消息就不补」的理由：开场白是对话的第一句，用户已经说过话之后再插一句会排在用户消息**后面**，变成 AI 在自问自答。所以前端应在**创建会话后立刻**调用本接口。
+- 内容硬约束：**一句人话、≤60 字、一次只问一件事、绝不出现 A/B/C 这类选项**；有画像标签或进行中任务时必须引用背景，**全新用户从日常小事切入**。它不写任何画像标签 —— 没有任何用户输入，就没有可回流的证据。
+- **新会话 = 用户想换一个话题**（硬性规格）：
+  - 开场白**禁止**顺着最近会话里出现过的任何话题 / 关键词发问 —— 既包括用户刚说过的话（例如"我平时健身，刷视频，看短句"），也包括刚刚从这些对话里新抽出来的画像标签；
+  - 也**禁止**用"你之前说……""上次那个……还在弄吗"这类承接式措辞把旧话题当铺垫；
+  - 跨会话信息（其它会话最近几条开场白 + 用户最近说过的话）**只能当"已经聊过"的禁止清单用，绝不能当"可以拿来问的素材"**；
+  - 因此开场白要么换一个画像维度（用**没有被聊过**的标签 / 任务），要么聊一件与它们都无关的日常小事；
+  - 与服务端保证配套：候选（画像标签 / 进行中任务）在生成前会被**硬剔除** —— 剔的依据是"最近几条开场白 **+ 用户最近说过的话**"，所以即使模型想顺着问也没有素材；剔完候选为空时回到"全新用户 → 聊日常"，这是**预期行为**；
+  - 但**不许把"有背景就引用背景"搞死**：全新用户照旧只聊日常；有背景且背景**没有**刚聊过时，仍然必须真的引用该背景，不许退化成"最近在忙什么"这种通用问候。
+- AI 不可用时走**开场专用**的三档本地模板（有进行中任务 → 引用任务标题；有画像标签 → 引用标签；都没有 → 聊日常），不会退化成空白、报错或一张选择题。
+- 前端消费时要注意：`data: null` 是**预期行为**（说明用户已经先说话了），不是错误，不要弹提示。
+
+**删除会话（`DELETE /chat/conversations/{id}`）**
+
+- 只删 `conversations` 与 `messages` 两类数据，**一行 `profiles` / `profile_tags` 都不碰**；
+- 这是**产品红线**，不是实现遗漏：画像标签按 `user_id` 独立存储，回答的是「对这个人已经了解到什么」，与「这些信息是在哪次聊天里说的」无关。用户清理聊天记录是界面整理行为，不该连带丢掉他积累的画像 —— 否则删一次记录就得重新测评，而画像又是后续所有推荐的输入；
+- 实现上**显式先删消息、再删会话**，不依赖级联（模型里没有 `ondelete="CASCADE"`，且 SQLite 的外键行为取决于 `PRAGMA foreign_keys`）；这样在开不开外键强制的库上行为一致；
+- 重复删除同一个 id 第二次返回 `2001`（已不存在），符合预期。
 
 ### 11.5 痛点诊断与任务推荐
 
 - 从画像标签中识别痛点。
-- 映射到任务模板。
+- 映射到任务模板（`task_service.TASK_TEMPLATES`，支持「精确命中 → 互相包含 → 默认模板」的降级匹配，所以标签「缺项目经验」也能命中「缺项目」模板）。
 - 生成任务并推送。
+
+**生成任务的服务端去重（`POST /task/generate`）**
+
+同一个痛点连点几次「生成任务」会攒出同题任务。只把已有任务标题塞进 prompt 靠模型自觉是不够的，服务端必须自己校验。
+
+| 场景 | `data.reused` | `message` | `data` |
+|---|---|---|---|
+| 正常新建 | `false` | `"success"` | 新任务详情 |
+| 命中同题「进行中」任务 | `true` | `"已经有一个类似的任务了，没有重复生成"` | **那条已有任务的详情（`id` 不变）**，不新建、不写库 |
+
+- **前端判断一律看 `reused === true`**，不要去匹配 `message` 里的中文（文案会改，字段不会）；字段缺失时按「新建」处理。
+- 判定规则（保守：**宁可漏判，不可误判**）：
+  1. **只跟「进行中」比** —— 已完成/已放弃的同题任务不算重复（放弃后想重做是合理的），它们只进 prompt 当「可承接/加深」的素材；
+  2. **按标题相似度比，不按 `pain_point` 比** —— 同一痛点下产出两件不同的事是正常的，按痛点去重会让用户再也拿不到新任务；
+  3. 相似度用字符 bigram Jaccard + 归一化（去空白标点、去数字、去虚词量词与交付物泛称），阈值 **0.6**；实现只有一份（`app/utils/similarity.py`），清理脚本也 import 它，避免「接口认为不重复、脚本认为是重复」的两套口径漂移；
+  4. 阈值只收语气词/量词/时间词/交付物泛称，**绝不收主题词** —— 否则「用 Java 写命令行工具」和「用 C 写命令行工具」会被压成同一个串。
+
+**打卡区的能力边界（硬约束）**
+
+任务的标题、`action`、`resource` 以及**选项文本里**，一律禁止出现需要提交文件的动作：
+
+- **打卡区只能点选 + 最多写 30 字补充，不支持截图 / 上传 / 拍照 / 录屏 / 录音 / 附件**；
+- 禁止词：截图、上传、拍照、录屏、录音、附件、提交文件、发给我看；
+- 需要「留下痕迹」的步骤改成**自己做、自己留**：完成标准写「能自己独立做一遍」「把结果存在本地留作纪念」，不要求交付物。
+
+要求写在 `app/ai/prompts/task_generate.txt` 里（第 4 条「能力边界」与第 3 条「禁止让用户写小作文」）。
 
 ### 11.6 成长任务打卡与画像更新
 
-- 用户完成任务步骤 → 打卡。
+- 用户完成任务步骤 → 打卡（`feedback` 最多 1000 字，UI 上限见 11.5 的打卡区边界）。
 - 记录反馈。
 - 更新画像标签（行动力、自律性等）。
-- 完成第一个任务 → 发奖章。
+- 打卡路径**必须触发奖章检查**（`complete_step` 里调用），否则打完第 5 步要等一小时的定时兜底才拿到奖章。
+
+> **实现约束：`Task` / `TaskStep` 没有配 `relationship()`，不能用 ORM 删 task**。`db.delete(task)` 会撞 `FOREIGN KEY constraint failed` —— 工作单元不知道两张表的依赖顺序，把 `DELETE FROM tasks` 排到了 `DELETE FROM task_steps` 之前。删任务必须显式按「子表先于父表」发 Core `delete()`。
 
 ### 11.7 每日一问
 
-- 每天生成1题。
+- 题库 30 题（六维度轮换），从 `daily_questions` 表按天取题。
 - 用户点击即答。
-- 累计7题触发画像微调。
+- 题库为空或当日已答完时返回 `question: null`（**不要返回假数据**，例如全零 UUID 的占位题）。
+- 累计答题触发画像微调。
 
 ### 11.8 简历生成/优化
 
-- 上传PDF/Word → 解析文本 → DeepSeek分段。
+- 上传PDF/`.docx` → 解析文本 → DeepSeek分段（**只支持 `.docx`，不支持二进制 `.doc`**，见 13.2）。
 - 引导式生成：五步表单。
 - ATS评分：关键词规则+DeepSeek。
 - 优化建议逐条展示。
@@ -1364,27 +1712,90 @@ linux:
 
 - 选择模式与场景。
 - DeepSeek基于简历出题。
-- 每题后1-2轮追问。
+- 每题后 1-2 轮追问（追问上限 `MAX_FOLLOWUP_PER_QUESTION = 2`）。
 - 结束生成复盘报告。
 - 画像回流：技能、项目深度、知识盲区、沟通能力。
 
+**追问与下一题的判别（`POST /interview/{id}/answer` 的响应契约）**
+
+追问 = **同一道题的再问，不新建题目行**（都挂在同一行 `interview_questions`：主问题答 `answer`，追问存 `followups` JSON 数组）。响应必须给出判别字段：
+
+| `action` | 含义 | 前端行为 |
+|---|---|---|
+| `followup` | 这是同一题的追问（`question_id` 与上一题相同） | **就地续问**，不追加新题、不前进题号 |
+| `next_question` | 这是下一道新题 | 追加新题并前进 |
+| `finished` | 本题/本场结束 | 收尾 |
+
+`followups` 必须回传（不能只藏在 `extra` 里，否则前端看不到追问内容）；`extra` 是 JSON 列，**只做整体赋值**（见 5.1）。
+
 ### 11.10 成长报告
 
-- 聚合画像变化、完成任务数。
-- 简单页面展示。
+两个接口，`data` 形状完全一致：
+
+| 接口 | 语义 |
+|---|---|
+| `GET /report` | **每次实时聚合计算，从不落库** —— 改一个分数（打卡/测评）后立刻反映。查询参数 `refresh` 已废弃且被忽略 |
+| `POST /report/save` | 把**当前实时数据 + 用户补充说明**存成一份**里程碑快照**（`reports` 一行）；该快照成为下一次 `score_delta` 的基线 |
+
+- `score_delta` = 当前实时分数 − **最近一次「保存」的报告**里的分数；**从未保存过则全为 0**，但这不代表「真的没变化」；
+- 前端必须用 `saved` / `last_saved_at` 判断「有没有可比对的基线」，**不能只看 delta 是否为 0**；**没有基线时不渲染一排「＋0」**（那是误导），应显示「还没有可对比的基线」；
+- 即使有基线，变化值为 0 也显示 `±0` 而不是 `+0`（0 不是「涨了」）；
+- `suggestions` 每条带 `pain_point`，可直接作为 `POST /task/generate` 的 `pain_point` 传回去，让「报告 → 行动」闭环；
+- **产品红线：用户只能改自己的补充说明（`user_note`，≤500 字），不能改分数** —— 分数是对行为证据的度量，由测评、打卡、简历、面试算出。代码层面的保证是保存请求的 schema 里根本没有分数字段。
+
+> 实现注意：组装响应时不要写成 `GrowthReportResponse(**content, score_delta=...)` —— `content` 里已有同名键会抛 `TypeError: got multiple values for keyword argument`。
 
 ### 11.11 结论卡片
 
-- 对话结束生成结构化诊断卡。
-- 保存到报告。
+- 对话结束生成结构化诊断卡（`chat_conclusion.txt`）。
+- 首次调用时生成并缓存到 `conversations.conclusion`；`done` 事件带 `conclusion_ready` 供前端决定是否去拉取。
 
 ### 11.12 奖章触发
 
-- 完成第一个任务 → 起步行动家。
+**三枚奖章（用户验收后由 1 枚扩到 3 枚）**：
+
+| key | 名称 | 条件（**必须由真实行为证据驱动**） |
+|---|---|---|
+| `first_task` | 起步行动家 | 已完成任务数 ≥ 1 |
+| `five_steps` | 坚持打卡者 | 累计打卡步骤数 ≥ 5（**跨任务累计**） |
+| `profile_shape` | 方向初现 | 画像标签数 ≥ 6（标签是 AI 从真实对话里抽出来的，不是用户自报） |
+
+> 手册 V1.0 曾写「砍掉奖章墙、P1 只保留一个轻量奖章」。**这一条已被用户验收后的决定推翻**：用户看到界面后要求「添加其他奖章，建议一共三个，后续可以添加」，因此改为三枚。被砍掉的仍然只有「奖章墙 / 庆祝动画」这类陈列与表演部分。
+
+工程上的三条要求：
+
+1. **定义只有一个来源**：三枚奖章的定义（事件名、阈值、`key`、展示顺序、文案）只写在 `badge_service.BADGE_RULES` 一处，`seed_data.BADGES` 由它派生。历史上出现过「种子里有、引擎里没有」的死数据 —— 奖章在种子里定义了但引擎只认第一枚，于是「坚持打卡者」从来没被发放过。**凡是「种子/配置/代码」三处各写一份的定义，都要收成一个来源。**
+2. **事件只是触发器，一次触发要评估全部条件**：不能按 `event == "task_completed"` 分派，否则新增奖章时老用户永远不会被追认。任何触发都重算全部条件，另有每小时 `settle_badges` 兜底。打卡路径必须显式触发检查（见 11.6）。
+3. **红线**：`current` 只能来自真实行为证据（已完成任务 / 已完成步骤 / 画像标签），不允许出现「用户声称即达成」的条件，也不允许为了让人拿到而调阈值。
+
+**`GET /badge` 的契约**：
+
+```json
+{
+  "total": 3,
+  "obtained_count": 1,
+  "items": [
+    {
+      "key": "first_task",
+      "name": "起步行动家",
+      "description": "完成第一个成长任务",
+      "hint": "把「成长任务」里任意一个任务的步骤全部打完，让它变成已完成",
+      "obtained": true,
+      "obtained_at": "2026-09-18T12:00:00Z",
+      "progress": { "current": 1, "target": 1 }
+    }
+  ]
+}
+```
+
+- `items` **必须包含未获得的奖章**，只返回已获得的做不出「还差多远」的界面（`hint` 未获得时说怎么拿到、已获得时说一句庆祝/意义）；
+- `items` 顺序**固定为门槛从低到高**，前端槽位不会因为获得顺序而跳动；
+- `progress.current` 已达成的封顶为 `target`（进度条不该溢出 100%）；
+- 前端 `key` 取不到时用默认美术兜底；未获得的奖章渲染成「铸模」态（中性灰），不留整块空白。
 
 ### 11.13 提醒
 
-- 站内提醒或Electron通知。
+- 站内提醒或Electron通知（推送通道属 M3，当前只返回提醒列表）。
 
 ---
 
@@ -1405,9 +1816,9 @@ scheduler.start()
 | 任务 | 频率 | 说明 |
 |---|---|---|
 | 每日一问生成 | 每天0点 | 生成次日题目 |
-| 任务提醒 | 每天10点 | 检查未打卡任务 |
-| 奖章结算 | 每小时 | 检查奖章条件 |
-| 数据清理 | 每周 | 清理过期临时文件 |
+| 任务提醒 | 每天10点 | 检查未打卡任务（只返回列表，通知通道属 M3） |
+| 奖章结算 | 每小时 | 遍历全部用户 × 全部奖章条件，追认新达成的奖章（兜底，见 11.12） |
+| 数据清理 | 每周 | 清理过期临时文件（`cleanup_job.py`） |
 
 ### 12.3 不做
 
@@ -1426,8 +1837,9 @@ scheduler.start()
 
 ### 13.2 上传限制
 
-- PDF/Word
-- 最大10MB
+- 支持 **PDF 与 `.docx`**；**不支持二进制 `.doc`**（`python-docx` 打不开旧格式，错误提示里要说明「请另存为 .docx 再上传」）。
+- 扩展名白名单校验；最大 10MB。
+- 落盘文件名用 `{uuid}.{ext}`，**不用原始文件名**。
 
 ### 13.3 解析
 
@@ -1440,7 +1852,7 @@ def parse_pdf(path):
         return "\n".join(page.extract_text() for page in pdf.pages)
 
 def parse_docx(path):
-    doc = Document(path)
+    doc = Document(path)   # 仅支持 .docx
     return "\n".join(p.text for p in doc.paragraphs)
 ```
 
@@ -1473,16 +1885,26 @@ def parse_docx(path):
 
 ### 14.5 权限
 
-- 用户只能访问自己的数据。
+- 用户只能访问自己的数据：所有按 id 取私有资源的地方一律走 `not_found_unless_owner()`，「不存在」与「不属于你」返回同一个 `2001`（见 6.10）。
+- **上传目录禁止挂成无鉴权静态目录**：曾把 `uploads/` 挂成 `StaticFiles`，于是未登录的人只要知道路径就能下载别人的简历（简历含姓名、手机号、学校、经历，属 PII）。现在简历文件只能经 `GET /api/v1/resume/{id}/file`（带鉴权）读取，Nginx 也不暴露 `/uploads`。
+- 文件类端点要做**目录穿越校验**：规范化后的路径必须仍在 `UPLOAD_DIR` 内。
 
 ### 14.6 日志脱敏
 
 - 不记录密码、API Key。
+- 私密资源的越权访问**不记日志**（避免被当成探测信号刷日志）。
+- 流内异常用 `logger.exception` 而不是 `logger.error`：否则只剩一行错误文本、没有堆栈。
 
 ### 14.7 Prompt注入
 
 - 系统Prompt与用户输入分离。
 - 输出校验。
+
+### 14.8 字段与枚举不外泄
+
+- 所有对外枚举（阶段、标签来源、分数维度）都必须经中文映射后再给用户看；
+- 私有资源的错误信息不得泄露「该 id 是否存在」；
+- 500 的细节只进日志，响应体里不带堆栈。
 
 ---
 
@@ -1526,36 +1948,70 @@ def parse_docx(path):
 ### 16.2 Docker Compose
 
 ```yaml
-version: '3.8'
 services:
+  # 建表 / 迁移（一次性）：docker-compose run --rm migrate
+  migrate:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: sqlite:////data/app.db     # 生产切 PG 时改成 postgresql://...
+    volumes:
+      - sqlite_data:/data
+    command: ["sh", "-c", "python -m app.db.init_db"]   # 有迁移脚本后换成 alembic upgrade head
+    restart: "no"
+
+  app:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: sqlite:////data/app.db
+      UPLOAD_DIR: /app/uploads
+      APP_ENV: production
+      DEBUG: "false"
+    volumes:
+      - ./backend/uploads:/app/uploads        # 与 13.1 的 UPLOAD_DIR 保持一致
+      - sqlite_data:/data
+    ports:
+      - "8000:8000"
+    # 建表失败则不让 app 起来，避免"表不存在"的 500
+    command: >
+      sh -c "python -m app.db.init_db &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  # PostgreSQL：保留但默认不启动（profile: postgres），生产一键切回
   db:
     image: postgres:16
+    profiles: ["postgres"]
     environment:
       POSTGRES_DB: ai_career
       POSTGRES_USER: ai_user
       POSTGRES_PASSWORD: your_password
     volumes:
       - pgdata:/var/lib/postgresql/data
-  app:
-    build: ./backend
-    env_file: .env
-    depends_on:
-      - db
-    volumes:
-      - ./uploads:/app/uploads
+
   nginx:
     image: nginx:alpine
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./frontend/dist:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      # ⚠️ 不要把 uploads 挂给 Nginx（见 14.5）
     depends_on:
       - app
+
 volumes:
+  sqlite_data:
   pgdata:
 ```
+
+要点：
+
+1. **数据库默认 SQLite**，`db` 服务放在 `postgres` profile 下，默认不启动（因此 app 也不 `depends_on: db`）；
+2. **建表/迁移写进启动命令**（`python -m app.db.init_db`，切回 PG 时改成 `alembic upgrade head`），另留一次性 `migrate` 服务；
+3. **uploads 卷统一为 `./backend/uploads`**，与 13.1 的 `UPLOAD_DIR` 一致（原手册 16.2 写 `./uploads`，两处路径不一致）；
+4. 补了 db 健康检查、app healthcheck（打 `/api/v1/health`）与重启策略。
 
 ### 16.3 Nginx
 
@@ -1569,7 +2025,8 @@ docker-compose up -d
 
 ### 16.5 备份
 
-- pg_dump 定期备份。
+- **SQLite（默认）**：定期复制库文件（连同 `-wal` / `-shm` 一起，或先 `VACUUM INTO` 导出一份一致性快照），与 `uploads/` 一起备份。
+- **PostgreSQL（若已切回）**：`pg_dump` 定期备份。
 
 ### 16.6 日志
 
@@ -1605,6 +2062,7 @@ docker-compose up -d
 
 - 版本化。
 - 测试后再上线。
+- 改完**必须重启后端**才能生效（`load_prompt` 带 `lru_cache`；启动命令已带 `--reload-include '*.txt'`，见 3.6）。
 
 ### 17.6 数据库变更
 
@@ -1624,6 +2082,8 @@ docker-compose up -d
 | 痛点 | 缺项目、缺实习、表达差、迷茫 |
 | 焦虑 | 高、中、低 |
 | 认知 | 清晰、模糊、偏差 |
+
+标签来源 `source` 的取值与展示文案：`test` 职业测评 / `chat` 和 AI 对话 / `resume` 简历 / `interview` 模拟面试 / `daily` 每日一问 / `task` 成长任务。
 
 ### 附录B：阶段判定规则
 
@@ -1649,12 +2109,16 @@ docker-compose up -d
 
 ### 附录E：成长任务模板
 
+以代码常量承载（`task_service.TASK_TEMPLATES`），作为 `task_generate` 的参考样例：
+
 1. 做一个入门级小项目
 2. 挖掘三段校园经历
 3. 每天1分钟口头复述
 4. 完成一个基础技能学习
 5. 完成一次职业深度对话
 6. 完成一次面试小测试
+
+> 实际落地的模板数量少于上面 6 条（当前 4 条，并补齐了报告建议所对应的痛点模板），且**未落库**（理由与影响见 5.4）。
 
 ### 附录F：岗位关键词库
 
@@ -1686,9 +2150,10 @@ docker-compose up -d
 
 | 问题 | 答案 |
 |---|---|
-| 如何修改DeepSeek模型？ | 修改 `deepseek_client.py` 中 model 字段 |
-| 如何增加岗位？ | 在岗位关键词库中添加 |
-| 如何导出报告？ | 浏览器打印 |
+| 如何修改DeepSeek模型？ | 改 `.env` 的 `DEEPSEEK_MODEL`（或 `deepseek_client.py` 中的 model 字段） |
+| 如何增加岗位？ | 在岗位关键词库中添加（代码常量，见 5.4） |
+| 如何导出报告？ | 浏览器打印（`src/styles/print.css` 提供打印样式） |
+| 改了 prompt 为什么不生效？ | prompt 带 `lru_cache`，必须重启后端（见 3.6） |
 
 ---
 
