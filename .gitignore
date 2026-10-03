@@ -72,8 +72,25 @@ Thumbs.db
 desktop.ini
 
 # ---- 临时转换产物 ----
-docs/_build/
+# ⚠️ 注意必须写成 `docs/_build/*`（而不是 `docs/_build/`）：
+# 带斜杠的写法会把**整个目录**排除掉，git 就不再往里看，下面的例外**永远不生效**。
+docs/_build/*
+# ⚠️ 例外：这份**真实的《需求分析文档 V2.0》**现在只存在于 docs/_build/ 下，
+# 一旦清理构建目录就永久丢失（仓库里没有第二份）—— 所以它必须被 git 跟踪。
+# 2026-10 最终回归审计发现（见 docs/开发手册-勘误与决策记录.md 9.22）。
+!docs/_build/需求分析V2.0.txt
 
 # ---- 验证工具产物（渲染冒烟测试的截图与依赖） ----
 tools/render-check/shots/
 tools/render-check/node_modules/
+
+# ---- 桌面端（Electron）打包产物 ----
+# 这些都是构建输出/依赖，不进版本库；要重新生成看 electron/README-打包说明.md
+electron/node_modules/
+electron/dist/
+electron/release/
+
+# ---- 后端打包（PyInstaller）产物 ----
+backend/build/
+backend/dist/
+backend/*.spec

@@ -43,6 +43,11 @@ class ResumeTemplateField(BaseModel):
     example: str = Field(default="", description="示例答案")
     required: bool = Field(default=False, description="是否必填")
     multiple: bool = Field(default=False, description="是否可多值（前端渲染成一组输入）")
+    lines: bool = Field(
+        default=False,
+        description="可多值且**一项一行**地编辑（技能用：展开后的表述自带顿号逗号，"
+        "用顿号分隔的单行输入框会把一句话切成好几项）",
+    )
 
 
 class ResumeTemplateSection(BaseModel):

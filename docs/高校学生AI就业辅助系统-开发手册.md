@@ -24,7 +24,8 @@
 10. **若干工程纪律与放宽**（7.4 / 7.7 / 8.4 / 12.2 / 13.2 / 14.5 / 16.2 / 16.4）：`POST /task/generate` 服务端按标题相似度去重；打卡区只支持点选 + ≤30 字文本，**不支持截图/上传/拍照/录屏/附件**；改 prompt 必须重启或带 `--reload-include '*.txt'`；compose 的 uploads 路径统一为 `./backend/uploads`，建表步骤写进启动命令。
 11. **老简历链路整体删除**（8.1 / 10.2 / 11.8 / 13.x / 14.5）：原「上传 PDF → 解析 → ATS 评分 → 优化报告 → 下载」已整体移除，简历改为**问答式生成**——模板逐项提问 → 用户填 → 只润色不编造 → 展示/保存/打印；`resumes` 表与画像 `resume_score` 回流不变（见 9.17）。
 
-> **不在本版范围**：Electron 桌面端（第 9 章）仍是 M3 待做；对 5 条已有打卡的老任务步骤的改写已明确**不做**（保持历史打卡与新要求一致，见勘误 9.6），本手册不将它列为待办。
+> **Electron 桌面端（第 9 章）**：**壳与打包已落地**（2026-10，见勘误 **9.23** 与 `electron/README-打包说明.md`）——可出**免安装文件夹**、双击即用、内置后端随包走。本章原文里"仓库尚无 `electron/` 目录""全部是规划"等说法已被 9.23 覆盖；仍未做的只有 IPC 文件读写、自动更新、NSIS 安装版（清单见 9.23）。
+> **不在本版范围**：对 5 条已有打卡的老任务步骤的改写已明确**不做**（保持历史打卡与新要求一致，见勘误 9.6），本手册不将它列为待办。
 
 ---
 
@@ -448,12 +449,21 @@ npm run dev
 
 ### 3.8 启动Electron
 
-**M3 阶段实现，当前仓库尚无 `electron/` 目录**，第 9 章为规划。M3 落地后按第 9 章的结构创建工程，启动方式为：
+**已落地（2026-10）**：`electron/` 目录已建好，开发模式与打包流程都能跑（详见 `electron/README-打包说明.md`、勘误 9.23）。
+
+开发模式（需要后端自己起，或用 `dev-backend.ps1`）：
 
 ```bash
 cd electron
-npm install
-npm run dev
+npm install        # 只有第一次需要
+npm run dev        # 编译主进程 + 启动 Electron，加载 http://localhost:5173
+```
+
+出免安装包（双击即用，内置后端）：
+
+```bash
+powershell -ExecutionPolicy Bypass -File backend\build_backend.ps1   # 先打后端 exe
+cd electron && npm run dist                                          # 产物：release\win-unpacked\
 ```
 
 ### 3.9 Docker Compose一键启动
@@ -644,17 +654,26 @@ frontend/
 ### 4.3 Electron目录
 
 ```text
-electron/
+electron/                       # 桌面端（2026-10 落地；用法见 README-打包说明.md）
 ├── src/
-│   ├── main.ts
-│   ├── preload.ts
-│   └── ipc/
-│       ├── file.ts
-│       ├── notification.ts
-│       └── tray.ts
+│   ├── main.ts                 # 主进程：拉起内置后端 + 建窗口 + 托盘 + 通知
+│   └── preload.ts              # contextBridge 暴露 notify / isDesktop（手册 9.3）
+├── build/
+│   ├── icon.png                # 图标源图（512×512）
+│   ├── icon.ico                # 应用图标（16~256 七个尺寸）
+│   └── tray.ico                # 托盘图标（16/24/32）
+├── scripts/
+│   └── 交付前去掉Key.ps1       # 交付前一键清掉产物里的 DEEPSEEK_API_KEY
+├── dist/                       # tsc 编译产物（gitignore）
+├── release/                    # electron-builder 产物：win-unpacked\（gitignore）
 ├── package.json
-└── electron-builder.yml
+├── tsconfig.json
+├── electron-builder.yml
+└── README-打包说明.md
 ```
+
+> 与手册原规划（`src/ipc/{file,notification,tray}.ts`）的差异：托盘/通知都直接写在 `main.ts` 里，
+> 没有拆 `ipc/` 子目录 —— 目前只有"弹通知"一个 IPC 方法，拆文件反而绕。等真做文件读写（9.6）再拆。
 
 ---
 
@@ -1380,7 +1399,7 @@ Recharts：成长报告的趋势/柱状图、画像维度的雷达图（简化�
 
 先做Web，Web稳定后用Electron包壳。
 
-> **当前状态**：M3 阶段实现，仓库里**尚无 `electron/` 目录**，本章全部是规划（未实现、未验证）。
+> **当前状态**：**已落地（2026-10）** —— `electron/` 目录、开发模式、免安装包打包都已实现并真机验证过；下面 9.2~9.7 里 **9.2 / 9.4 / 9.5 / 9.7 已实现**，9.3 只暴露了 `notify`（文件读写未做），9.6 因简历改为问答式生成而暂不需要。未做项清单见勘误 **9.23**。
 
 ### 9.2 主进程与渲染进程
 
@@ -1522,6 +1541,7 @@ linux:
 | GET | /task/{id} | 任务详情 |
 | POST | /task/{id}/steps/{step_id}/complete | 打卡 |
 | POST | /task/{id}/abandon | 放弃 |
+| DELETE | /task/{id} | **删除任务**（硬删除，连带全部步骤，不可恢复；前端「删除」按钮走它） |
 
 #### DailyQuestion
 
@@ -1529,6 +1549,7 @@ linux:
 |---|---|---|
 | GET | /daily/today | 今日问题（题库为空或已答完时 `question` 为 `null`） |
 | POST | /daily/answer | 回答 |
+| GET | /daily/history | 每日一问历史（`/daily` 页面的历史列表走它） |
 
 #### Report
 
@@ -1550,6 +1571,7 @@ linux:
 | GET | /home/summary | 首页聚合：阶段、画像、标签、今日一问、AI 发现、进行中任务、`next_action` |
 | POST | /events | 行为埋点上报（单条或批量；**只落结构化日志，不建表**） |
 | GET | /health | 探活 |
+| GET | `/`（**根路径，不在 `/api/v1` 下**） | 服务信息：应用名与版本（运维自检用，不是业务接口） |
 
 > `/home/summary` 的 `next_action` **由后端按阶段 + 画像 + 任务状态判定**，前端不做推荐逻辑 —— 这是「AI 主动性」这个核心卖点的落点，让前端按几个 if 排序就退化成了静态导航。
 

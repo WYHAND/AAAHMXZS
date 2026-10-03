@@ -6,7 +6,8 @@
  * 2. `errorElement: <RouteErrorFallback />` —— **全站最后一道网**（见文件内注释）。
  */
 
-import { Outlet, createBrowserRouter } from 'react-router-dom'
+import { Outlet, createBrowserRouter, createHashRouter } from 'react-router-dom'
+import type { RouteObject } from 'react-router-dom'
 
 import { RouteErrorFallback } from '@/components/AppErrorFallback'
 import { AppLayout } from '@/layouts/AppLayout'
@@ -40,7 +41,7 @@ import InterviewReviewPage from '@/pages/interview/InterviewReviewPage'
 import GrowthReportPage from '@/pages/report/GrowthReportPage'
 import NotFoundPage from '@/pages/error/NotFoundPage'
 
-export const router = createBrowserRouter([
+const routes: RouteObject[] = [
   {
     /*
      * ---------------------------------------------------------------
@@ -142,4 +143,17 @@ export const router = createBrowserRouter([
       { path: '*', element: <NotFoundPage /> },
     ],
   },
-])
+]
+
+/**
+ * 路由实现按**运行环境**切换（只差这一行，其余代码两边完全相同）：
+ *
+ * - **Web / 开发服务器**：`createBrowserRouter` —— 真实路径 `/chat`、`/resume`，
+ *   与设计说明书、手册以及 `tools/render-check` 的 URL 断言保持一致；
+ * - **Electron 桌面端**：`file://` 加载 `index.html` 时**必须**用 `createHashRouter`。
+ *   因为 file:// 下 `window.location.pathname` 是**文件路径**（`/D:/.../index.html`），
+ *   BrowserRouter 一条路由都匹配不上 → 打开就是 404 页、刷新白屏。
+ *   换成 hash 后地址形如 `index.html#/chat`，pathname 不参与匹配。
+ */
+export const router =
+  window.location.protocol === 'file:' ? createHashRouter(routes) : createBrowserRouter(routes)

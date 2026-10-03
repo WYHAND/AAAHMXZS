@@ -119,7 +119,8 @@ services:
       # ⚠️ 安全（14.5 / 14.1）：**不把 uploads 挂给 Nginx**。
       # nginx.conf 里也没有 /uploads 的静态 location —— 否则未登录的人遍历
       # /uploads/resumes/{user_id}/{uuid}.pdf 就能下载别人的简历（PII）。
-      # 简历文件只能经 GET /api/v1/resume/{id}/file（带鉴权）读取。
+      # 老链路的鉴权下载端点 GET /api/v1/resume/{id}/file 已随链路删除（见勘误 9.17），
+      # 现在 uploads/ 里没有简历文件；**以后再引入文件类功能，这条纪律照样适用**。
       # 16.3 / 14.4：HTTPS 证书目录（Let's Encrypt 申请后放这里）
       - ./certs:/etc/nginx/certs:ro
     depends_on:

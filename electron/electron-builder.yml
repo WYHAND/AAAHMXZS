@@ -1,0 +1,56 @@
+# electron-builder 配置（手册 9.7 的扩写版）
+#
+# 产物：`npm run dist` → release/win-unpacked/（**免安装文件夹**，整个拷走就能用）
+# 选 dir 而不是 portable 的原因：portable 每次运行都解压到临时目录，
+# 内置后端的 SQLite（resources/backend/data/app.db）会跟着临时目录走 ——
+# 看起来就是"每开一次数据都清空"。dir 是解压好的固定文件夹，数据落在文件夹里，不会丢。
+
+appId: com.example.aicareer
+productName: AI就业助手
+copyright: 高校学生 AI 就业辅助系统（比赛作品）
+
+directories:
+  output: release
+  buildResources: build
+
+# 打进 app.asar 的东西：
+# - dist/**：编译后的主进程与 preload
+# - build/**：应用图标 / 托盘图标（主进程用 __dirname 相对路径读它们）
+# - frontend/**：前端构建产物（`npm run build:electron` 出的 dist，主进程用 loadFile 加载）
+files:
+  - dist/**
+  - build/**
+  - package.json
+  - from: ../frontend/dist
+    to: frontend/dist
+
+# 不打进 asar、而是**原样放到 resources/ 下**：内置后端（主进程用 process.resourcesPath 找它）
+extraResources:
+  - from: ../backend/dist/aicareer-backend
+    to: backend
+    filter:
+      - "**/*"
+      - "!**/__pycache__/**"
+      - "!**/*.pyc"
+
+win:
+  target:
+    # dir：免安装文件夹（release\win-unpacked\，整个拷走就能用）
+    # nsis：安装版（有桌面图标 / 开始菜单 / 卸载入口）—— 交付和演示用这个更省事
+    - dir
+    - nsis
+  icon: build/icon.ico
+
+# 安装版（NSIS）设置
+nsis:
+  oneClick: false # 有安装向导，用户可以选安装目录
+  perMachine: false # ⚠️ 装到「当前用户」目录（%LOCALAPPDATA%\Programs\…）：那里可写，
+  #    内置后端的 SQLite（resources\backend\data\app.db）才写得进去；
+  #    装到 Program Files 会让普通用户写不了数据。
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true # 桌面图标
+  createStartMenuShortcut: true # 开始菜单
+  shortcutName: AI就业助手
+  artifactName: AI就业助手-安装版-${version}.${ext}
+  deleteAppDataOnUninstall: false # 卸载时保留用户数据（简历/对话/画像），别手贱删掉
+

@@ -175,54 +175,144 @@ const taskSteps = [
 
 const taskDetail = { ...task, steps: taskSteps }
 
-const resumeDetail = {
-  id: RESUME_ID,
-  user_id: user.id,
-  title: '林小满-鸿蒙客户端开发-2026 秋招',
-  file_path: `${user.id}/resume_20260912.pdf`,
-  parsed_data: {
-    basics: {
-      name: '林小满',
-      phone: '138****2233',
-      email: 'linxiaoman@example.com',
-      city: '武汉',
-      target_job: '鸿蒙应用开发工程师',
+/* ------------------------------ 简历（新契约） ------------------------------ */
+
+/** 与后端 resume_template._field 同构：question 是界面上唯一的文案出处 */
+const rf = (key, label, question, example, required = false, multiple = false, lines = false) =>
+  ({ key, label, question, example, required, multiple, lines })
+
+/** 项目经历 / 校园与实践经历共用字段（后端 _experience_fields） */
+const experienceFields = () => [
+  rf('name', '名称', '这段经历叫什么？（项目名 / 活动名）', '校园二手交易小程序'),
+  rf('role', '你的角色', '你在这段经历里是什么角色？', '前端开发'),
+  rf('period', '起止时间', '这段时间大概是什么时候？（没记住可以不填）', '2024.09 - 2024.12'),
+  rf('star.situation', '情境', '当时是什么背景、要解决什么问题？', '老师布置了课程作业，要做一个小程序；同学们卖二手书很麻烦'),
+  rf('star.task', '任务', '你要做成什么？', '做出能发布和搜索二手书的页面'),
+  rf('star.action', '行动', '你具体做了什么？', '我负责前端页面，用 Vue 写的'),
+  rf('star.result', '结果', '最后达成什么？有数字就写上。', '最后上线了，有一百多个同学用过'),
+]
+
+/**
+ * GET /resume/template 的真实出参（逐字抄自 backend/app/services/resume_template.py）。
+ *
+ * 旧版 mock 只有一条 `GET /resume/{x}` 通配，`/resume/template` 与 `/resume/mine`
+ * 都被它当成"简历明细"返回 → 模板里没有 `sections` → 页面落失败卡
+ * 「这次没拿到简历模板。」，而路由判定只看白屏 / URL / 文本长度，失败卡照样 PASS。
+ *
+ * 技能栏必须 `multiple: true` + `lines: true`：前端按 `field.lines` 才渲染 textarea。
+ */
+const resumeTemplate = {
+  sections: [
+    {
+      key: 'basic', label: '基本信息', repeatable: false, fields: [
+        rf('name', '姓名', '你叫什么名字？', '张三', true),
+        rf('grade', '年级', '你现在大几？（选填）', '大三'),
+        rf('major', '专业', '你学什么专业？', '软件工程', true),
+        rf('school', '学校', '你在哪所学校？', 'XX 大学', true),
+        rf('contact', '联系方式（电话或邮箱）', '怎么联系你？（电话或邮箱，写一个就行）', '138xxxx1234 或 zhangsan@example.com', true),
+      ],
     },
-    education: [
-      {
-        school: '华中科技大学',
-        major: '软件工程',
-        degree: '本科',
-        start: '2023-09',
-        end: '2027-06',
-        gpa: '3.7/4.0',
+    {
+      key: 'target', label: '求职意向', repeatable: false, fields: [
+        rf('direction', '想投的方向/岗位', '你想投哪个方向或岗位？', '前端开发实习生', true),
+        rf('city', '城市', '你倾向去哪个城市？（选填）', '杭州'),
+      ],
+    },
+    {
+      key: 'education', label: '教育背景', repeatable: true, fields: [
+        rf('school', '学校', '这段教育经历是哪所学校？', 'XX 大学'),
+        rf('major', '专业', '是什么专业？', '软件工程'),
+        rf('period', '起止时间', '什么时候到什么时候？', '2022.09 - 2026.06'),
+        rf('highlights', '亮点', '有什么值得一提的？（课程、成绩、奖项，一条一句）', '专业排名前 20%', false, true),
+      ],
+    },
+    {
+      key: 'skills', label: '技能', repeatable: false, fields: [
+        rf('items', '技能', '你会用什么工具或技术？（一个一行，写关键词就行）', 'Java\nVue\nExcel', false, true, true),
+      ],
+    },
+    { key: 'projects', label: '项目经历', repeatable: true, fields: experienceFields() },
+    { key: 'campus', label: '校园与实践经历', repeatable: true, fields: experienceFields() },
+    {
+      key: 'self_evaluation', label: '自我评价', repeatable: false, fields: [
+        rf('text', '自我评价', '用几句话说说你自己的特点。', '做事比较较真，答应的事会做完；不太会主动争取，正在改。'),
+      ],
+    },
+  ],
+}
+
+/** parsed_data 的契约结构（basic/target/education/skills/projects/campus/self_evaluation） */
+const resumeParsedData = {
+  basic: { name: '林小满', grade: '大三', major: '软件工程', school: '华中科技大学', contact: 'lin@example.com' },
+  target: { direction: '鸿蒙应用开发工程师', city: '武汉' },
+  education: [{ school: '华中科技大学', major: '软件工程', period: '2023.09 - 2027.06', highlights: ['专业排名前 20%'] }],
+  skills: ['ArkTS', 'TypeScript'],
+  projects: [
+    {
+      name: '鸿蒙待办清单', role: '独立开发', period: '2025.03 - 2025.06',
+      star: {
+        situation: '想做一个能写进简历的完整项目。',
+        task: '做出一份能跑在真机上的鸿蒙小应用。',
+        action: '用 ArkTS + ArkUI 写列表与本地持久化。',
+        result: '上线后日活约 800。',
       },
-    ],
-    experience: [
-      {
-        company: '校学生创新基地',
-        role: '客户端开发',
-        start: '2025-03',
-        end: '2025-06',
-        description: '负责活动报名小程序的列表与表单模块，日活约 800。',
-      },
-    ],
-    projects: [
-      {
-        name: '鸿蒙待办清单',
-        role: '独立开发',
-        tech: ['ArkTS', 'ArkUI', 'Preferences'],
-        description: '从 0 到 1 完成的鸿蒙小应用，支持列表增删改与本地持久化。',
-      },
-    ],
-    skills: ['ArkTS', 'TypeScript', 'Java', 'Git', '数据结构与算法'],
-  },
-  ats_score: 76,
-  completeness: 0.82,
+    },
+  ],
+  campus: [],
+  self_evaluation: '做事比较较真，答应的事会做完。',
+}
+
+/**
+ * GET|PUT /resume/mine 的"有简历"形状（id/title/target_job/parsed_data/completeness/updated_at）。
+ * 没有简历时后端返回 **data = null**（HTTP 200 + code 0，不是 404）。
+ */
+const resumeMineSaved = {
+  id: RESUME_ID,
+  title: '林小满-鸿蒙客户端开发-2026 秋招',
   target_job: '鸿蒙应用开发工程师',
-  created_at: '2026-09-12T15:30:00+08:00',
+  parsed_data: resumeParsedData,
+  completeness: 0.82,
   updated_at: NOW,
 }
+
+/* ---------------------------- 每日一问历史 ---------------------------- */
+
+/** GET /daily/history（schemas/daily_question.DailyHistoryResponse）：answered_at 倒序 */
+const DAILY_HISTORY_FIRST_ANSWER = '改过一次简历，还投了三家。'
+const dailyHistory = {
+  total: 3,
+  items: [
+    { id: 'dh-1', question_id: 'dq-old-1', content: '过去一个月，你为求职做过下面哪件事？', dimension: '行动', answer: DAILY_HISTORY_FIRST_ANSWER, answered_at: '2026-09-17T21:12:00+08:00' },
+    { id: 'dh-2', question_id: 'dq-old-2', content: '你觉得自己最想让别人记住的一点是什么？', dimension: '能力', answer: '做事比较较真，答应的事会做完。', answered_at: '2026-09-16T20:40:00+08:00' },
+    { id: 'dh-3', question_id: 'dq-old-3', content: '最近一次投递没回音，你觉得卡在哪个环节？', dimension: '焦虑', answer: '大概是简历里的项目描述太虚了。', answered_at: '2026-09-15T22:05:00+08:00' },
+  ],
+}
+
+/* ------------------------------ 奖章（新契约） ------------------------------ */
+
+/**
+ * GET /badge 的 data 是 **BadgeOverview 对象** { total, obtained_count, items[] }
+ * （frontend/src/api/badge.ts + utils/badge.ts::normalizeBadgeOverview），不是旧裸数组。
+ * 三枚奖章的名字 / 顺序 / 文案抄自 backend/app/services/badge_service.py 的 BADGE_RULES。
+ */
+const BADGE_ITEMS = [
+  {
+    key: 'first_task', name: '起步行动家', description: '完成第一个成长任务',
+    hint: '你已经迈出第一步——动手做，永远比想清楚更值钱',
+    obtained: true, obtained_at: '2026-09-14T19:02:00+08:00', progress: { current: 1, target: 1 },
+  },
+  {
+    key: 'five_steps', name: '坚持打卡者', description: '累计打卡 5 个任务步骤',
+    hint: '稳定坚持比一时冲劲更难得，你已经打卡 5 次了',
+    obtained: true, obtained_at: '2026-09-16T21:10:00+08:00', progress: { current: 5, target: 5 },
+  },
+  {
+    key: 'profile_shape', name: '方向初现', description: 'AI 从对话里攒够 6 条你的画像标签',
+    hint: '多和 AI 聊几轮，让它从你的话里攒出 6 条画像标签',
+    obtained: false, obtained_at: null, progress: { current: 4, target: 6 },
+  },
+]
+const BADGE_OVERVIEW = { total: 3, obtained_count: 2, items: BADGE_ITEMS }
 
 const interviewQuestions = {
   interview_id: SESSION_ID,
@@ -429,7 +519,7 @@ function fail(route, status, code, message) {
  * 两个 handler 都能匹配时行为容易误判，所以这里只在**一个** handler 内分支。
  */
 async function installApiMock(page, opts = {}) {
-  const { mode = 'ok', tested = true, sseGapMs = 0 } = opts
+  const { mode = 'ok', tested = true, sseGapMs = 0, resumeMine = 'none' } = opts
   const hits = []
   const misses = []
   const sseRequests = []
@@ -592,35 +682,27 @@ async function installApiMock(page, opts = {}) {
         extracted_tags: [],
       })
     }
+    /* 之前没有这条 mock：请求落到 catch-all 拿到 data=null，历史区降级成空态 */
+    if (method === 'GET' && p === '/daily/history') return json(route, dailyHistory)
 
-    /* ---- 简历 ---- */
-    // 新链路只用 GET /resume/template、GET|PUT /resume/mine、POST /resume/polish（无 stub）。
-    // 这三条 GET/PUT 端点都落在下面这条通配的上，所以它不能跟着老端点一起删。
-    if (method === 'GET' && /^\/resume\/[^/]+$/.test(p)) return json(route, resumeDetail)
-    if (method === 'PUT' && /^\/resume\/[^/]+$/.test(p)) return json(route, resumeDetail)
+    /*
+     * 简历四条端点（老 ATS 链路已整体删除）：
+     *   GET  /resume/template -> { sections: [...] }
+     *   GET  /resume/mine     -> 没有简历时 **data = null**（HTTP 200 + code 0，不是 404）
+     *   PUT  /resume/mine     -> 保存后的那一份
+     *   POST /resume/polish   -> 润色结果
+     * 刻意不再用 `/resume/{x}` 通配：那正是"模板请求被当成简历明细"的假绿来源。
+     */
+    if (method === 'GET' && p === '/resume/template') return json(route, resumeTemplate)
+    if (method === 'GET' && p === '/resume/mine') return json(route, resumeMine === 'saved' ? resumeMineSaved : null)
+    if (method === 'PUT' && p === '/resume/mine') return json(route, resumeMineSaved)
+    if (method === 'POST' && p === '/resume/polish') return json(route, resumeMineSaved)
 
     /* ---- 成长报告 ---- */
     if (method === 'GET' && p === '/report') return json(route, growthReport)
 
-    /* ---- 奖章 ---- */
-    if (method === 'GET' && p === '/badge') {
-      return json(route, [
-        {
-          id: 'ub-1',
-          badge_id: 'badge_starter',
-          name: '起步行动家',
-          condition: { type: 'completed_steps', value: 5 },
-          obtained_at: '2026-09-14T19:02:00+08:00',
-        },
-        {
-          id: 'ub-2',
-          badge_id: 'badge_first_resume',
-          name: '第一份简历',
-          condition: { type: 'resume_created', value: 1 },
-          obtained_at: '2026-09-12T16:00:00+08:00',
-        },
-      ])
-    }
+    /* ---- 奖章：契约是 BadgeOverview 对象（不是旧裸数组） ---- */
+    if (method === 'GET' && p === '/badge') return json(route, BADGE_OVERVIEW)
 
     /* ---- 测评 ---- */
     if (method === 'GET' && p === '/test/questions') {
@@ -1032,6 +1114,32 @@ async function main() {
         .filter((e) => !isNoise(e.text))
         .map((e) => e.text.slice(0, 300))
 
+      /*
+       * 路由级真断言：整轮只判"白屏 / ErrorBoundary / pageerror / URL / 文本长度"，
+       * 这个口径放过了"渲染出一张失败卡" —— /resume 就是这样假绿的
+       * （模板请求被通配 mock 当成简历明细 → 失败卡「这次没拿到简历模板。」，
+       * 文本够长、URL 对、不报错，于是 PASS）。
+       */
+      if (r.name === 'resume') {
+        entry.resumeForm = {
+          failureCardShown: snap.bodyText.includes('这次没拿到简历模板'),
+          skillsQuestionShown: snap.bodyText.includes('你会用什么工具或技术？'),
+          skillsField: await page.evaluate(() => {
+            const el = document.getElementById('resume-skills-items')
+            return { found: !!el, tag: el ? el.tagName.toLowerCase() : null }
+          }),
+          inputCount: snap.inputCount,
+          textareaCount: snap.textareaCount,
+        }
+      }
+      if (r.name === 'daily') {
+        entry.dailyHistory = {
+          sectionShown: snap.bodyText.includes('以前答过的题'),
+          firstItemShown: snap.bodyText.includes(DAILY_HISTORY_FIRST_ANSWER),
+          emptyStateShown: snap.bodyText.includes('还没有答过的题'),
+        }
+      }
+
       await page.screenshot({ path: path.join(SHOTS_DIR, `${String(r.n).padStart(2, '0')}-${r.name}.png`), fullPage: true })
 
       /* --- 场景 C 探针：chat 页真的发一句，看流式是否逐字进气泡 --- */
@@ -1083,9 +1191,12 @@ async function main() {
           })
           // 用户气泡是否出现
           entry.sse.userEcho = after.includes('简历我也改过')
-          // 追问进度文案
-          const progress = after.match(/追问进度\s*\d+\/3/)
-          entry.sse.followupProgressText = progress ? progress[0] : null
+          /*
+           * 结论卡片入口（done 事件 conclusion_ready=true 才浮出）—— 仍然存在的行为。
+           * 「追问进度 N/3」那段 UI 已被删除（81ba03f），所以不再断言它。
+           */
+          entry.sse.conclusionCardVisible = after.includes('结论卡片')
+          entry.sse.pageErrorCount = store.pageErrors.length
           // 「停止」按钮 = streamState 进入过 streaming/connecting 的 UI 证据
           entry.sse.stopButtonSeen = samples.length > 0 && after.includes('发送')
           entry.sse.shortBubblesSeen = samples
@@ -1101,14 +1212,16 @@ async function main() {
           entry.sse.requestObserved = sseRequests.map((o) => `${o.method} ${o.path}`)
           entry.sse.requestBody = sseRequests[0]?.body ?? null
           entry.sse.requestCount = sseRequests.length
-          // 判定：三个断言全过才算 PASS
-          entry.sse.verdict =
-            entry.sse.requestCount === 1 &&
-            entry.sse.fullTextInAfter &&
-            entry.sse.userEcho &&
-            !!entry.sse.followupProgressText
-              ? 'PASS'
-              : 'FAIL'
+          /* 判定只依赖仍然存在的行为：stream 请求发出 / delta 全文上屏 / 用户消息回显 /
+             结论卡可见 / pageerror = 0 */
+          entry.sse.checks = {
+            streamRequestSent: entry.sse.requestCount === 1,
+            deltaFullTextOnScreen: entry.sse.fullTextInAfter,
+            userMessageEchoed: entry.sse.userEcho,
+            conclusionCardVisible: entry.sse.conclusionCardVisible,
+            noPageError: entry.sse.pageErrorCount === 0,
+          }
+          entry.sse.verdict = Object.values(entry.sse.checks).every(Boolean) ? 'PASS' : 'FAIL'
 
           await page.screenshot({
             path: path.join(SHOTS_DIR, `C-chat-stream-final.png`),
@@ -1126,6 +1239,19 @@ async function main() {
       if (entry.pageErrors.length) reasons.push(`未捕获异常 ${entry.pageErrors.length} 条`)
       if (!entry.urlOk) reasons.push(`最终 URL=${entry.finalUrl}，期望 ${entry.expectedUrl}`)
       if (entry.renderedText < 10) reasons.push(`渲染文本过少(${entry.renderedText})`)
+      /* /resume 必须真是"填写态"：没有失败卡 + 模板问题文案上屏 + 技能栏是 textarea */
+      if (r.name === 'resume' && entry.resumeForm) {
+        if (entry.resumeForm.failureCardShown) reasons.push('渲染出失败卡「这次没拿到简历模板」')
+        if (!entry.resumeForm.skillsQuestionShown) reasons.push('模板问题文案没上屏（缺「你会用什么工具或技术？」）')
+        if (entry.resumeForm.skillsField.tag !== 'textarea') reasons.push(`技能栏不是 textarea（实际 ${entry.resumeForm.skillsField.tag ?? '不存在'}）`)
+        if (entry.resumeForm.inputCount < 5) reasons.push(`填写态输入框过少（${entry.resumeForm.inputCount} 个）`)
+      }
+      /* /daily 必须真渲染出历史列表，而不是降级空态 */
+      if (r.name === 'daily' && entry.dailyHistory) {
+        if (!entry.dailyHistory.sectionShown) reasons.push('没有「以前答过的题」区块')
+        if (entry.dailyHistory.emptyStateShown) reasons.push('历史区仍是空态「还没有答过的题」，说明 GET /daily/history 没拿到数据')
+        if (!entry.dailyHistory.firstItemShown) reasons.push('历史列表没渲染出任何一条答案')
+      }
       entry.verdict = reasons.length ? 'FAIL' : 'PASS'
       entry.notes = reasons
     } catch (err) {

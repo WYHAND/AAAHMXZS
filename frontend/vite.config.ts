@@ -6,6 +6,13 @@ import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
+  /*
+   * ⚠️ `base: './'` 是**桌面端（Electron）打包的硬要求**：
+   * Electron 用 `loadFile()` 以 `file://` 加载 index.html，绝对路径 `/assets/xx.js`
+   * 会解析成 `file:///assets/xx.js`（不存在）→ 打开就是白屏。
+   * 相对路径在 Web 部署（nginx 根路径或子路径）下同样成立，所以两边都安全。
+   */
+  base: './',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

@@ -72,17 +72,119 @@ const taskSteps = [
 ]
 const taskDetail = { ...task, steps: taskSteps }
 
-const resumeDetail = {
-  id: RESUME_ID, user_id: user.id, title: '林小满-鸿蒙客户端开发-2026 秋招',
-  file_path: `${user.id}/resume.pdf`,
-  parsed_data: {
-    basics: { name: '林小满', phone: '138****2233', email: 'lin@example.com', city: '武汉', target_job: '鸿蒙应用开发工程师' },
-    education: [{ school: '华中科技大学', major: '软件工程', degree: '本科', start: '2023-09', end: '2027-06' }],
-    projects: [{ name: '鸿蒙待办清单', role: '独立开发', tech: ['ArkTS'], description: '从 0 到 1。' }],
-    skills: ['ArkTS', 'TypeScript'],
-  },
-  ats_score: 76, completeness: 0.82, target_job: '鸿蒙应用开发工程师',
-  created_at: '2026-09-12T15:30:00+08:00', updated_at: NOW,
+/* ------------------------------ 简历（新契约） ------------------------------ */
+
+/** 与后端 resume_template._field 同构：question 是界面上唯一的文案出处 */
+const rf = (key, label, question, example, required = false, multiple = false, lines = false) =>
+  ({ key, label, question, example, required, multiple, lines })
+
+/** 项目经历 / 校园与实践经历共用字段（后端 _experience_fields） */
+const experienceFields = () => [
+  rf('name', '名称', '这段经历叫什么？（项目名 / 活动名）', '校园二手交易小程序'),
+  rf('role', '你的角色', '你在这段经历里是什么角色？', '前端开发'),
+  rf('period', '起止时间', '这段时间大概是什么时候？（没记住可以不填）', '2024.09 - 2024.12'),
+  rf('star.situation', '情境', '当时是什么背景、要解决什么问题？', '老师布置了课程作业，要做一个小程序；同学们卖二手书很麻烦'),
+  rf('star.task', '任务', '你要做成什么？', '做出能发布和搜索二手书的页面'),
+  rf('star.action', '行动', '你具体做了什么？', '我负责前端页面，用 Vue 写的'),
+  rf('star.result', '结果', '最后达成什么？有数字就写上。', '最后上线了，有一百多个同学用过'),
+]
+
+/**
+ * GET /resume/template 的真实出参 —— 逐字抄自 backend/app/services/resume_template.py。
+ *
+ * 为什么必须补这一条：旧版 mock 只有一条 `GET /resume/{x}` 通配，`/resume/template`
+ * 与 `/resume/mine` **都**被它当成"简历明细"返回。模板里于是没有 `sections`，
+ * 页面走 `loadError.template` 落失败卡「这次没拿到简历模板。」；而路由判定只看
+ * 白屏 / URL / 文本长度，**失败卡照样 PASS** —— 这正是假绿的来源。
+ *
+ * 技能栏必须是 `multiple: true` + `lines: true`：前端 FieldList 按 `field.lines`
+ * 才渲染 textarea（MyResumePage 里 `field.lines ? <Textarea rows={4}/> : ...`）。
+ */
+const resumeTemplate = {
+  sections: [
+    {
+      key: 'basic', label: '基本信息', repeatable: false, fields: [
+        rf('name', '姓名', '你叫什么名字？', '张三', true),
+        rf('grade', '年级', '你现在大几？（选填）', '大三'),
+        rf('major', '专业', '你学什么专业？', '软件工程', true),
+        rf('school', '学校', '你在哪所学校？', 'XX 大学', true),
+        rf('contact', '联系方式（电话或邮箱）', '怎么联系你？（电话或邮箱，写一个就行）', '138xxxx1234 或 zhangsan@example.com', true),
+      ],
+    },
+    {
+      key: 'target', label: '求职意向', repeatable: false, fields: [
+        rf('direction', '想投的方向/岗位', '你想投哪个方向或岗位？', '前端开发实习生', true),
+        rf('city', '城市', '你倾向去哪个城市？（选填）', '杭州'),
+      ],
+    },
+    {
+      key: 'education', label: '教育背景', repeatable: true, fields: [
+        rf('school', '学校', '这段教育经历是哪所学校？', 'XX 大学'),
+        rf('major', '专业', '是什么专业？', '软件工程'),
+        rf('period', '起止时间', '什么时候到什么时候？', '2022.09 - 2026.06'),
+        rf('highlights', '亮点', '有什么值得一提的？（课程、成绩、奖项，一条一句）', '专业排名前 20%', false, true),
+      ],
+    },
+    {
+      key: 'skills', label: '技能', repeatable: false, fields: [
+        rf('items', '技能', '你会用什么工具或技术？（一个一行，写关键词就行）', 'Java\nVue\nExcel', false, true, true),
+      ],
+    },
+    { key: 'projects', label: '项目经历', repeatable: true, fields: experienceFields() },
+    { key: 'campus', label: '校园与实践经历', repeatable: true, fields: experienceFields() },
+    {
+      key: 'self_evaluation', label: '自我评价', repeatable: false, fields: [
+        rf('text', '自我评价', '用几句话说说你自己的特点。', '做事比较较真，答应的事会做完；不太会主动争取，正在改。'),
+      ],
+    },
+  ],
+}
+
+/** parsed_data 的契约结构（backend types ResumeData：basic/target/education/skills/projects/campus/self_evaluation） */
+const resumeParsedData = {
+  basic: { name: '林小满', grade: '大三', major: '软件工程', school: '华中科技大学', contact: 'lin@example.com' },
+  target: { direction: '鸿蒙应用开发工程师', city: '武汉' },
+  education: [{ school: '华中科技大学', major: '软件工程', period: '2023.09 - 2027.06', highlights: ['专业排名前 20%'] }],
+  skills: ['ArkTS', 'TypeScript'],
+  projects: [
+    {
+      name: '鸿蒙待办清单', role: '独立开发', period: '2025.03 - 2025.06',
+      star: {
+        situation: '想做一个能写进简历的完整项目。',
+        task: '做出一份能跑在真机上的鸿蒙小应用。',
+        action: '用 ArkTS + ArkUI 写列表与本地持久化。',
+        result: '上线后日活约 800。',
+      },
+    },
+  ],
+  campus: [],
+  self_evaluation: '做事比较较真，答应的事会做完。',
+}
+
+/**
+ * GET|PUT /resume/mine 的"有简历"形状（契约：id/title/target_job/parsed_data/completeness/updated_at）。
+ * 没有简历时后端返回 **data = null**（HTTP 200 + code 0，不是 404），见 api/resume.ts。
+ */
+const resumeMineSaved = {
+  id: RESUME_ID,
+  title: '林小满-鸿蒙客户端开发-2026 秋招',
+  target_job: '鸿蒙应用开发工程师',
+  parsed_data: resumeParsedData,
+  completeness: 0.82,
+  updated_at: NOW,
+}
+
+/* ---------------------------- 每日一问历史 ---------------------------- */
+
+/** GET /daily/history（schemas/daily_question.DailyHistoryResponse）：answered_at 倒序 */
+const DAILY_HISTORY_FIRST_ANSWER = '改过一次简历，还投了三家。'
+const dailyHistory = {
+  total: 3,
+  items: [
+    { id: 'dh-1', question_id: 'dq-old-1', content: '过去一个月，你为求职做过下面哪件事？', dimension: '行动', answer: DAILY_HISTORY_FIRST_ANSWER, answered_at: '2026-09-17T21:12:00+08:00' },
+    { id: 'dh-2', question_id: 'dq-old-2', content: '你觉得自己最想让别人记住的一点是什么？', dimension: '能力', answer: '做事比较较真，答应的事会做完。', answered_at: '2026-09-16T20:40:00+08:00' },
+    { id: 'dh-3', question_id: 'dq-old-3', content: '最近一次投递没回音，你觉得卡在哪个环节？', dimension: '焦虑', answer: '大概是简历里的项目描述太虚了。', answered_at: '2026-09-15T22:05:00+08:00' },
+  ],
 }
 
 /** N2 用的题目：首屏只给 1 道（贴近后端「答一题给下一题」的增量行为） */
@@ -130,10 +232,34 @@ const growthReport = {
   created_at: NOW,
 }
 
-const BADGES = [
-  { id: 'ub-1', badge_id: 'badge_starter', name: '起步行动家', condition: { type: 'completed_steps', value: 5 }, obtained_at: '2026-09-14T19:02:00+08:00' },
-  { id: 'ub-2', badge_id: 'badge_first_resume', name: '第一份简历', condition: { type: 'resume_created', value: 1 }, obtained_at: '2026-09-12T16:00:00+08:00' },
+/**
+ * GET /badge 的新契约（frontend/src/api/badge.ts + utils/badge.ts::normalizeBadgeOverview）：
+ * `data` 是 **BadgeOverview 对象** { total, obtained_count, items[] }，不是旧裸数组。
+ * 三枚奖章与顺序、文案抄自 backend/app/services/badge_service.py 的 BADGE_RULES。
+ * 空态 = `items: []` + total 仍是 3（后端 total 恒等于规则条数，"没拿到"不等于"没有奖章"）。
+ */
+const BADGE_ITEMS = [
+  {
+    key: 'first_task', name: '起步行动家', description: '完成第一个成长任务',
+    hint: '你已经迈出第一步——动手做，永远比想清楚更值钱',
+    obtained: true, obtained_at: '2026-09-14T19:02:00+08:00', progress: { current: 1, target: 1 },
+  },
+  {
+    key: 'five_steps', name: '坚持打卡者', description: '累计打卡 5 个任务步骤',
+    hint: '稳定坚持比一时冲劲更难得，你已经打卡 5 次了',
+    obtained: true, obtained_at: '2026-09-16T21:10:00+08:00', progress: { current: 5, target: 5 },
+  },
+  {
+    key: 'profile_shape', name: '方向初现', description: 'AI 从对话里攒够 6 条你的画像标签',
+    hint: '多和 AI 聊几轮，让它从你的话里攒出 6 条画像标签',
+    obtained: false, obtained_at: null, progress: { current: 4, target: 6 },
+  },
 ]
+const BADGE_OVERVIEW = { total: 3, obtained_count: 2, items: BADGE_ITEMS }
+const BADGE_OVERVIEW_EMPTY = { total: 3, obtained_count: 0, items: [] }
+
+/** ProfilePage 在 items 为空时渲染的空态句（旧文案「还没有奖章。…」已被删除） */
+const BADGE_EMPTY_TEXT = '奖章还在铸造，过一会儿再来看看。'
 
 const testQuestions = [
   { id: 'q_clarity_01', dimension: 'clarity', content: '想到未来的工作，你现在的感觉更接近哪一种？', options: [{ key: 'A', text: '完全不知道能做什么', score: 1 }, { key: 'B', text: '有几个方向但都很模糊', score: 2 }, { key: 'C', text: '有一个比较想去的方向', score: 4 }], multiple: false },
@@ -180,7 +306,7 @@ function envelope(data, status = 200) {
 
 /** 统一的 /api/v1 mock。每次请求都记录，末尾全量导出。 */
 async function installApi(page, opts = {}) {
-  const { mode = 'ok', tested = true, badge = 'data', ivAnswerSeq = IV_ANSWER_SEQ } = opts
+  const { mode = 'ok', tested = true, badge = 'data', ivAnswerSeq = IV_ANSWER_SEQ, resumeMine = 'none' } = opts
   const log = []
   let ivAnswerIdx = 0
 
@@ -227,17 +353,28 @@ async function installApi(page, opts = {}) {
     if (method === 'POST' && /^\/task\/[^/]+\/abandon$/.test(p)) return J({ ...task, status: '已放弃' })
 
     if (method === 'GET' && p === '/daily/today') return J({ question: { id: 'dq1', dimension: '焦虑', content: '最近一次投递没回音，你觉得卡在哪个环节？', options: null, created_at: NOW }, answered: false, answer: null, streak: 4 })
+    /* 之前完全没有这条 mock：/daily 的请求落到 catch-all 拿到 data=null，
+       页面把历史区降级成空态「还没有答过的题」，而路由判定照样 PASS。 */
+    if (method === 'GET' && p === '/daily/history') return J(dailyHistory)
     if (method === 'POST' && p === '/daily/answer') return J({ id: 'da1', user_id: user.id, question_id: 'dq1', answer: '大概是简历里的项目描述太虚了。', answered_at: NOW, profile_refreshed: true, extracted_tags: [] })
 
-    // 新链路只用 GET /resume/template、GET|PUT /resume/mine、POST /resume/polish（无 stub）。
-    // 这三条 GET/PUT 端点都落在下面这条通配的上，所以它不能跟着老端点一起删。
-    if (method === 'GET' && /^\/resume\/[^/]+$/.test(p)) return J(resumeDetail)
-    if (method === 'PUT' && /^\/resume\/[^/]+$/.test(p)) return J(resumeDetail)
+    /*
+     * 简历四条端点（老 ATS 链路已整体删除，只剩这四条）：
+     *   GET  /resume/template -> { sections: [...] }（界面"问什么"的唯一出处）
+     *   GET  /resume/mine     -> 没有简历时 **data = null**（HTTP 200 + code 0，不是 404）
+     *   PUT  /resume/mine     -> 保存后的那一份
+     *   POST /resume/polish   -> 润色结果（本轮的自动断言不点它，但点到时不能给 null）
+     * 这里刻意**不再用** `/resume/{x}` 通配：那正是"模板请求被当成简历明细"的假绿来源。
+     */
+    if (method === 'GET' && p === '/resume/template') return J(resumeTemplate)
+    if (method === 'GET' && p === '/resume/mine') return J(resumeMine === 'saved' ? resumeMineSaved : null)
+    if (method === 'PUT' && p === '/resume/mine') return J(resumeMineSaved)
+    if (method === 'POST' && p === '/resume/polish') return J(resumeMineSaved)
 
     if (method === 'GET' && p === '/report') return J(growthReport)
 
-    /* N4：奖章两态 */
-    if (method === 'GET' && p === '/badge') return J(badge === 'empty' ? [] : BADGES)
+    /* N4：奖章两态（新契约是 BadgeOverview 对象，空态是 items 为空而不是"没有奖章"） */
+    if (method === 'GET' && p === '/badge') return J(badge === 'empty' ? BADGE_OVERVIEW_EMPTY : BADGE_OVERVIEW)
 
     if (method === 'GET' && p === '/test/questions') return J(testQuestions)
     if (method === 'POST' && p === '/test/submit') return J(testResult)
@@ -367,6 +504,32 @@ async function main() {
       e.consoleErrorCount = store.consoleErrors.length
       e.consoleErrors = store.consoleErrors
       e.consoleReal = store.consoleErrors.filter((t) => !isNoise(t))
+
+      /*
+       * 路由级真断言：整轮回归只看"白屏 / ErrorBoundary / pageerror / URL / 文本长度"，
+       * 这个口径放过了"页面渲染出一张失败卡" —— 文本够长、URL 对、不报错，于是 PASS。
+       * /resume 与 /daily 正是这样假绿的，所以这两条路由额外校验**内容**。
+       */
+      if (r.name === 'resume') {
+        e.resumeForm = {
+          failureCardShown: s.bodyText.includes('这次没拿到简历模板'),
+          skillsQuestionShown: s.bodyText.includes('你会用什么工具或技术？'),
+          skillsField: await page.evaluate(() => {
+            const el = document.getElementById('resume-skills-items')
+            return { found: !!el, tag: el ? el.tagName.toLowerCase() : null }
+          }),
+          inputCount: s.inputCount,
+          textareaCount: await page.locator('textarea').count(),
+        }
+      }
+      if (r.name === 'daily') {
+        e.dailyHistory = {
+          sectionShown: s.bodyText.includes('以前答过的题'),
+          firstItemShown: s.bodyText.includes(DAILY_HISTORY_FIRST_ANSWER),
+          emptyStateShown: s.bodyText.includes('还没有答过的题'),
+        }
+      }
+
       await page.screenshot({ path: path.join(SHOTS_DIR, `${String(r.n).padStart(2, '0')}-${r.name}.png`), fullPage: true })
       const reasons = []
       if (e.blank) reasons.push('白屏')
@@ -374,6 +537,19 @@ async function main() {
       if (e.pageErrors.length) reasons.push(`pageerror x${e.pageErrors.length}`)
       if (!e.urlOk) reasons.push(`URL=${e.finalUrl} 期望 ${r.expect}`)
       if (e.renderedText < 10) reasons.push(`文本过少 ${e.renderedText}`)
+      /* /resume 必须真是"填写态"：没有失败卡 + 模板问题文案上屏 + 技能栏是 textarea */
+      if (r.name === 'resume') {
+        if (e.resumeForm.failureCardShown) reasons.push('渲染出失败卡「这次没拿到简历模板」')
+        if (!e.resumeForm.skillsQuestionShown) reasons.push('模板问题文案没上屏（缺「你会用什么工具或技术？」）')
+        if (e.resumeForm.skillsField.tag !== 'textarea') reasons.push(`技能栏不是 textarea（实际 ${e.resumeForm.skillsField.tag ?? '不存在'}）`)
+        if (e.resumeForm.inputCount < 5) reasons.push(`填写态输入框过少（${e.resumeForm.inputCount} 个）`)
+      }
+      /* /daily 必须真渲染出历史列表，而不是降级空态 */
+      if (r.name === 'daily') {
+        if (!e.dailyHistory.sectionShown) reasons.push('没有「以前答过的题」区块')
+        if (e.dailyHistory.emptyStateShown) reasons.push('历史区仍是空态「还没有答过的题」，说明 GET /daily/history 没拿到数据')
+        if (!e.dailyHistory.firstItemShown) reasons.push('历史列表没渲染出任何一条答案')
+      }
       e.verdict = reasons.length ? 'FAIL' : 'PASS'
       e.notes = reasons
     } catch (err) {
@@ -518,15 +694,27 @@ async function main() {
       const body = await page.evaluate(() => document.body.innerText)
       c.finalFullTextPresent = body.includes(c.expectedFull)
       c.userEcho = body.includes('简历我也改过')
-      c.followupProgressText = (body.match(/追问进度\s*\d+\/3/) ?? [null])[0]
       c.conclusionCardVisible = body.includes('结论卡片')
       c.streamRequest = log.find((x) => /\/stream$/.test(x.path)) ?? null
       c.pageErrors = store.pageErrors
-      c.verdict = c.streamRequest && c.finalFullTextPresent && c.userEcho && c.followupProgressText && !store.pageErrors.length ? 'PASS' : 'FAIL'
+      c.consoleErrors = store.consoleErrors
+      /*
+       * 「追问进度 N/3」那段 UI 已被删除（git log -S"追问进度" → 81ba03f；
+       * frontend/src 里搜不到它，SSEPayload 也不再声明 followup_round），
+       * 所以断言不再依赖它，只依赖**仍然存在**的行为。
+       */
+      c.checks = {
+        streamRequestSent: Boolean(c.streamRequest),
+        deltaFullTextOnScreen: c.finalFullTextPresent,
+        userMessageEchoed: c.userEcho,
+        conclusionCardVisible: c.conclusionCardVisible,
+        noPageError: store.pageErrors.length === 0,
+      }
+      c.verdict = Object.values(c.checks).every(Boolean) ? 'PASS' : 'FAIL'
       await page.screenshot({ path: path.join(SHOTS_DIR, 'C-chat-stream-final.png'), fullPage: true })
     } catch (err) { c.error = err.message; c.verdict = 'FAIL' }
     out.scenarios.C = c
-    console.log(`[C] ${c.verdict} full=${c.finalFullTextPresent} progress=${c.followupProgressText}`)
+    console.log(`[C] ${c.verdict} full=${c.finalFullTextPresent} conclusion=${c.conclusionCardVisible} pageErr=${c.pageErrors?.length}`)
     await page.close()
   }
 
@@ -712,23 +900,33 @@ async function main() {
       const body = await page.evaluate(() => document.body.innerText)
       n4.badgeRequested = log.some((x) => x.path === '/badge')
       n4.hasSection = body.includes('我的奖章')
-      n4.badgeNames = mode === 'data' ? BADGES.map((b) => b.name).filter((n) => body.includes(n)) : []
-      n4.emptyStateText = body.includes('还没有奖章') ? '还没有奖章。去任务列表做一个小任务，完成第一步就能拿到。' : null
+      n4.badgeNames = mode === 'data' ? BADGE_ITEMS.map((b) => b.name).filter((n) => body.includes(n)) : []
+      /* 空态文案：契约改成 BadgeOverview 对象后，ProfilePage 渲染的是这一句 */
+      n4.emptyStateText = body.includes(BADGE_EMPTY_TEXT) ? BADGE_EMPTY_TEXT : null
+      /* 旧空态文案（「还没有奖章。…」）必须已经不存在于产物里 */
+      n4.staleEmptyTextGone = !body.includes('还没有奖章')
+      n4.overviewCounter = (body.match(new RegExp(`${BADGE_OVERVIEW.obtained_count}\\s*/\\s*${BADGE_OVERVIEW.total}`)) ?? [null])[0]
       n4.loadingText = body.includes('正在读你的奖章') ? '正在读你的奖章…' : null
       n4.bodySample = body.slice(0, 700)
       n4.pageErrors = store.pageErrors
       const problems = []
       if (!n4.badgeRequested) problems.push('未调用 GET /badge')
       if (!n4.hasSection) problems.push('页面没有「我的奖章」区块')
-      if (mode === 'data' && n4.badgeNames.length !== BADGES.length) problems.push(`有数据态只渲染了 ${n4.badgeNames.length}/${BADGES.length} 枚奖章`)
-      if (mode === 'empty' && !n4.emptyStateText) problems.push('空数组态没有出现空态句子')
+      if (mode === 'data') {
+        if (n4.badgeNames.length !== BADGE_ITEMS.length) problems.push(`有数据态只渲染了 ${n4.badgeNames.length}/${BADGE_ITEMS.length} 枚奖章`)
+        if (!n4.overviewCounter) problems.push(`没有渲染进度计数 ${BADGE_OVERVIEW.obtained_count}/${BADGE_OVERVIEW.total}`)
+      }
+      if (mode === 'empty') {
+        if (!n4.emptyStateText) problems.push(`items 为空的 BadgeOverview 没有出现空态句子「${BADGE_EMPTY_TEXT}」`)
+        if (!n4.staleEmptyTextGone) problems.push('仍然出现已删除的旧文案「还没有奖章」')
+      }
       if (n4.pageErrors.length) problems.push(`pageerror x${n4.pageErrors.length}`)
       n4.problems = problems
       n4.verdict = problems.length ? 'FAIL' : 'PASS'
       await page.screenshot({ path: path.join(SHOTS_DIR, `N4-badge-${mode}.png`), fullPage: true })
     } catch (err) { n4.error = err.message; n4.verdict = 'FAIL' }
     out.newAssertions[`N4-${mode}`] = { name: `奖章区块(${mode})`, ...n4 }
-    console.log(`[N4-${mode}] ${n4.verdict} names=${JSON.stringify(n4.badgeNames)} empty=${!!n4.emptyStateText}`)
+    console.log(`[N4-${mode}] ${n4.verdict} names=${JSON.stringify(n4.badgeNames)} empty=${!!n4.emptyStateText} counter=${n4.overviewCounter}`)
     await page.close()
   }
 

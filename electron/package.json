@@ -1,0 +1,21 @@
+{
+  "name": "aicareer-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI就业助手 桌面端（Electron 壳 + 内置后端）",
+  "author": "高校学生AI就业辅助系统",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json && electron .",
+    "dist": "npm run build:web && npm run build && electron-builder --win",
+    "build:web": "npm --prefix ../frontend run build:electron",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.5",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.9.3"
+  }
+}
