@@ -27,12 +27,13 @@ TModel = TypeVar("TModel", bound=BaseModel)
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 
 # ---------- Prompt 清单（7.4 表格的 9 项） + 2 项骨架补充（见 README「待确认」） ----------
+# ⚠️ 7.4 里的 ``resume_parse`` / ``resume_optimize`` 两项已随老 ATS 链路移除（2026-11，
+#    见 README §4.10）；现行简历链路只用 ``resume_polish``。
 PROMPT_FILES: Dict[str, str] = {
-    # 7.4 表格中明确列出的 9 项
+    # 7.4 表格中明确列出的其余项
     "chat_system": "chat_system.txt",
     "profile_extract": "profile_extract.txt",
-    "resume_parse": "resume_parse.txt",
-    "resume_optimize": "resume_optimize.txt",
+    "resume_polish": "resume_polish.txt",
     "interview_question": "interview_question.txt",
     "interview_followup": "interview_followup.txt",
     "interview_review": "interview_review.txt",

@@ -43,6 +43,8 @@ export default function InterviewSessionPage() {
 
   const [draft, setDraft] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  /** 「结束面试」正在生成复盘（要调 AI，可能十几秒，按钮上必须给出反馈） */
+  const [finishing, setFinishing] = useState(false)
 
   const load = useCallback(async () => {
     if (!sessionId) return
@@ -55,9 +57,11 @@ export default function InterviewSessionPage() {
 
   const finishAndReview = useCallback(
     async (interviewId: string) => {
+      setFinishing(true)
       const ok = await finish(interviewId)
+      setFinishing(false)
       if (!ok) {
-        toast.error('生成复盘失败，可以稍后在复盘页重试')
+        toast.error('生成复盘失败，可以稍后在复盘页点「生成复盘」重试')
       }
       storage.session.remove(STORAGE_KEY.interviewId)
       navigate(toInterviewReview(interviewId), { replace: true })
@@ -181,14 +185,24 @@ export default function InterviewSessionPage() {
 
       <div className="flex items-center justify-between gap-3">
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={() => navigate('/interview')} className="gap-1.5">
+          {/*
+            「结束面试」= 收尾动作：必须**真的调 finish 生成复盘**，不能只是跳走。
+            以前这里写的是 navigate('/interview')，于是面试永远停在"进行中"、
+            复盘永远生成不出来（用户点进去只看到"这份复盘还没生成"）。
+          */}
+          <Button
+            variant="ghost"
+            onClick={() => void finishAndReview(sessionId)}
+            disabled={submitting || finishing}
+            className="gap-1.5"
+          >
             <Square className="size-4" />
-            结束面试
+            {finishing ? '正在生成复盘…' : '结束面试'}
           </Button>
           <Button
             variant="outline"
             onClick={() => void submit(true)}
-            disabled={submitting}
+            disabled={submitting || finishing}
             className="gap-1.5"
           >
             <SkipForward className="size-4" />
@@ -199,7 +213,7 @@ export default function InterviewSessionPage() {
         <Button
           variant="warm"
           onClick={() => void submit(false)}
-          disabled={submitting || !draft.trim()}
+          disabled={submitting || finishing || !draft.trim()}
         >
           {submitting ? '提交中…' : askingFollowup ? '回答追问' : '提交并继续'}
         </Button>

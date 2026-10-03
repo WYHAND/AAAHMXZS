@@ -12,7 +12,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import delete as sa_delete
@@ -35,6 +36,7 @@ from app.schemas.task import (
 )
 from app.services import badge_service, profile_service
 from app.utils.logger import get_logger, sanitize
+from app.utils.reference_match import drop_referenced, looks_referenced
 from app.utils.similarity import is_similar, normalize, similarity
 
 logger = get_logger(__name__)
@@ -160,6 +162,200 @@ TASK_TEMPLATES: Dict[str, Dict[str, Any]] = {
     },
 }
 
+# ---------------------------------------------------------------------------
+# 主题素材的机械剔除（"生成的任务主题全都一样"的修复主线）
+# ---------------------------------------------------------------------------
+#
+# ## 现场与根因
+# 用户的成长任务列表里三条全是健身（「自动整理健身笔记的桌面小工具」「个人健身数据看板」
+# 「健身饮食记录小工具」）；真实库里 ``admin`` 名下是 5 条同主题任务
+# （打卡小工具 / 动作计数小工具 / 饮食记录小工具 / 数据看板 / 笔记整理小工具）。
+# 根因不是去重，也不是"不该生成健身"（用户明确说"可以生成健身小任务，只是不能全是"）：
+# 组装 Prompt 时把**全部**画像标签喂给模型，而该用户画像里「兴趣/健身」权重最高
+# （0.90，排在标签列表第一行，来自聊天抽取）；去重那条硬规则说的是**标题**
+# （``is_similar``），于是模型给出的答案完全"合规" —— 在同一个主题内不停换角度
+# （笔记 → 看板 → 饮食记录 → 动作计数），主题高度同质。
+#
+# ## 为什么必须**机械剔除**，不能只在 Prompt 里写一句"请注意多样性"
+# 1. **软提示压不过输入信号**：Prompt 里标签的权重就是"重要性"的排序，"健身 0.90"
+#    摆在第一行；实测加过"换一个完全不同的主题或产物形态"这类措辞之后，模型仍然在
+#    健身主题内换产物名 —— 而它这么做并不违反任何一条既有规则（"不能同题"说的是标题）。
+# 2. **剔除是可验证的**：日志能直接说出"这次剔掉了哪个标签、依据哪条已有标题"
+#    （见 ``_plan_theme_material`` 的 ``logger.info("任务主题剔除…")``）；
+#    "模型有没有听话"只能靠结果反推，出了事无法定位。
+# 3. **把约束从"模型的自由裁量"搬到"服务端的输入约束"**：标签根本不出现在 Prompt 里，
+#    模型即使想锚也无从锚起 —— 与开场白那条 ``_drop_already_asked``
+#    （"模型就算想顺着问也没有素材"）是同一个思路，判据也**复用同一份实现**
+#    （``app/utils/reference_match.py``）。
+#
+# ## 边界（别把这条修过头）
+# - 只剔**主题标签**，不禁止"健身"这个兴趣本身：剔的是"这一次不许再拿它当主题"，
+#   不是"以后都不许提健身"；下一轮如果用户把健身任务做完了（不再「进行中」），
+#   这个标签会重新回到候选里。
+# - 只拿**【进行中】**任务标题当依据。已完成/已放弃的任务是"可承接"的素材（规则 9），
+#   拿它们剔标签会让用户再也做不了想进阶/重做的主题。
+# - 剔除后**候选池为空**必须给模型一条明确指令（换维度 / 换痛点词），
+#   绝不能让 Prompt 出现"素材一片空白"（见 ``_theme_hint_text``）。
+# ---------------------------------------------------------------------------
+
+# ``avoid_themes`` 在"本次没有标签与已有任务主题重叠"时的取值。
+# 显式写"本次无"，而不是空串：空串会让 Prompt 里那一行以裸冒号结尾
+# （与 ``NO_DUPLICATE_FEEDBACK`` 同一个理由），模型可能把它当成一条被截断的指令。
+NO_AVOID_THEMES = "（本次无：没有任何画像标签与【进行中】任务的主题重叠）"
+
+
+@dataclass
+class ThemeMaterial:
+    """一次任务生成用的**主题素材**（画像标签已按"已用主题"机械剔除）。
+
+    字段分工：
+    - ``profile_tags``：**剔除后**的标签，进 Prompt 的 ``{profile_tags}``
+      （已 ``serialize_tags``，可直接 json.dumps）；
+    - ``dropped_labels`` / ``evidence``：**只用于留痕日志**，不进 Prompt；
+    - ``avoid_themes``：进 Prompt 的**禁止主题清单**（含剔除依据，让模型知道"这几个词
+      这次不许再当主题，换说法也不行"）；
+    - ``theme_hint``：进 Prompt 的**方向指令**。候选池被剔空时这里明确要求模型
+      "不能再围绕已用过的主题"，并给出换维度 / 换痛点维度的具体做法 ——
+      保证"素材为空"时模型仍有可执行的指令，而不是一片空白。
+    """
+
+    profile_tags: List[Dict[str, Any]]
+    dropped_labels: List[str]
+    # [(被剔的标签, [命中的已有任务标题])]，仅用于日志与 avoid_themes 的依据行
+    evidence: List[Tuple[str, List[str]]]
+    avoid_themes: str
+    theme_hint: str
+
+    @property
+    def pool_empty(self) -> bool:
+        """剔除后一个候选主题标签都不剩（新用户 0 标签也走这条路）。"""
+        return not self.profile_tags
+
+
+def _plan_theme_material(
+    db: Session, user: User, active_tasks: List[Task], pain_point: str
+) -> ThemeMaterial:
+    """算出这次生成能用的主题素材：**把已出现在【进行中】标题里的标签机械剔掉**。
+
+    判定走 :func:`~app.utils.reference_match.drop_referenced`（= 开场白那套
+    "宁可多剔、不可漏剔"的子串/字覆盖率/英文词根判据），所以中文标签做子串判断即可，
+    例如【进行中】标题里都有"健身" -> 「健身」这个标签这一次直接不进 Prompt。
+
+    剔除**必须留痕**（与 ``chat_service._opening_context`` 的日志同一目的）：
+    以后"为什么这次没围绕某个标签出题"能直接从日志看出来。日志一行说清三件事：
+    剔了哪些标签 / 依据哪些已有标题 / 候选池是否因此为空。
+
+    ⚠️ 已知代价（刻意保留，不是 bug）：``looks_referenced`` 对**短标签**还有一条
+    "单字覆盖率 ≥ 0.5"的宽松信号（标签『剪辑』↔"剪视频"），用在任务标题上会误剔 ——
+    实测 ``admin`` 的 5 条健身任务里有「健身**作**计数」，于是 2 字标签『写作』
+    因为共用"作"字被一起剔掉。这与开场白侧是**同一套"宁可多剔、不可漏剔"口径**：
+    多剔一个标签的代价只是"这一次少一个候选主题"，漏剔的代价正是本次要修的
+    "主题全都一样"。判定口径不做第二套，避免两处漂移；真要收紧，应该改
+    ``app/utils/reference_match.py``（两处一起变），而不是在这里另写一份。
+    """
+    all_tags = profile_service.list_tags(db, user.id)  # 已按 weight 降序
+    active_titles = [(task.title or "").strip() for task in active_tasks if (task.title or "").strip()]
+
+    # 标签可能在不同维度下重名（例如 兴趣/技术 与 技能/技术）：先按标签名去重，
+    # 判定以**标签名**为单位（主题是标签级的），再去重结果上做剔除/保留。
+    labels: List[str] = list(dict.fromkeys(tag.label for tag in all_tags if tag.label))
+    kept_labels, dropped_labels = drop_referenced(labels, active_titles)
+    kept_set = set(kept_labels)
+    kept_tags = [tag for tag in all_tags if tag.label in kept_set]
+
+    evidence: List[Tuple[str, List[str]]] = [
+        (label, [title for title in active_titles if looks_referenced(label, title)])
+        for label in dropped_labels
+    ]
+
+    if dropped_labels:
+        logger.info(
+            "任务主题剔除（机械排除已用主题）：user_id=%s 剔除标签=%s 依据【进行中】标题=%s "
+            "保留标签=%s 候选池为空=%s",
+            user.id,
+            dropped_labels,
+            "、".join(f"{label}←「{'」「'.join(titles)}」" for label, titles in evidence),
+            len(kept_tags),
+            not kept_tags,
+        )
+    elif not all_tags:
+        # 新用户（0 标签、0 任务）：没有素材可剔，照旧走痛点模板/兜底方向。
+        logger.info(
+            "任务主题剔除：user_id=%s 画像没有任何标签（新用户），无需剔除，按痛点「%s」模板方向生成",
+            user.id, pain_point,
+        )
+
+    return ThemeMaterial(
+        profile_tags=profile_service.serialize_tags(kept_tags),
+        dropped_labels=list(dropped_labels),
+        evidence=evidence,
+        avoid_themes=_avoid_themes_text(evidence),
+        theme_hint=_theme_hint_text(pain_point, dropped_labels, pool_empty=not kept_tags),
+    )
+
+
+def _avoid_themes_text(evidence: List[Tuple[str, List[str]]]) -> str:
+    """Prompt 变量 ``{avoid_themes}``：本次**禁止再当主题**的标签清单 + 剔除依据。
+
+    为什么要把依据（命中的已有标题）也写进 Prompt：只写"不许用健身"时，模型很容易
+    从"它为什么不许用"里脑补出一个更窄的禁令（例如"只许用健身但别做打卡"）。
+    把"因为这几条进行中任务已经在做健身"摆出来，规则 11 的语义才是完整的。
+    """
+    if not evidence:
+        return NO_AVOID_THEMES
+    lines = [
+        "以下主题已被系统从你的素材里**机械剔除**，本次一个都不许再用"
+        "（换说法、换工具名、换语言、加「进阶版/自动版」都不算换主题）："
+        + "、".join(label for label, _ in evidence),
+        "剔除依据是它们已经出现在用户「进行中」的任务标题里：",
+    ]
+    lines.extend(f"- {label} ← 「{'」「'.join(titles)}」" for label, titles in evidence)
+    return "\n".join(lines)
+
+
+def _theme_hint_text(pain_point: str, dropped_labels: List[str], *, pool_empty: bool) -> str:
+    """Prompt 变量 ``{theme_hint}``：本次的**主题方向指令**（四种情形，永远非空）。
+
+    为什么每种情形都要有话说：这一行的作用不是"提醒多样性"，而是**替代被剔掉的素材**。
+    素材被剔空时若只给一句"请注意多样性"，模型手里就只剩痛点 + 模板，
+    实测会退回"围绕同一批进行中任务再换一个角度"（它就是被这么喂出来的）。
+    所以空池分支必须给出**可执行的替代路径**（换维度 -> 换痛点维度 -> 必须产出）。
+
+    四种情形：
+    1. 池空且剔过标签：明确"你不能再围绕已用过的主题做任务"，要求换维度/换痛点词；
+    2. 池空且什么都没剔（新用户 0 标签）：照旧按痛点模板出起步任务，不要被第 1 条误伤；
+    3. 剔过标签但还有候选：优先用剩下的标签/其它维度里没碰过的角度，必要时换痛点词；
+    4. 什么都没剔：无强制换主题要求，仍要求挑"现有任务没用过"的角度。
+    """
+    if pool_empty and dropped_labels:
+        return (
+            "⚠️ 本次候选主题池**已被清空**：画像里的标签全部与【进行中】任务的主题重叠，"
+            f"已全部机械剔除（{'、'.join(dropped_labels)}）。你**不能再围绕这些已用过的主题做任务**，"
+            "必须换一个方向：\n"
+            "1. 优先用**别的维度**里现有任务完全没碰过的角度：痛点 / 焦虑 / 能力 / 认知 / 兴趣 / 技能 都可用；\n"
+            f"2. 如果目标痛点「{pain_point}」这个维度确实已经做遍了，就**换一个痛点维度**"
+            "（把输出里的 pain_point 改成一个明显不同的词），在新维度下出题 —— 不要硬凑同题；\n"
+            "3. 无论素材多少，都必须输出一个具体、可执行的新任务（不许空着、不许报错）。"
+        )
+    if pool_empty:
+        return (
+            f"（该用户还没有任何画像标签，也没有与【进行中】任务的主题重叠）"
+            f"请直接按目标痛点「{pain_point}」对应的任务模板给出一个具体、可执行的起步任务，"
+            "主题自选一个与痛点贴切的即可。"
+        )
+    if dropped_labels:
+        return (
+            "本次候选标签里已经剔除了上面那些**已用过的主题**。请优先从**剩下的标签**或其它维度"
+            "（痛点 / 焦虑 / 能力 / 认知 / 兴趣 / 技能）里挑一个现有任务**完全没碰过**的角度；"
+            "如果目标痛点这个维度剩下的角度确实也都做过了，就换一个痛点维度"
+            "（把输出里的 pain_point 改成一个明显不同的词），不要回到被剔除的主题上硬凑。"
+        )
+    return (
+        "（本次无强制换主题要求：候选标签与【进行中】任务没有主题重叠）"
+        "从候选标签里挑一个现有任务还没用过的角度出题。"
+    )
+
+
 DEFAULT_TEMPLATE_KEY = "迷茫"
 
 
@@ -262,6 +458,12 @@ async def generate_task(
     重试有一条不重试的短路（直接复用），为了不让用户白等一次模型调用：
     第一次的 ``result`` 就是 7.6 兜底值（``empty_task_generate``，说明这次模型调用本身失败了，
     再问一次大概率还是失败）。
+
+    **主题素材的机械剔除（本函数第 3 条约束，修的是"生成的任务主题全都一样"）**：
+    进 Prompt 的 ``profile_tags`` 不是画像全量，而是先由 :func:`_plan_theme_material`
+    把**已经出现在【进行中】任务标题里**的标签剔掉（用户现场：三条进行中任务都含"健身"
+    -> 标签「健身」这次不进 Prompt）。理由与边界见该函数上方的长注释 —— 一句话：
+    "别重复主题"必须是**服务端的输入约束**（可留痕、可验证），而不是 Prompt 里的一句请求。
     """
     pain_point = payload.pain_point or _pick_pain_point(db, user)
 
@@ -272,6 +474,10 @@ async def generate_task(
     active_tasks.sort(key=lambda t: t.created_at, reverse=True)
     finished_tasks = [t for t in tasks if t.status != ACTIVE_TASK_STATUS]
     template_hint = template_for_pain(pain_point)
+    # 主题素材：**机械剔除**已经出现在【进行中】任务标题里的画像标签（修复"主题全都一样"）。
+    # 只算一次、两次调用（首次 + 撞车重试）共用同一份 -- 否则重试那次可能拿到不同的
+    # 标签集，出现"重试时素材悄悄变宽/变窄"的静默降质。
+    theme = _plan_theme_material(db, user, active_tasks, pain_point)
 
     # 第一次生成：duplicate_feedback 明确写"（本次无）"，避免模板里那行以裸冒号结尾
     # （给模型一个残缺的指令行）；重试时才替换成真正的换方向说明。
@@ -282,6 +488,7 @@ async def generate_task(
         active_tasks=active_tasks,
         finished_tasks=finished_tasks,
         template_hint=template_hint,
+        theme=theme,
         duplicate_feedback=NO_DUPLICATE_FEEDBACK,
     )
 
@@ -308,6 +515,7 @@ async def generate_task(
                 active_tasks=active_tasks,
                 finished_tasks=finished_tasks,
                 template_hint=template_hint,
+                theme=theme,
                 duplicate_feedback=_duplicate_feedback(
                     pain_point, duplicated, result.title, [t.title for t in active_tasks]
                 ),
@@ -520,6 +728,7 @@ async def _generate_once(
     active_tasks: List[Task],
     finished_tasks: List[Task],
     template_hint: Dict[str, Any],
+    theme: ThemeMaterial,
     duplicate_feedback: str,
 ) -> TaskGenerateResult:
     """调一次 ``task_generate`` Prompt（结构化输出 + 7.6 兜底）。
@@ -528,16 +737,25 @@ async def _generate_once(
     非空且是真正的换方向说明 = 撞车后的重试 —— 只有重试那次才会把
     "撞上了哪些标题、必须换方向"塞进 Prompt。
 
+    ``theme`` 是**算好的主题素材**（画像标签已机械剔除已用主题；见
+    :class:`ThemeMaterial`）。它由调用方算一次、两次调用共用，理由见 ``generate_task``。
+
     抽成函数是为了让"第一次"和"重试"共用同一套变量拼装：两处一旦分叉，
     很容易出现"重试时忘了给模板/标签"这种静默降质的 bug。
     """
     variables: Dict[str, Any] = {
         "pain_point": pain_point,
         "stage": profile_service.get_stage(db, user.id),
-        "profile_tags": profile_service.serialize_tags(profile_service.list_tags(db, user.id)),
+        # ⚠️ 这里是**剔除后**的标签，不是画像全量：已出现在【进行中】任务标题里的主题
+        # （例如三条进行中任务都含"健身" -> 标签「健身」）根本不出现在 Prompt 里。
+        "profile_tags": theme.profile_tags,
         "active_tasks": [t.title for t in active_tasks],
         "finished_tasks": [t.title for t in finished_tasks],
         "template_hint": json.dumps(template_hint, ensure_ascii=False),
+        # 被机械剔除的主题（禁止清单，含剔除依据）+ 本次的主题方向指令
+        # （候选池被剔空时，这两段是模型唯一可依据的素材，所以永远非空）。
+        "avoid_themes": theme.avoid_themes,
+        "theme_hint": theme.theme_hint,
         # 模板里始终有这个占位符：第一次替换成空串，重试时才填入撞车说明
         "duplicate_feedback": duplicate_feedback,
     }

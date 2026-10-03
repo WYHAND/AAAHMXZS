@@ -16,9 +16,6 @@ export const ROUTES = {
   daily: '/daily',
 
   resume: '/resume',
-  resumeCreate: '/resume/create',
-  resumeEdit: '/resume/:id/edit',
-  resumeReport: '/resume/:id/report',
 
   interview: '/interview',
   interviewPrepare: '/interview/prepare',
@@ -31,8 +28,6 @@ export const ROUTES = {
 
 /** 构建带参数的路径 */
 export const toTaskDetail = (id: string | number) => `/task/${id}`
-export const toResumeEdit = (id: string | number) => `/resume/${id}/edit`
-export const toResumeReport = (id: string | number) => `/resume/${id}/report`
 export const toInterviewReview = (id: string | number) => `/interview/review/${id}`
 
 /**

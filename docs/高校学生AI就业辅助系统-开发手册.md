@@ -16,12 +16,13 @@
 2. **数据库由 PostgreSQL 改为 SQLite**（2.3 / 3.4 / 3.5 / 5.1 / 5.5 / 16.2 / 16.5）：默认 `sqlite:///./data/app.db`，PostgreSQL 路径保留为生产可选项（连接串一换即切回）。
 3. **UI 规范与主题定稿**（8.5）：浅米黄底 `#FAF7EE`（`--background: hsl(43 44% 96%)`）+ 低饱和克制蓝主色 `#4E6D92`（`--primary: hsl(213 30% 44%)`），替代原「主色蓝紫 `#6366f1` + 白灰辅色」。
 4. **奖章由 1 枚扩到 3 枚**（1.5 / 5.4 / 11.12）：`first_task` 起步行动家 / `five_steps` 坚持打卡者 / `profile_shape` 方向初现，条件必须由真实行为证据驱动。这是用户验收界面后对「砍掉奖章墙」的正式推翻。
-5. **接口契约补齐**（10.2 / 10.3）：新增 `POST /chat/conversations/{id}/opening`（AI 先开口）、`DELETE /chat/conversations/{id}`、`POST /report/save`、`GET /resume/{id}/file`、`GET /home/summary`、`POST /events`；`GET /badge` 由裸数组改为 `{total, obtained_count, items[]}` 总览；`POST /task/generate` 增加 `reused`。
+5. **接口契约补齐**（10.2 / 10.3）：新增 `POST /chat/conversations/{id}/opening`（AI 先开口）、`DELETE /chat/conversations/{id}`、`POST /report/save`、`GET /home/summary`、`POST /events`；`GET /badge` 由裸数组改为 `{total, obtained_count, items[]}` 总览；`POST /task/generate` 增加 `reused`。（另有 `GET /resume/{id}/file`、`POST /resume/upload` 等简历端点，**已于 2026-11 随老简历链路删除**，见要点 11 与 9.17。）
 6. **统一信封与错误分层定案**（6.2 / 6.5 / 6.6 / 10.1）：所有 JSON 接口统一 `{code,message,data}`（失败时 `data` 恒为 `null`）；HTTP 状态码由 `CODE_TO_HTTP_STATUS` 唯一推导，`3001` 刻意保持 200。
 7. **私有资源「不存在」与「不属于你」统一 `code 2001`**（6.6 / 6.8 / 10.4）：禁止用 `1003` 区分归属，避免错误码本身成为可枚举的 oracle。
 8. **SSE 流式对话改为 `POST` + `fetch/ReadableStream`**（7.2 / 8.4）：`EventSource` 既不能带 `Authorization` 头也不能带 body；事件仍是具名事件，每个事件的 `data` 是完整信封。
 9. **成长报告语义**（11.10）：`GET /report` 每次实时计算、不落库；`POST /report/save` 才写里程碑快照并成为下一次 `score_delta` 的基线；无基线时不得渲染「＋0」。
-10. **若干工程纪律与放宽**（7.4 / 7.7 / 8.4 / 12.2 / 13.2 / 14.5 / 16.2 / 16.4）：`POST /task/generate` 服务端按标题相似度去重；打卡区只支持点选 + ≤30 字文本，**不支持截图/上传/拍照/录屏/附件**；简历只支持 `.docx`（不支持二进制 `.doc`）；改 prompt 必须重启或带 `--reload-include '*.txt'`；compose 的 uploads 路径统一为 `./backend/uploads`，建表步骤写进启动命令。
+10. **若干工程纪律与放宽**（7.4 / 7.7 / 8.4 / 12.2 / 13.2 / 14.5 / 16.2 / 16.4）：`POST /task/generate` 服务端按标题相似度去重；打卡区只支持点选 + ≤30 字文本，**不支持截图/上传/拍照/录屏/附件**；改 prompt 必须重启或带 `--reload-include '*.txt'`；compose 的 uploads 路径统一为 `./backend/uploads`，建表步骤写进启动命令。
+11. **老简历链路整体删除**（8.1 / 10.2 / 11.8 / 13.x / 14.5）：原「上传 PDF → 解析 → ATS 评分 → 优化报告 → 下载」已整体移除，简历改为**问答式生成**——模板逐项提问 → 用户填 → 只润色不编造 → 展示/保存/打印；`resumes` 表与画像 `resume_score` 回流不变（见 9.17）。
 
 > **不在本版范围**：Electron 桌面端（第 9 章）仍是 M3 待做；对 5 条已有打卡的老任务步骤的改写已明确**不做**（保持历史打卡与新要求一致，见勘误 9.6），本手册不将它列为待办。
 
@@ -190,7 +191,7 @@
                             ▼
 ┌─────────────────────────────────────────────────────────┐
 │                      数据层                              │
-│  SQLite（默认）│  本地磁盘（简历文件）  │  APScheduler     │
+│  SQLite（默认）│  本地磁盘（uploads/，已无文件写入）  │  APScheduler     │
 │  （生产可切 PostgreSQL，连接串一换即切回）                │
 └─────────────────────────────────────────────────────────┘
                             │
@@ -245,8 +246,8 @@
 | 数据库 | SQLite（默认），PostgreSQL（生产可选） | 默认 `sqlite:///./data/app.db`，开箱即跑；生产换连接串即可切回 PG，代码不用改 |
 | 鉴权 | JWT | python-jose + passlib |
 | 定时任务 | APScheduler | 单机定时足够 |
-| 文件解析 | pdfplumber + python-docx | 简历PDF解析 + `.docx` 解析 |
-| 文件上传 | python-multipart | FastAPI文件上传 |
+| 文件解析 | 已移除 | 老简历链路（PDF / `.docx` 解析）已整体删除，新简历是问答式生成，不再解析任何文件（见 9.17） |
+| 文件上传 | 已移除 | 老链路的文件上传端点已删除，`python-multipart` 也一并从依赖清单移除（见 9.17） |
 | HTTP客户端 | httpx | 调用DeepSeek API |
 | 数据库迁移 | Alembic | 开发用 `python -m app.db.init_db` 建表；迁移脚本用 Alembic（SQLite 下开 `render_as_batch`） |
 | 部署 | Docker Compose + Nginx + Uvicorn | 默认两容器（app + nginx），PG 在 `postgres` profile 下可选 |
@@ -271,7 +272,7 @@
 | pgvector / 向量数据库 | 画像、简历、面试不需要语义检索，岗位匹配用关键词+DeepSeek |
 | LangChain / LlamaIndex | 只接DeepSeek，直接SDK更轻、更可控 |
 | 多模型路由 / LLM Gateway | 只考虑DeepSeek，封装一个客户端即可 |
-| MinIO / OSS | 简历文件存本地磁盘，数据库存路径 |
+| MinIO / OSS | 简历不再涉及文件存储：老链路的本地磁盘存文件已随链路删除，且简历体量很小（结构化 JSON 存库），更不需要对象存储 |
 | PaddleOCR / OCR | 学生简历绝大多数是电子版，扫描件概率极低 |
 | 云ASR/TTS | 面试语音用浏览器Web Speech API，后端零依赖（后期可加） |
 | Elasticsearch / MongoDB | 单库 SQLite（生产可切 PostgreSQL）足够；扩展字段用 JSON 列承载 |
@@ -295,9 +296,7 @@ python-jose[cryptography]
 passlib[bcrypt]
 bcrypt
 httpx
-pdfplumber
-python-docx
-python-multipart
+# pdfplumber / python-docx / python-multipart   # 随老简历链路（上传 PDF/.docx 解析 + 文件上传）删除，见 9.17
 apscheduler
 ```
 
@@ -551,8 +550,7 @@ backend/
 │   │   │   ├── chat_opening.txt        # AI 开场白（11.4）
 │   │   │   ├── chat_conclusion.txt     # 结论卡片（11.11）
 │   │   │   ├── profile_extract.txt
-│   │   │   ├── resume_parse.txt
-│   │   │   ├── resume_optimize.txt
+│   │   │   ├── resume_polish.txt
 │   │   │   ├── interview_question.txt
 │   │   │   ├── interview_followup.txt
 │   │   │   ├── interview_review.txt
@@ -578,7 +576,7 @@ backend/
 ├── migrations/                 # Alembic（versions/ 目前为空，首次 autogenerate 生成）
 ├── scripts/                    # 一次性运维脚本（清重复任务、修老步骤等）
 ├── data/                       # SQLite 库文件（app.db），不入版本库
-├── uploads/                    # 简历文件存储
+├── uploads/                    # 老链路的上传目录，仍保留但已无简历文件写入（见 13.x）
 ├── tests/
 ├── requirements.txt
 └── .env
@@ -605,7 +603,7 @@ frontend/
 │   │   ├── test/               # TestIntroPage / TestQuestionPage / TestResultPage
 │   │   ├── home/               # HomePage
 │   │   ├── chat/               # ChatPage
-│   │   ├── resume/             # ResumeListPage / ResumeCreatePage / ResumeEditPage / ResumeReportPage
+│   │   ├── resume/             # MyResumePage（+ ResumePreview / resumeForm / resumeShape）
 │   │   ├── interview/          # InterviewSelectPage / InterviewPreparePage / InterviewSessionPage / InterviewReviewPage
 │   │   ├── task/               # TaskListPage / TaskDetailPage
 │   │   ├── daily/              # DailyPage
@@ -622,18 +620,18 @@ frontend/
 │   │   ├── EmptyState.tsx
 │   │   ├── PageShell.tsx
 │   │   └── ErrorBoundary.tsx
-│   ├── store/                  # Zustand：auth / chat / profile / task / resume / interview
+│   ├── store/                  # Zustand：auth / chat / profile / task / interview（简历页状态在组件内，无 resumeStore）
 │   ├── api/                    # client.ts（axios + 拦截器）+ 按模块拆分的接口封装
 │   │   ├── client.ts
 │   │   ├── chat.ts
 │   │   ├── sse.ts              # fetch + ReadableStream 消费 SSE
 │   │   └── ...
 │   ├── hooks/                  # useSSE / useAuth / useStage / useResponsive
-│   ├── constants/              # routes / nav / stage / errorCode / interview / resume 等常量
+│   ├── constants/              # routes / nav / stage / errorCode / interview 等常量（`resume.ts` 已随老链路删除）
 │   ├── lib/                    # utils.ts（cn 等）
 │   ├── types/                  # 与后端 schema 对齐的类型
 │   ├── utils/                  # format / storage / list（normalizeList）/ markdown / track
-│   └── styles/                 # print.css（成长报告打印样式）
+│   └── styles/                 # print.css（成长报告与简历的打印样式）
 ├── package.json
 ├── vite.config.ts              # react + tailwindcss 插件、@ 别名、/api 代理
 ├── components.json             # shadcn/ui 配置
@@ -772,10 +770,10 @@ electron/
 |---|---|---|
 | id | UUID | 主键 |
 | user_id | UUID | 外键 |
-| title | VARCHAR(200) | 简历标题 |
-| file_path | VARCHAR(500) | 文件路径 |
-| parsed_data | JSONB / JSON | 解析后结构化数据 |
-| ats_score | FLOAT | ATS评分 |
+| title | VARCHAR(200) | 简历标题（仍在使用） |
+| file_path | VARCHAR(500) | **老链路遗留列**（表结构未改，列还在；上传链路删除后既不写也不读，值恒为空） |
+| parsed_data | JSONB / JSON | 结构化数据（仍在使用：新链路存的就是它） |
+| ats_score | FLOAT | **老链路遗留列**（表结构未改，列还在；不再有 ATS 评分，既不写也不读） |
 | completeness | FLOAT | 完整度 |
 | target_job | VARCHAR(100) | 目标岗位 |
 | created_at | TIMESTAMP | 创建时间 |
@@ -887,7 +885,7 @@ electron/
 **仍以代码常量承载、不落库的两项**（属于内部参考数据，不是用户可见数据，手册 5.2 也没有对应表）：
 
 - 成长任务模板（附录E）：`task_service.TASK_TEMPLATES`，作为 `task_generate` 的参考样例喂给模型；
-- 岗位关键词库（附录F）：`ai/schemas.py::JOB_KEYWORDS`，用于 ATS 评分。
+- 岗位关键词库（附录F）：`ai/schemas.py::JOB_KEYWORDS`，已不再用于 ATS 评分（老链路已删），现仅被 `db/init_db.py` 打日志引用。
 
 > 若要让这两项支持在线维护，需要新增 `task_templates` / `job_keywords` 两张表并把常量搬成种子数据（范围扩张，未做）。
 
@@ -1044,7 +1042,7 @@ logger.info("...")
 | Test | /api/v1/test | 测试表 |
 | Profile | /api/v1/profile | 画像 |
 | Chat | /api/v1/chat | 职业指导对话 |
-| Resume | /api/v1/resume | 简历 |
+| Resume | /api/v1/resume | 简历（模板 / 我的那一份 / 润色三条件套，见 10.2） |
 | Interview | /api/v1/interview | 面试 |
 | Task | /api/v1/task | 成长任务 |
 | DailyQuestion | /api/v1/daily | 每日一问 |
@@ -1059,7 +1057,7 @@ logger.info("...")
 > 查私有资源时，「不存在」与「不属于你」必须返回**同一个**错误码 `2001`；禁止用 `1003` 区分，否则错误码本身就是可枚举的 oracle。
 
 - 实现落点：`app/core/errors.py::not_found_unless_owner()`，所有私有资源端点都走它；
-- 适用范围：`resume`（`{id}` / `optimize` / `report` / `file`）、`task`（`{id}` / `abandon` / `steps/{id}/complete`）、`interview`（`questions` / `answer` / `finish` / `review`）、`chat`（`conversations/{id}` 下的 `messages` / `stream` / `conclusion` / `opening`，以及 `DELETE`）；
+- 适用范围：`task`（`{id}` / `abandon` / `steps/{id}/complete`）、`interview`（`questions` / `answer` / `finish` / `review`）、`chat`（`conversations/{id}` 下的 `messages` / `stream` / `conclusion` / `opening`，以及 `DELETE`）；`resume` **没有**需要归属校验的 `{id}` 端点（只有 `/resume/template`、`/resume/mine`、`/resume/polish`，老链路的 `{id}` / `optimize` / `report` / `file` 已随链路删除）；
 - 归属不符时**不记日志**（避免探测行为刷日志），排查时看 404 计数；
 - 文件类资源还要做目录穿越校验：规范化后的路径必须仍在 `UPLOAD_DIR` 内。
 
@@ -1161,8 +1159,7 @@ tag = ProfileTag.model_validate_json(content)
 | chat_opening.txt | AI 开场白（11.4） |
 | chat_conclusion.txt | 结论卡片（11.11） |
 | profile_extract.txt | 从对话中抽取画像标签 |
-| resume_parse.txt | 简历解析 |
-| resume_optimize.txt | 简历优化建议 |
+| resume_polish.txt | 简历润色（**只改写用户填过的内容，一个字的事实都不许新增**） |
 | interview_question.txt | 面试出题 |
 | interview_followup.txt | 面试追问 |
 | interview_review.txt | 面试评分与复盘 |
@@ -1223,7 +1220,7 @@ tag = ProfileTag.model_validate_json(content)
 ### 7.8 AI数据回流画像
 
 - 对话每轮结束后，调用 `profile_extract` 抽取标签。
-- 简历解析、面试复盘、任务打卡后同样抽取。
+- 简历润色、面试复盘、任务打卡后同样抽取。
 - 标签写入 `profile_tags`，更新权重。
 - 阶段判定重新计算。
 
@@ -1246,10 +1243,8 @@ tag = ProfileTag.model_validate_json(content)
 | /task/:id | 任务详情 | 同上 |
 | /profile | 个人中心（含奖章区） | 同上 |
 | /daily | 每日一问 | 同上 |
-| /resume | 简历列表 | 同上 |
-| /resume/create | 新建简历 | 同上 |
-| /resume/:id/edit | 简历编辑 | 同上 |
-| /resume/:id/report | 简历优化报告 | 同上 |
+| /resume | 问答式生成简历（单页，含填写态与展示态） | 同上 |
+> 简历原有四条路由（`/resume/list`、`/resume/create`、`/resume/:id/edit`、`/resume/:id/report`）已随老链路（上传 → 解析 → ATS 评分 → 优化报告 → 下载）一并删除，现在只有上面这一行（见 9.17）；`nav.ts`、`stage.ts` 与对话页的「生成简历」入口都指向这个 `/resume`。
 | /interview | 面试选择 | 同上 |
 | /interview/prepare | 面试准备 | 同上 |
 | /interview/review/:id | 面试复盘 | 同上 |
@@ -1271,7 +1266,7 @@ Zustand store（`src/store/`），**除 `authStore.token`（localStorage）外�
 - `authStore`：token、user、bootstrapped、loading；并在模块初始化时把 `getToken` / `onUnauthorized` 反向注入 api 层（避免 store↔api 循环依赖）
 - `chatStore`：会话列表、当前会话、消息、流式状态、追问轮次、结论卡片
 - `profileStore`：画像、标签、阶段、`tested`、`nextAction`、`version`
-- `taskStore` / `resumeStore` / `interviewStore`：各自的列表与当前对象
+- `taskStore` / `interviewStore`：各自的列表与当前对象（**没有 `resumeStore`**：简历只有 `/resume` 一个页面、一份数据，状态就放在页面组件内，`store/resumeStore.ts` 已随老链路删除）
 
 **全局失效信号只有 `profileStore.version` 一个**：任何写操作成功后调 `bumpVersion()`，依赖画像的页面 `useEffect(..., [version])` 重拉。不要为每个模块各造一套刷新信号。
 
@@ -1422,7 +1417,7 @@ new Notification({ title: '每日一问', body: '今天聊一句？' }).show();
 
 ### 9.6 本地文件读写
 
-用于简历文件、缓存。
+- `uploads/` 目录树与 Dockerfile 里的空目录**还在**（用于简历文件、缓存的这条用途已随老简历链路删除，现在目录是空的，不再有简历文件写入，见 13.1）。
 
 ### 9.7 打包
 
@@ -1449,7 +1444,7 @@ linux:
 ### 10.1 通用规范
 
 - 前缀：`/api/v1`
-- 请求：JSON（文件上传除外，用 `multipart/form-data`）
+- 请求：JSON（老链路的文件上传端点已删除，现行接口没有 `multipart/form-data`）
 - 响应：`{ code, message, data }`；成功时 `data` 为业务对象，**失败时恒为 `null`**；列表接口的 `data` 为裸数组
 - 鉴权：`Authorization: Bearer <token>`
 - 阶段字段：一律 `stage`（slug） + `stage_label`（中文），见 6.11
@@ -1501,14 +1496,12 @@ linux:
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | /resume | 简历列表 |
-| POST | /resume | 新建 |
-| GET | /resume/{id} | 详情 |
-| PUT | /resume/{id} | 更新 |
-| POST | /resume/upload | 上传解析（`.pdf` / `.docx`，≤10MB） |
-| POST | /resume/{id}/optimize | 优化建议 |
-| GET | /resume/{id}/report | 优化报告 |
-| GET | /resume/{id}/file | **鉴权下载/预览原文件**（禁止静态目录直出，见 14.5） |
+| GET | /resume/template | 简历模板：要问用户哪些字段（纯静态配置，不查库、不调 AI） |
+| GET | /resume/mine | 我的那一份简历（**没有时 `data: null`，刻意不 404**） |
+| PUT | /resume/mine | 保存我编辑的简历（不调 AI，全量覆盖 `parsed_data`） |
+| POST | /resume/polish | 润色我填的简历：**只改写用户写过的内容，不新增事实**（技能栏例外：关键词展开成能力表述，见 11.8 / 9.20） |
+
+> 原 ATS 链路的 8 条端点（`GET /resume` 列表、`POST /resume` 新建、`GET|PUT /resume/{id}`、`POST /resume/upload` 上传解析、`POST /resume/{id}/optimize`、`GET /resume/{id}/report`、`GET /resume/{id}/file` 鉴权下载）**已全部移除**（见 9.17），因此本模块现在只有固定路径、不再有 `/{resume_id}` 动态段。
 
 #### Interview
 
@@ -1702,11 +1695,13 @@ linux:
 
 ### 11.8 简历生成/优化
 
-- 上传PDF/`.docx` → 解析文本 → DeepSeek分段（**只支持 `.docx`，不支持二进制 `.doc`**，见 13.2）。
-- 引导式生成：五步表单。
-- ATS评分：关键词规则+DeepSeek。
-- 优化建议逐条展示。
-- 画像回流：完整度、项目经验、技能栈。
+- 模板提问：`GET /resume/template` 下发"简历要问的每一项"（每项一句人话问题），前端一个问题一个输入框地问用户。
+- 用户填写：前端提交前把空字段剔掉（**用户没写的字段绝不发给 AI**）。
+- 润色：`POST /resume/polish` 调 `resume_polish.txt`，**只改写用户写过的内容**（口语 → 简历口吻 / 按 STAR 重组），一个字的事实都不许新增；**唯一的例外是技能栏** —— 用户在那里写的通常只是关键词，要展开成简历上的能力表述（「Java」→「熟悉 Java 基础语法、面向对象编程、集合框架与异常处理。能使用 Java 独立完成控制台程序开发。」），但**不许加用户没写过的其它技术名、不许加任何数字、不许写"精通/资深"**（这条边界与它的机械缺口见 9.20）；服务端另做机械校验（数字必须是用户原文数字的子集、用户没填的字段不许被填、技能条目**一一对应且每条必须留着原技术名**），命中就把那个字段回退成用户原文。
+- 技能的填写方式：**一项一行**（模板下发 `lines: true`，前端渲染成多行输入框）。因为展开后的一句话自带顿号逗号，用顿号分隔的单行输入框会把一句话切成好几项假技能；展示态也只对短词条用「、」拼接，展开成句子的技能一条一行。
+- 展示 / 保存 / 打印：点「润色」立刻先按用户原文排出一份完整简历（顶上提示"正在润色"），AI 回来后原地换成润色版；可编辑、可 `PUT /resume/mine` 保存、可打印导出。
+- 画像回流：完整度（`calculate_completeness`，权重 25/10/20/10/20/10/5 合计 100）、项目经验、技能栈。
+- 老链路的「上传 PDF → 解析 → ATS 评分 → 优化报告 → 下载」已**整体删除**，本节的标题与编号沿用，内容以上面这几条为准（见 9.17）。
 
 ### 11.9 模拟面试
 
@@ -1818,7 +1813,7 @@ scheduler.start()
 | 每日一问生成 | 每天0点 | 生成次日题目 |
 | 任务提醒 | 每天10点 | 检查未打卡任务（只返回列表，通知通道属 M3） |
 | 奖章结算 | 每小时 | 遍历全部用户 × 全部奖章条件，追认新达成的奖章（兜底，见 11.12） |
-| 数据清理 | 每周 | 清理过期临时文件（`cleanup_job.py`） |
+| 数据清理 | 每周 | 清理 `uploads/` 下过期临时文件（只认 `tmp`/`temp`/`.cache` 目录与 `.tmp`/`.part`/`.crdownload` 后缀，保留 7 天；`cleanup_job.py`） |
 
 ### 12.3 不做
 
@@ -1831,35 +1826,23 @@ scheduler.start()
 
 ### 13.1 本地磁盘存储
 
-- 目录：`uploads/resumes/{user_id}/`
-- 文件名：`{uuid}.pdf` 或 `.docx`
-- 数据库存路径。
+- **本章讲的是老简历链路（上传 PDF → 解析 → ATS 评分 → 报告 → 下载）的文件能力，该功能已整体移除**（见 9.17）；现行的简历是问答式生成（见 11.8），**不涉及任何文件上传、解析或落盘**。
+- 仍然成立的部分：`uploads/` 目录树与 Dockerfile 里的空目录**还在**，`UPLOAD_DIR` 与 compose 的 `./backend/uploads` 卷也照旧（一致性约定仍要遵守），只是老链路删掉后**不再有任何简历文件写进去**（现存目录是空的）。
+- `app/utils/file.py` 现在只剩 `get_upload_root()`（`tasks/cleanup_job.py` 在用）与 `resolve_stored_path` / `delete_file`；上传校验、PDF / `.docx` 解析、鉴权下载全部已删。
 
 ### 13.2 上传限制
 
-- 支持 **PDF 与 `.docx`**；**不支持二进制 `.doc`**（`python-docx` 打不开旧格式，错误提示里要说明「请另存为 .docx 再上传」）。
-- 扩展名白名单校验；最大 10MB。
-- 落盘文件名用 `{uuid}.{ext}`，**不用原始文件名**。
+- 老链路的限制（支持 **PDF 与 `.docx`**、不支持二进制 `.doc`、白名单 + 10MB 上限、落盘用 `{uuid}.{ext}`）**随功能一并移除**，现在没有任何上传入口，这些校验也就不存在了。
+- 之所以不需要：简历改成用户一个字段一个字段填，走的是 JSON 接口，不经过文件。
 
 ### 13.3 解析
 
-```python
-import pdfplumber
-from docx import Document
-
-def parse_pdf(path):
-    with pdfplumber.open(path) as pdf:
-        return "\n".join(page.extract_text() for page in pdf.pages)
-
-def parse_docx(path):
-    doc = Document(path)   # 仅支持 .docx
-    return "\n".join(p.text for p in doc.paragraphs)
-```
+**该实现已移除**：原来的 `parse_pdf`（pdfplumber）/ `parse_docx`（`from docx import Document`）两个函数已随老链路删除，`pdfplumber` / `python-docx` 也不再是运行依赖（见 2.3 / 2.6）。简历数据现在由前端表单直接产出结构化 JSON（`parsed_data`），没有任何文本抽取步骤，因此本节不再保留示例代码。
 
 ### 13.4 解析失败
 
-- 提示用户切换引导式生成。
-- 保留已识别信息。
+- **该失败分支已随解析功能一并移除**：没有上传与解析，就没有"解析失败"这条路径。
+- 仍然成立的教训保留在这里：**用户输入永远可能不合格式**，所以新链路的兜底做在服务端——润色失败/坏 JSON 一律退回用户原文，画像 `completeness` 按实际填写比例算，**永远不 500**。
 
 ---
 
@@ -1886,7 +1869,7 @@ def parse_docx(path):
 ### 14.5 权限
 
 - 用户只能访问自己的数据：所有按 id 取私有资源的地方一律走 `not_found_unless_owner()`，「不存在」与「不属于你」返回同一个 `2001`（见 6.10）。
-- **上传目录禁止挂成无鉴权静态目录**：曾把 `uploads/` 挂成 `StaticFiles`，于是未登录的人只要知道路径就能下载别人的简历（简历含姓名、手机号、学校、经历，属 PII）。现在简历文件只能经 `GET /api/v1/resume/{id}/file`（带鉴权）读取，Nginx 也不暴露 `/uploads`。
+- **上传目录禁止挂成无鉴权静态目录**：曾把 `uploads/` 挂成 `StaticFiles`，于是未登录的人只要知道路径就能下载别人的简历（简历含姓名、手机号、学校、经历，属 PII）。老链路的鉴权下载端点 `GET /api/v1/resume/{id}/file` 已随链路删除，Nginx 也不暴露 `/uploads`；**以后再引入文件类功能，仍然禁止把上传目录挂成静态目录**。
 - 文件类端点要做**目录穿越校验**：规范化后的路径必须仍在 `UPLOAD_DIR` 内。
 
 ### 14.6 日志脱敏
@@ -2010,7 +1993,7 @@ volumes:
 
 1. **数据库默认 SQLite**，`db` 服务放在 `postgres` profile 下，默认不启动（因此 app 也不 `depends_on: db`）；
 2. **建表/迁移写进启动命令**（`python -m app.db.init_db`，切回 PG 时改成 `alembic upgrade head`），另留一次性 `migrate` 服务；
-3. **uploads 卷统一为 `./backend/uploads`**，与 13.1 的 `UPLOAD_DIR` 一致（原手册 16.2 写 `./uploads`，两处路径不一致）；
+3. **uploads 卷统一为 `./backend/uploads`**，与 13.1 的 `UPLOAD_DIR` 一致（原手册 16.2 写 `./uploads`，两处路径不一致）；卷本身保留，但老链路删除后**不再有简历文件写进去**（见 13.1）；
 4. 补了 db 健康检查、app healthcheck（打 `/api/v1/health`）与重启策略。
 
 ### 16.3 Nginx
@@ -2025,7 +2008,7 @@ docker-compose up -d
 
 ### 16.5 备份
 
-- **SQLite（默认）**：定期复制库文件（连同 `-wal` / `-shm` 一起，或先 `VACUUM INTO` 导出一份一致性快照），与 `uploads/` 一起备份。
+- **SQLite（默认）**：定期复制库文件（连同 `-wal` / `-shm` 一起，或先 `VACUUM INTO` 导出一份一致性快照），与 `uploads/` 一起备份（该目录目前是空的，保留它只是延续同样的备份口径）。
 - **PostgreSQL（若已切回）**：`pg_dump` 定期备份。
 
 ### 16.6 日志

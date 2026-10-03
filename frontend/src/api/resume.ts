@@ -1,63 +1,54 @@
 /**
  * 简历接口 —— 路径对齐后端 app/api/v1/resume.py（prefix="/resume"，**单数**）
  *
- *   GET  /resume                列表（裸数组）
- *   POST /resume                新建（ResumeCreate）
- *   POST /resume/upload         上传解析（multipart: file + title? + target_job?）
- *   GET  /resume/{id}           详情
- *   PUT  /resume/{id}           更新（ResumeUpdate）
- *   POST /resume/{id}/optimize  优化建议（**需要 body**，字段都可选）
- *   GET  /resume/{id}/report    最近一次优化报告
+ *   GET  /resume/template       简历模板（每个字段带 question / example / required）
+ *   POST /resume/polish         润色（只改用户写过的内容，不替他编）
+ *   GET  /resume/mine           我的那一份（没有时 data = null，**不是报错**）
+ *   PUT  /resume/mine           保存我的那一份
  *
- * ⚠️ 后端没有 DELETE /resume/{id}，也没有 /resume/{id}/file。
- * 上传后的文件走 main.py 挂载的静态目录 `/uploads/{file_path}`（无鉴权）。
+ * 旧的列表式接口（GET /resume 列表、POST /resume 新建、POST /resume/upload 上传解析、
+ * GET|PUT /resume/{id} 详情与更新、POST /resume/{id}/optimize 与 GET /resume/{id}/report
+ * 优化报告、GET /resume/{id}/file 下载）已随老 ATS 链路整体删除（2026-11，与后端同批）。
  */
 
-import { client, get, post, put } from '@/api/client'
+import { client, get, put } from '@/api/client'
 import type {
-  ListPayload,
-  Resume,
-  ResumeCreatePayload,
-  ResumeOptimizePayload,
-  ResumeReport,
-  ResumeUpdatePayload,
+  ApiEnvelope,
+  ResumeMineUpdatePayload,
+  ResumePolishPayload,
+  ResumeResponse,
+  ResumeTemplateData,
 } from '@/types'
 
 export const resumeApi = {
-  /** 列表返回裸数组，调用方用 normalizeList 收口（Fix B） */
-  list: () => get<ListPayload<Resume>>('/resume'),
+  /* ------------------- 我的简历（单份：模板 / 润色 / 读取 / 保存） ------------------- */
 
-  detail: (id: string) => get<Resume>(`/resume/${id}`),
-
-  create: (payload: ResumeCreatePayload) => post<Resume>('/resume', payload),
-
-  save: (id: string, payload: ResumeUpdatePayload) => put<Resume>(`/resume/${id}`, payload),
-
-  /** 上传简历文件（react-dropzone 提供 File）；后端 multipart 字段名是 file */
-  upload: (file: File, meta?: { title?: string; target_job?: string }) => {
-    const form = new FormData()
-    form.append('file', file)
-    if (meta?.title) form.append('title', meta.title)
-    if (meta?.target_job) form.append('target_job', meta.target_job)
-    return post<Resume>('/resume/upload', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      // 解析要调 AI，给足超时
-      timeout: 120000,
-    })
-  },
-
-  /** 生成优化报告；后端 body 必填（字段可选），所以至少发 {} */
-  optimize: async (id: string, payload?: ResumeOptimizePayload): Promise<ResumeReport> =>
-    (await post<ResumeReport>(`/resume/${id}/optimize`, payload ?? {})) as ResumeReport,
-
-  report: (id: string) => get<ResumeReport>(`/resume/${id}/report`),
+  /** 模板：界面上「问什么、怎么问」的唯一出处，前端不另写一份问题文案 */
+  template: () => get<ResumeTemplateData>('/resume/template'),
 
   /**
-   * 带鉴权的简历文件下载（后端返回 FileResponse，不是信封）：
-   * 后端**后补**了这个端点，因为 file_path 里带 user_id、路径可枚举，
-   * 而简历含 PII，不能直接静态暴露 —— 必须走这个带鉴权的接口拿 blob。
-   * 不能用 <a href> 直链。
+   * 润色：只改写用户写过的内容。
+   *
+   * ⚠️ 这里刻意**不走 post<T>()**：润色必须把信封里的 `message` 原样带出来
+   * （它是一句人话，例如「已润色；还有 3 项你没填，先空着（教育背景的时间…）」），
+   * 而 post<T>() 只解出 data，message 会被丢掉。失败路径完全一致：
+   * 非 0 code 由同一个响应拦截器 reject。
    */
-  downloadFile: async (id: string): Promise<Blob> =>
-    (await client.get(`/resume/${id}/file`, { responseType: 'blob' })) as unknown as Blob,
+  polish: async (payload: ResumePolishPayload): Promise<ApiEnvelope<ResumeResponse>> =>
+    (await client.post('/resume/polish', payload, {
+      // 润色要调 AI，给足超时
+      timeout: 120000,
+    })) as unknown as ApiEnvelope<ResumeResponse>,
+
+  /**
+   * 我的简历。后端**没有简历时返回 data = null**（HTTP 200 + code 0），
+   * 所以 null 与「请求失败」是两件事：
+   * - null → 正常，落到空态（还没开始填）；
+   * - 抛错（ApiError）→ 真正的失败，页面给失败态 + 重试。
+   * 调用方必须区分，不能把 null 当失败。
+   */
+  mine: () => get<ResumeResponse | null>('/resume/mine'),
+
+  saveMine: (payload: ResumeMineUpdatePayload) =>
+    put<ResumeResponse>('/resume/mine', payload),
 }

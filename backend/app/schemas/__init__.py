@@ -73,14 +73,7 @@ from app.schemas.report import (
     ReportScoreDelta,
     USER_NOTE_MAX_LENGTH,
 )
-from app.schemas.resume import (
-    ResumeCreate,
-    ResumeOptimizeRequest,
-    ResumeOptimizeResponse,
-    ResumeParseRequest,
-    ResumeResponse,
-    ResumeUpdate,
-)
+from app.schemas.resume import ResumeResponse
 from app.schemas.task import (
     TaskDeleteResponse,
     TaskDetailResponse,
@@ -124,13 +117,8 @@ __all__ = [
     "ChatConclusionCard",
     "SSEEvent",
     "SSEEventType",
-    # resume
-    "ResumeCreate",
-    "ResumeUpdate",
+    # resume（现行：模板 / mine / polish；老的 ResumeCreate/Update/Parse/Optimize 已随 ATS 链路移除）
     "ResumeResponse",
-    "ResumeParseRequest",
-    "ResumeOptimizeRequest",
-    "ResumeOptimizeResponse",
     # interview
     "InterviewStartRequest",
     "InterviewAnswerRequest",

@@ -85,13 +85,6 @@ const resumeDetail = {
   created_at: '2026-09-12T15:30:00+08:00', updated_at: NOW,
 }
 
-const resumeReport = {
-  resume_id: RESUME_ID, ats_score: 76, completeness: 0.82,
-  matched_keywords: ['ArkTS', 'TypeScript'], missing_keywords: ['分布式软总线'],
-  suggestions: [{ section: 'projects', problem: '项目描述没写结果。', suggestion: '补一条量化结果。', example: '首屏 480ms → 210ms。' }],
-  summary: '整体结构完整，主要短板是缺少可量化成果。', generated_at: NOW,
-}
-
 /** N2 用的题目：首屏只给 1 道（贴近后端「答一题给下一题」的增量行为） */
 const IV_FIRST_QUESTION = { id: 'q-1', interview_id: SESSION_ID, question_order: 1, content: '先花一分钟介绍一下你自己，重点讲鸿蒙客户端开发相关的部分。', answer: null, followups: [], score: null, created_at: NOW, answered_at: null, kind: 'main', current_followup: null, followup_round: 0 }
 const ivQuestionsResponse = {
@@ -236,14 +229,8 @@ async function installApi(page, opts = {}) {
     if (method === 'GET' && p === '/daily/today') return J({ question: { id: 'dq1', dimension: '焦虑', content: '最近一次投递没回音，你觉得卡在哪个环节？', options: null, created_at: NOW }, answered: false, answer: null, streak: 4 })
     if (method === 'POST' && p === '/daily/answer') return J({ id: 'da1', user_id: user.id, question_id: 'dq1', answer: '大概是简历里的项目描述太虚了。', answered_at: NOW, profile_refreshed: true, extracted_tags: [] })
 
-    if (method === 'GET' && p === '/resume') return J([resumeDetail])
-    if (method === 'POST' && p === '/resume') return J(resumeDetail)
-    if (method === 'POST' && p === '/resume/upload') return J(resumeDetail)
-    if (method === 'GET' && /^\/resume\/[^/]+\/report$/.test(p)) return J(resumeReport)
-    if (method === 'POST' && /^\/resume\/[^/]+\/optimize$/.test(p)) return J(resumeReport)
-    if (method === 'GET' && /^\/resume\/[^/]+\/file$/.test(p)) {
-      return route.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==', 'base64') })
-    }
+    // 新链路只用 GET /resume/template、GET|PUT /resume/mine、POST /resume/polish（无 stub）。
+    // 这三条 GET/PUT 端点都落在下面这条通配的上，所以它不能跟着老端点一起删。
     if (method === 'GET' && /^\/resume\/[^/]+$/.test(p)) return J(resumeDetail)
     if (method === 'PUT' && /^\/resume\/[^/]+$/.test(p)) return J(resumeDetail)
 
@@ -336,17 +323,14 @@ const ROUTES = [
   { n: 9, path: `/task/${TASK_ID}`, name: 'task-detail', expect: `/task/${TASK_ID}` },
   { n: 10, path: '/profile', name: 'profile', expect: '/profile' },
   { n: 11, path: '/daily', name: 'daily', expect: '/daily' },
-  { n: 12, path: '/resume', name: 'resume-list', expect: '/resume' },
-  { n: 13, path: '/resume/create', name: 'resume-create', expect: '/resume/create' },
-  { n: 14, path: `/resume/${RESUME_ID}/edit`, name: 'resume-edit', expect: `/resume/${RESUME_ID}/edit` },
-  { n: 15, path: `/resume/${RESUME_ID}/report`, name: 'resume-report', expect: `/resume/${RESUME_ID}/report` },
-  { n: 16, path: '/interview', name: 'interview-select', expect: '/interview' },
-  { n: 17, path: '/interview/prepare', name: 'interview-prepare', expect: '/interview/prepare' },
-  { n: 18, path: '/interview/session', name: 'interview-session', expect: '/interview/session', session: true },
-  { n: 19, path: `/interview/review/${SESSION_ID}`, name: 'interview-review', expect: `/interview/review/${SESSION_ID}` },
-  { n: 20, path: '/report', name: 'growth-report', expect: '/report' },
-  { n: 21, path: '/404', name: '404', expect: '/404' },
-  { n: 22, path: '/this-route-does-not-exist', name: 'wildcard-404', expect: '/this-route-does-not-exist' },
+  { n: 12, path: '/resume', name: 'resume', expect: '/resume' },
+  { n: 13, path: '/interview', name: 'interview-select', expect: '/interview' },
+  { n: 14, path: '/interview/prepare', name: 'interview-prepare', expect: '/interview/prepare' },
+  { n: 15, path: '/interview/session', name: 'interview-session', expect: '/interview/session', session: true },
+  { n: 16, path: `/interview/review/${SESSION_ID}`, name: 'interview-review', expect: `/interview/review/${SESSION_ID}` },
+  { n: 17, path: '/report', name: 'growth-report', expect: '/report' },
+  { n: 18, path: '/404', name: '404', expect: '/404' },
+  { n: 19, path: '/this-route-does-not-exist', name: 'wildcard-404', expect: '/this-route-does-not-exist' },
 ]
 
 /* ------------------------------------------------------------------- run */
@@ -358,7 +342,7 @@ async function main() {
   const browser = await chromium.launch({ executablePath: EDGE, headless: true, args: ['--no-first-run', '--no-default-browser-check', '--disable-extensions'] })
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'zh-CN' })
 
-  /* ===================== ① 全量回归 22 条路由 ===================== */
+  /* ===================== ① 全量回归 19 条路由 ===================== */
   for (const r of ROUTES) {
     const page = await context.newPage()
     const store = { pageErrors: [], consoleErrors: [], frameNavigations: [] }

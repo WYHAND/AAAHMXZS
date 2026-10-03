@@ -36,7 +36,7 @@ React 19 + TypeScript 6 + Vite 8 + Zustand + **shadcn/ui（Radix + Tailwind CSS 
 
 > **与手册的偏差（需同步修订手册 2.1、8.5）**：手册原定 Ant Design。改成 shadcn/ui 的理由：① 产品是"陪伴型"而不是中后台，AntD 的企业级观感偏重；② shadcn 是源码级组件，配色/圆角/密度完全可控，才可能落实 6.1 的用色纪律；③ 组件即源码，没有主题黑盒和版本升级风险。
 >
-> **代价**：AntD 现成的 `Form` 校验、`Table` 排序分页、`Upload`、`Steps`、`message` 要自己拼（Form → react-hook-form + zod；Upload → 原生 input + react-dropzone；Steps → 自建）。6.5 已逐项给出替代方案。
+> **代价**：AntD 现成的 `Form` 校验、`Table` 排序分页、`Upload`、`Steps`、`message` 要自己拼（Form → react-hook-form + zod；Upload → 老简历链路删除后**已无上传场景**；Steps → 自建）。6.5 已逐项给出替代方案。
 >
 > **收益**：样式系统只剩 Tailwind 一套，不再有"组件库 token 与 Tailwind 打架"；按需 add 组件，产物体积更小。
 
@@ -50,7 +50,7 @@ React 19 + TypeScript 6 + Vite 8 + Zustand + **shadcn/ui（Radix + Tailwind CSS 
 | `@radix-ui/react-*` | shadcn 组件底座，按 add 的组件逐个引入 |
 | `react-hook-form` `zod` `@hookform/resolvers` | 表单与校验 |
 | `sonner` | 轻提示 Toast |
-| `react-dropzone` | 简历上传拖拽 |
+| `react-dropzone` | **已无用**：老简历链路（上传拖拽）已整体删除，现行简历是问答式生成；依赖还在 `package.json` 里，但代码里没有任何引用 |
 | 图表库 | 待定，见第 11 章问题 3 |
 
 > 通过 `shadcn` CLI 逐步 `add`，不一次性装全套。
@@ -81,10 +81,8 @@ React 19 + TypeScript 6 + Vite 8 + Zustand + **shadcn/ui（Radix + Tailwind CSS 
 | /task/:id | 任务详情 | 登录 | 同上 | M1 |
 | /profile | 个人中心 / 画像 | 登录 | 同上 | M1 |
 | /daily | 每日一问 | 登录 | 同上 | M1 |
-| /resume | 简历列表 | 登录 | 同上 | M2 |
-| /resume/create | 引导式新建（五步） | 登录 | 同上 | M2 |
-| /resume/:id/edit | 简历编辑 | 登录 | 同上 | M2 |
-| /resume/:id/report | 优化报告 | 登录 | 同上 | M2 |
+| /resume | 我的简历（问答式生成，填写态 ↔ 展示态） | 登录 | 同上 | M2 |
+> 简历原有四条路由（`/resume/list` 列表、`/resume/create` 引导式新建、`/resume/:id/edit` 编辑、`/resume/:id/report` 优化报告）已随老链路（上传 → 解析 → ATS 评分 → 报告 → 下载）一并删除，现在只有上面这一行（见《勘误与决策记录》9.17）。
 | /interview | 面试选择 | 登录 | 同上 | M2 |
 | /interview/prepare | 面试准备（设备/场景） | 登录 | 同上 | M2 |
 | /interview/session | 面试进行（一题一屏） | 登录 | 有 interviewId | M2 |
@@ -146,7 +144,7 @@ React 19 + TypeScript 6 + Vite 8 + Zustand + **shadcn/ui（Radix + Tailwind CSS 
 | 任务列表 / 详情 / 打卡 | P0 | M1 | 2 人日 |
 | 个人中心 / 画像 | P1 | M1 | 1 人日 |
 | 每日一问 | P1 | M1 | 1 人日 |
-| 简历列表 / 新建 / 编辑 / 报告 | P0 | M2 | 4 人日 |
+| 我的简历（问答式生成） | P0 | M2 | 2 人日 |
 | 面试选择 / 准备 / 进行 / 复盘 | P0 | M2 | 4 人日 |
 | 成长报告 | P1 | M3 | 1.5 人日 |
 | Layout / 路由 / 主题 / API 层 | — | M1 | 2 人日 |
@@ -258,22 +256,40 @@ M1 前端合计约 **12 人日**（含框架搭建），与后端 M1 基本并�
 
 ```text
 ┌──────────────────────────────────────────────────────┐
-│ 简历：产品经理-2026秋招        目标岗位：产品经理      │
+│ 这份简历上次保存于 3 天前。   [ 编辑 ] [ 打印 / 导出 ] │
 ├──────────────────────────────────────────────────────┤
-│   ◯ 72  综合分     完整度 80 │ 关键词匹配 55 │ 表达 70 │
-├──────────────────────────────────────────────────────┤
-│ 待改进（按严重度排序）                                │
-│  ① 缺少"量化结果"                          高        │
-│     问题：项目描述只写了做什么，没写做成什么样         │
-│     建议：把"负责用户调研"改成"独立完成 32 份问卷…"    │
-│     [采纳建议] [忽略]                                 │
-│  ② 技能栏与目标岗位错配                    中         │
-├──────────────────────────────────────────────────────┤
-│ [导出 PDF]  [浏览器打印]  [重新优化]                   │
+│                                                      │
+│   我的简历                                            │
+│   大三 · 计算机科学与技术 · 某某大学                  │
+│   138****0000                                        │
+│                                                      │
+│   求职意向                                            │
+│   ──────────────────────────────────────────────     │
+│   产品经理  ·  期望城市：上海                          │
+│                                                      │
+│   教育背景                                            │
+│   ──────────────────────────────────────────────     │
+│   某某大学 · 计算机科学与技术        2023.09 - 2027.06 │
+│                                                      │
+│   技能                                                │
+│   ──────────────────────────────────────────────     │
+│   Python、SQL、Figma                                  │
+│                                                      │
+│   项目经历                                            │
+│   ──────────────────────────────────────────────     │
+│   校园二手交易小程序 · 前端        2025.03 - 2025.06   │
+│     情境：同学之间转卖闲置只能靠群消息，很乱。         │
+│     行动：用 Vue 写了发布与检索两个页面。             │
+│                                                      │
+│   自我评价                                            │
+│   ──────────────────────────────────────────────     │
+│   自我评价还没写，先空着。                            │
 └──────────────────────────────────────────────────────┘
 ```
 
-**空状态统一规范**：不允许出现纯"暂无数据"。每个列表空态 = 一句人话 + 一个可点按钮（例：「还没有简历，我带你 5 步生成一份 →」）。
+单栏、白底卡片：抬头（姓名 + 年级/专业/学校 + 联系方式）→ 求职意向 → 教育背景 → 技能 → 项目经历 → 校园与实践经历 → 自我评价，每节标题下一条细线；经历里的四段用中文小标题**情境 / 任务 / 行动 / 结果**（绝不出现英文字段名）。**空的字段不显示**，整节都空时折叠成一行「这一节还没填，先空着。」。整页只有两个动作：**编辑**（回到填写态）与**打印 / 导出**（`window.print()` + `styles/print.css`），顶栏同时显示上次保存时间。
+
+**空状态统一规范**：不允许出现纯"暂无数据"。每个列表空态 = 一句人话 + 一个可点按钮（例：「还没有简历，我把要问的一项一项问出来 →」）。
 
 ---
 
@@ -281,7 +297,7 @@ M1 前端合计约 **12 人日**（含框架搭建），与后端 M1 基本并�
 
 ### 4.1 store 划分
 
-手册 8.2 只列了 4 个 store，实际按模块拆到 6 个（新增 resume/interview），并统一约定命名。
+手册 8.2 只列了 4 个 store，实际按模块拆到 5 个（新增 interview），并统一约定命名。
 
 | store | 关键 state | 关键 actions | 持久化 |
 |---|---|---|---|
@@ -289,8 +305,9 @@ M1 前端合计约 **12 人日**（含框架搭建），与后端 M1 基本并�
 | `profileStore` | `profile`、`tags[]`、`stage`、`version` | `fetchProfile`、`bumpVersion` | 不持久化 |
 | `chatStore` | `conversations[]`、`activeId`、`messages[]`、`streamState`、`followupRound` | `send`、`stop`、`loadMessages` | 不持久化 |
 | `taskStore` | `tasks[]`、`activeTask`、`steps` | `fetchTasks`、`completeStep`、`abandon` | 不持久化 |
-| `resumeStore` | `list[]`、`active`、`report` | `upload`、`optimize`、`save` | 不持久化 |
 | `interviewStore` | `session`、`questions[]`、`answers[]`、`review` | `start`、`answer`、`finish` | 不持久化 |
+
+> **没有 `resumeStore`**：简历只有 `/resume` 一个页面、一份数据，状态就放在页面组件内（`store/resumeStore.ts` 已随老链路删除，见《勘误与决策记录》9.17）。
 
 ### 4.2 跨模块刷新：版本号失效策略
 
@@ -300,7 +317,7 @@ M1 前端合计约 **12 人日**（含框架搭建），与后端 M1 基本并�
 // profileStore
 bumpVersion() { set(s => ({ version: s.version + 1 })) }
 
-// 任何写操作成功后（打卡/对话结束/简历解析/面试结束）
+// 任何写操作成功后（打卡/对话结束/保存简历/面试结束）
 profileStore.bumpVersion();
 
 // 首页/画像页 useEffect(() => { fetchProfile() }, [version])
@@ -449,8 +466,8 @@ while (true) {
 | `GET /home/summary` 聚合（今日一问、AI发现、进行中任务、画像速览） | 首页一次请求渲染，避免 4 个串行请求 |
 | 对话流式事件含 `followup_round`、`conclusion_ready` | 追问进度环、结论卡片触发 |
 | `GET /daily/today` 含 `answered: boolean` | 每日一问的已答/未答态 |
-| 简历文件下载接口带鉴权（`/resume/:id/file`） | 本地磁盘文件不能直接静态暴露 |
-| 列表接口统一 `page/page_size/total` | 任务/对话/简历列表分页 |
+| 简历不再有文件下载接口 | 老链路的 `/resume/:id/file` 已随链路删除；现行简历是问答式生成，数据存结构化 JSON，不落磁盘文件 |
+| 列表接口统一 `page/page_size/total` | 任务/对话列表分页（**简历已无列表接口**：只有一份，`GET /resume/mine` 返回单对象） |
 | `POST /events` 埋点上报（跳题、放弃任务、忽略建议） | 无感采集信号，前端只上报事件名 |
 
 ---
@@ -569,11 +586,11 @@ while (true) {
 | 消息气泡 | 自建 `ChatBubble` | 基于 `Card`；AI 侧浅底、用户侧 `bg-secondary`，两端都不使用主色实心 |
 | 阶段徽章 / 标签 | `Badge` | 自建 `StageBadge`、`TagChip`，颜色取 `--stage-*`，`variant="outline"` |
 | 输入 / 发送框 | `Input` `Textarea` | 对话输入用 `Textarea` + `autosize`；回车发送需处理输入法组合态 |
-| 表单校验 | `Form` + react-hook-form + zod | 测试表、简历五步表单、打卡反馈 |
+| 表单校验 | `Form` + react-hook-form + zod | 测试表、简历问答表单、打卡反馈 |
 | 弹窗（打卡、结论卡、二次确认） | `Dialog` `AlertDialog` | 放弃任务用 `AlertDialog`（危险操作走 `destructive`） |
-| 抽屉（移动端筛选、简历预览） | `Sheet` | 移动端复用桌面弹窗内容 |
+| 抽屉 | `Sheet` | 组件源码已在 `components/ui/` 里，但**当前没有页面用到**（移动端筛选与简历预览都没做，简历页的展示态是页面内直接渲染，不是抽屉） |
 | 任务步骤条 | `Progress` + 自建 `StepList` | shadcn 无 Steps，三态自行实现 |
-| 列表 / 简历表格 | `Table` | 简单列表即可，不上 `@tanstack/react-table` |
+| 列表 | `Table` | 简单列表即可，不上 `@tanstack/react-table`（**简历没有表格视图**：展示态是一份简历，填写态是表单） |
 | 空态 | 自建 `EmptyState` | 强制 `title + action` 两个 props，杜绝"暂无数据" |
 | 骨架 / 等待 | `Skeleton` | 自建 `AIThinking`：骨架 + 阶段文案（"正在读你的经历…"），不用转圈 |
 | 轻提示 | `Sonner` (`sonner`) | 4s 自动消失，AI 失败类带"重试"action |
@@ -651,7 +668,7 @@ frontend/
 | 里程碑 | 前端交付物 |
 |---|---|
 | M1 | Layout + 路由守卫 + 主题 + API 层；登录注册、测试三页、首页、对话（流式+结论卡）、任务列表/详情、个人中心、每日一问 |
-| M2 | 简历四页（列表/新建/编辑/报告）、面试四页（选择/准备/进行/复盘） |
+| M2 | 我的简历单页（问答式生成：填写态 ↔ 展示态）、面试四页（选择/准备/进行/复盘） |
 | M3 | 成长报告、Electron 包壳（托盘/通知/每日一问弹窗）、打印样式、响应式细节打磨 |
 
 ---

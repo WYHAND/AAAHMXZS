@@ -358,20 +358,30 @@ async def _build_review(
     ]
     tags = profile_service.serialize_tags(profile_service.list_tags(db, user.id))
 
-    result: InterviewReviewResult = await deepseek_client.chat_prompt_json(
-        prompt_name="interview_review",
-        variables={
-            "mode": interview.mode,
-            "scene": interview.scene,
-            "target_job": "未指定",
-            "qa_json": json.dumps(qa_payload, ensure_ascii=False),
-            "profile_tags": tags,
-        },
-        schema=InterviewReviewResult,
-        default=empty_interview_review(),
-        temperature=STRUCTURED_TEMPERATURE,
-        max_tokens=3000,
-    )
+    result: InterviewReviewResult
+    try:
+        result = await deepseek_client.chat_prompt_json(
+            prompt_name="interview_review",
+            variables={
+                "mode": interview.mode,
+                "scene": interview.scene,
+                "target_job": "未指定",
+                "qa_json": json.dumps(qa_payload, ensure_ascii=False),
+                "profile_tags": tags,
+            },
+            schema=InterviewReviewResult,
+            default=empty_interview_review(),
+            temperature=STRUCTURED_TEMPERATURE,
+            max_tokens=3000,
+        )
+    except Exception as exc:  # noqa: BLE001 - 7.6：AI 挂了也必须有一份复盘可看
+        logger.warning(
+            "面试复盘生成失败，退回最小复盘（规则版）user_id=%s interview=%s err=%s",
+            user.id,
+            interview.id,
+            sanitize(exc),
+        )
+        return _fallback_review(interview, questions)
 
     return {
         "overall_score": result.overall_score,
@@ -384,6 +394,87 @@ async def _build_review(
         "tags": [t.model_dump() for t in result.tags],
         "generated_at": utcnow().isoformat(),
     }
+
+
+# 前端「跳过这题」写进来的占位文本（见 InterviewSessionPage.submit）
+SKIP_ANSWER = "（跳过这题）"
+
+
+def _fallback_review(interview: Interview, questions: List[InterviewQuestion]) -> Dict[str, Any]:
+    """AI 点评没生成出来时的**最小复盘**：只做机械判得出来的事，不编一句话。
+
+    为什么必须有它：``POST /interview/{id}/finish`` 是这场面试的**收尾动作** ——
+    它一失败，用户就没有任何复盘可看（复盘页只会一直显示"还没生成"，那个「重新加载」
+    永远点不出来）。所以退化成规则版：**哪几题答了、哪几题跳过了、回答是不是太短**，
+    据此给出可执行的建议；**不评分、不编优点**（``overall_score`` 留 0、
+    ``question_reviews`` 不带 score 字段，前端对空维度显示"本次没有 AI 评分"）。
+
+    2026-10 的真实事故见勘误 9.21：``chat_prompt_json`` 的签名漏了 ``max_tokens``，
+    这里传进去直接 TypeError → finish 永远 500 → 库里两场面试全卡在"进行中"、复盘一张都没有。
+    """
+    answered: List[InterviewQuestion] = []
+    skipped: List[InterviewQuestion] = []
+    for question in questions:
+        text = (question.answer or "").strip()
+        if not text or text == SKIP_ANSWER:
+            skipped.append(question)
+        else:
+            answered.append(question)
+
+    total = len(questions)
+    improvements: List[str] = []
+    if skipped:
+        orders = "、".join(f"第 {q.question_order} 题" for q in skipped[:3])
+        improvements.append(
+            f"{orders}你跳过了：面试里哪怕先给一句方向性的回答"
+            "（“这块我了解得不深，我的思路是…”），也比直接跳过强。"
+        )
+    short = [q for q in answered if len((q.answer or "").strip()) < 20]
+    if short:
+        orders = "、".join(f"第 {q.question_order} 题" for q in short[:3])
+        improvements.append(
+            f"{orders}答得太短（不到 20 字）：按“情境 → 我做了什么 → 结果”补到两三句，信息量立刻不一样。"
+        )
+    if answered:
+        improvements.append("每条回答都尽量带上具体做法和结果（用了什么、做成了什么样），这是面试官最想听的。")
+    else:
+        improvements.append("这次一道题都没作答，先回去把题目答一遍，再来看复盘。")
+
+    return {
+        "overall_score": 0.0,
+        "dimension_scores": {},
+        "strengths": ["每道题都给了回答，没有跳过"] if answered and not skipped else [],
+        "improvements": improvements,
+        "question_reviews": [
+            {
+                "question": q.content,
+                "answer_summary": (q.answer or "").strip(),
+                "comment": _fallback_comment(q),
+                "better_answer": None,
+            }
+            for q in questions
+        ],
+        "summary": (
+            "这次复盘的 AI 点评没生成出来（服务临时不可用），先按你的作答情况给你一份最小复盘："
+            f"共 {total} 道题，答了 {len(answered)} 道"
+            + (f"，跳过 {len(skipped)} 道。" if skipped else "。")
+            + "等 AI 服务恢复后再点一次「生成复盘」，就能拿到完整点评。"
+        ),
+        "tags": [],
+        "generated_at": utcnow().isoformat(),
+        # 标记这是兜底产物（get_review 不会读它，但库里能查出来"这份没经过 AI"）
+        "fallback": True,
+    }
+
+
+def _fallback_comment(question: InterviewQuestion) -> str:
+    """兜底复盘的逐题点评：只说机械能判的事，判不出来就留空（页面就不渲染那块）。"""
+    text = (question.answer or "").strip()
+    if not text or text == SKIP_ANSWER:
+        return "这题跳过了，没有可点评的内容。"
+    if len(text) < 20:
+        return "回答偏短，可以再具体一点。"
+    return ""
 
 
 # ---------------------------------------------------------------------------

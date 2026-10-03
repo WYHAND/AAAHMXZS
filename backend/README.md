@@ -151,7 +151,7 @@ backend/
 │   │   ├── fallbacks.py            # ★新增：兜底话术与默认值（7.6）
 │   │   └── prompts/
 │   │       ├── chat_system.txt     # 7.5 原文；★规则 8/11/12 已改、新增 13/14 反杜撰（见 §4.16.3 / §4.16.7 / §6 ㊴）
-│   │       ├── profile_extract.txt  resume_parse.txt  resume_optimize.txt
+│   │       ├── profile_extract.txt  resume_polish.txt
 │   │       ├── interview_question.txt  interview_followup.txt
 │   │       ├── interview_review.txt  task_generate.txt  daily_question.txt
 │   │       └── chat_conclusion.txt # ★新增（11.11 结论卡片用，7.4 未列）
@@ -168,7 +168,7 @@ backend/
 │       └── init_db.py              # 种子数据占位（5.4，不造假数据）
 ├── migrations/                     # ★Alembic（5.5）：env.py / script.py.mako / versions/
 ├── alembic.ini                     # ★Alembic 配置
-├── uploads/                        # 简历文件（13.1）
+├── uploads/                        # 历史上传文件目录（老简历链路已移除，见 §4.10；目录与历史文件保留）
 ├── tests/                          # 占位说明（骨架阶段不写测试）
 ├── requirements.txt                # 固定版本（未验证）
 ├── .env.example                    # 3.5 全部变量
@@ -229,11 +229,11 @@ backend/
 |---|---|---|
 | 测试表提交 | `profile_service.submit_test()`（选择题映射标签；`free_text` 在提交后 `await extract_tags_from_text(..., source="test")` 抽标签，见 §5.3） | `test` |
 | 每轮对话 | `chat_service._extract_round_tags(conversation_id, user_id)`（`send_message` 与 SSE `stream_reply` 都调用） | `chat` |
-| 简历解析 / 优化 | `resume_service._extract_resume_tags()`（技能规则 + AI 痛点抽取） | `resume` |
+| ~~简历解析 / 优化~~ | **已移除**（老的「上传 PDF -> 解析 -> ATS 评分 -> 报告」链路，2026-11 整体删除，见 §4.10） | — |
 | 面试复盘 | `interview_service.finish_interview()`（复盘结果自带 `tags`；复盘 Prompt 负责产出） | `interview` |
 | 任务打卡 | `task_service._extract_task_tags()`（行动力规则 + 反馈 AI 抽取） | `task` |
 | 每日一问 | `daily_question_service.answer_question()`（累计 7 题触发，11.7） | `daily` |
-| 简历完整度 | `profile_service.update_resume_score()`（11.8 简历 -> resume_score） | — |
+| 简历完整度 | `profile_service.update_resume_score()`（现行调用点：`resume_service.polish_resume` / `save_my_resume` -> `resume_score`；`recompute_stage()` 仍直接读 `resumes` 表） | — |
 
 阶段重算按附录B：`total = 0.4*clarity + 0.35*action + 0.25*resume`，
 `0-30 探索期 / 31-65 准备期 / 66-100 冲刺期`（`app/utils/stage.py`）。
@@ -670,9 +670,18 @@ EVENT user_id=<uuid> event=test_skip client_ts=<iso> server_ts=<iso> payload={..
 然后改 `event_service.record_events()` 落库、`count_events_today()` 从占位变成真查询。
 当前接口签名已经为这一步留好了（`record_events(db, user, items)` 收了 `db` 但暂未使用）。
 
-### 4.10 简历文件访问：只走鉴权端点，**禁止静态目录直出**（安全修复）
+### 4.10 简历文件访问（**老链路已移除**，2026-11）
 
-#### 4.10.1 曾经的漏洞
+> **该功能已移除**：老的「上传 PDF -> 解析 -> ATS 评分 -> 报告 -> 文件下载」整条链路已删除。
+> 删掉的端点是 `GET/POST /resume`、`POST /resume/upload`、`GET|PUT /resume/{id}`、
+> `POST /{id}/optimize`、`GET /{id}/report`、`GET /{id}/file`；服务层的
+> `get_resume_file` / `get_resume_report` / `parse_uploaded_resume` / `optimize_resume` 等，
+> 以及 `utils/file.py` 里的 `get_resume_dir` / `build_resume_path` / `resolve_download_path`
+> 等文件工具一并删除。现行简历功能是「模板 -> 用户填 -> AI 只润色」：
+> `GET /resume/template`、`GET|PUT /resume/mine`、`POST /resume/polish`（见 §4.2 / §7）。
+> **现在没有任何对外读文件 / 导出文件的简历端点。**
+
+#### 4.10.1 曾经的漏洞（历史记录，仍然不要重蹈）
 
 `app/main.py` 里曾经有这么一行：
 
@@ -691,143 +700,8 @@ application.mount("/uploads", StaticFiles(directory=str(get_upload_root())), nam
 
 **为什么不能"只在 DEBUG 挂载"**：开发库/演示环境里同样放的是真实简历，
 而且前端一旦依赖了这个路径，上线时改起来更贵。**一刀切掉。**
-
-#### 4.10.2 现在的做法
-
-`uploads/` 不再有任何静态挂载（`main.py` 里删掉了 `StaticFiles` 那一段，
-nginx 里也删掉了 `/uploads/` 的 location，compose 里不再把它挂给 nginx 容器）。
-简历文件**只有**一个读取入口：
-
-```http
-GET /api/v1/resume/{resume_id}/file
-Authorization: Bearer <access_token>
-```
-
-```python
-@router.get("/{resume_id}/file", summary="下载/预览简历文件（鉴权）", response_class=FileResponse)
-async def download_resume_file(
-    resume_id: UUID,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> FileResponse:
-    info = resume_service.get_resume_file(db, current_user, resume_id)
-    return FileResponse(
-        path=info.path,
-        media_type=info.media_type,
-        filename=info.filename,
-        content_disposition_type="inline",   # 内嵌预览；要强制下载改 "attachment"
-    )
-```
-
-服务层 `resume_service.get_resume_file()` 做了四件事：
-
-| # | 检查 | 行为 |
-|---|---|---|
-| 1 | 归属 | 不存在**或不属于当前用户**都抛 `2001`（**不是 1003**），由 `app.core.errors.not_found_unless_owner` 统一实现（全仓库规则，见 §8） |
-| 2 | 路径越界 | 交给 `file_utils.resolve_download_path()`，规范化后必须仍在 `UPLOAD_DIR` 之内，越界按"不存在"拒绝 + error 日志 |
-| 3 | 文件缺失 | 数据库有记录但磁盘文件没了 -> `2001` + `logger.warning` 记 `resume_id`（便于排查误删/迁移丢文件） |
-| 4 | 下载名 | `file_utils.build_download_filename(title, ext)` 清洗后再进响应头 |
-
-响应头：`Content-Type` 按扩展名给
-（`.pdf` → `application/pdf`；`.docx` →
-`application/vnd.openxmlformats-officedocument.wordprocessingml.document`），
-`Content-Disposition: inline; filename="..."`（中文名由 Starlette 按 RFC 5987 编码）。
-
-这是二进制响应，**不套** `ApiResponse` 信封（与 SSE 同理）。
-
-#### 4.10.3 目录穿越校验的写法（`app/utils/file.py`）
-
-```python
-def is_within_upload_dir(path: Path) -> bool:
-    """path 规范化之后是否仍位于 UPLOAD_DIR 之内（含其自身）。"""
-    try:
-        root = get_upload_root().resolve()
-        candidate = path.resolve()          # 展开 .. 与符号链接
-    except OSError as exc:
-        logger.warning("路径规范化失败: %s (%s)", path, exc)
-        return False
-    # 用「父目录链里有没有 root」判断，而不是字符串 startswith
-    # （后者会把 /data/uploads-evil 误判为在 /data/uploads 之内）
-    return candidate == root or root in candidate.parents
-
-
-def resolve_download_path(stored_path: str) -> Path:
-    """把数据库里的 file_path 解析成可下载路径，并强制校验不越界。"""
-    if not stored_path or not str(stored_path).strip():
-        raise BusinessException.not_found("简历文件不存在")
-    candidate = resolve_stored_path(str(stored_path))
-    if not is_within_upload_dir(candidate):
-        logger.error("拒绝越界的文件路径（疑似目录穿越）: %s", stored_path)
-        raise BusinessException.not_found("简历文件不存在")   # 不向调用方暴露真实原因
-    return candidate.resolve()
-```
-
-两个关键点：① 先 `resolve()` 再比较，`../` 和符号链接都被展开；
-② 用路径层级（`root in candidate.parents`）而不是字符串前缀比较，
-否则 `uploads-evil/` 这种同前缀目录会被错误放行。
-绝对路径逃逸（`file_path = "C:\\Windows\\win.ini"`）同样会被这一步拦下。
-
-#### 4.10.4 上传侧的限制（手册 13.2，本次核对）
-
-三项都已落地（**不是本次新加**，是核对确认）：
-
-**① 扩展名白名单：只允许 `.pdf` / `.docx`，旧版 `.doc` 明确拒绝并给中文提示**
-（`app/utils/file.py::validate_upload`）：
-
-```python
-ALLOWED_EXTENSIONS = {".pdf", ".docx"}
-
-def validate_upload(filename, size, content_type=None) -> str:
-    ext = Path(safe_filename(filename)).suffix.lower()
-    if ext == ".doc":
-        # 单独提示：python-docx 读不了旧的二进制 .doc
-        raise BusinessException.param_error("不支持旧版 .doc，请在 Word 里另存为 .docx 后重新上传")
-    if ext not in ALLOWED_EXTENSIONS:
-        raise BusinessException.param_error("仅支持 PDF / .docx 文件")
-    if content_type and content_type not in ALLOWED_CONTENT_TYPES:
-        logger.warning(...)          # content_type 由客户端控制，只记日志不拒绝
-    if size > settings.MAX_UPLOAD_SIZE:
-        raise BusinessException.param_error(f"文件超过大小限制 {...}MB")
-    return ext
-```
-
-**② 大小上限取 `MAX_UPLOAD_SIZE`（默认 10MB），超限报 1001 而不是 500**
-（`app/api/v1/resume.py::_read_upload`，**边读边判**，避免先落盘一个大文件）：
-
-```python
-_CHUNK_SIZE = 1024 * 1024
-
-async def _read_upload(file: UploadFile) -> bytes:
-    chunks, size = [], 0
-    while True:
-        chunk = await file.read(_CHUNK_SIZE)
-        if not chunk:
-            break
-        size += len(chunk)
-        if size > settings.MAX_UPLOAD_SIZE:
-            raise BusinessException.param_error(f"文件超过大小限制 {...}MB")   # code 1001
-        chunks.append(chunk)
-    return b"".join(chunks)
-```
-
-`BusinessException.param_error` → HTTP 400 + `code 1001`（不是 500）。
-上传接口还会对空文件单独判一次（`code 1001`）。
-Nginx 侧另有 `client_max_body_size 12m` 兜住超大请求体。
-
-**③ 落盘文件名用 `{uuid}.{ext}`，不用用户提交的原始名**
-（`app/utils/file.py::build_resume_path`）：
-
-```python
-def build_resume_path(user_id, ext) -> Tuple[Path, str]:
-    target_dir = get_resume_dir(user_id)               # uploads/resumes/{user_id}/
-    name = f"{uuid.uuid4().hex}{ext}"                  # 丢掉用户原始名
-    absolute = target_dir / name
-    relative = str(Path("resumes") / str(user_id) / name)
-    return absolute, relative
-```
-
-这样天然免疫"原始名里带 `../`"和"同名覆盖"，13.1 的命名规则也得以保持。
-用户原始名只经 `safe_filename()` 清洗后作为**标题兜底**使用。
+静态挂载已删除（nginx / docker-compose 里的对应配置也删了）；虽然现在没有任何
+读文件的端点，这条"不挂 `StaticFiles`"的决策**继续保持**（`uploads/` 下仍有历史文件）。
 
 ### 4.11 `stage` 字段全接口统一：slug + label
 
@@ -1850,8 +1724,12 @@ stage           submit='explore'  profile='explore'  一致=True
   并被 `apply_tags` 的权重融合规则写进 `profile_tags`（第二轮后权重 0.86，
   `evidence_log` 累积）—— 说明 **Pydantic 校验 + 兜底逻辑 + 回流入库整条链路都通**。
 
-仍未验证的是**流式**（SSE）调用与其余 Prompt（`resume_*` / `interview_*` / `task_generate`
+仍未验证的是**流式**（SSE）调用与其余 Prompt（`interview_*` / `task_generate`
 真实调用；其中 `task_generate` 在本轮走的是兜底任务，因为当时未配 Key）。
+
+> 更新（2026-11）：`resume_*` 里的 `resume_polish` 已用真 Key 跑通（见 §5.1 最新一轮）；
+> `resume_parse` / `resume_optimize` 两个 Prompt 已随老 ATS 链路移除（见 §4.10），
+> **不再是**"未验证"项。
 
 **最近一轮（反杜撰：开场白"声明依据 + 服务端逐字核对"）：正例 1 条全过 + 反例 4 组全拦 + 回归 4 项全过**
 
@@ -2096,7 +1974,8 @@ stage           submit='explore'  profile='explore'  一致=True
 - **SQLite 外键强制**：`PRAGMA foreign_keys = 1`（应用引擎连接上实测），
   插入指向不存在题目的 `daily_answers` 被 `FOREIGN KEY constraint failed` 拒绝；
 - **原子性**：题库为空/答案全无效时提交返回 1001，且**没有写入任何 `test_results`**；
-- 目录穿越：`../../etc/passwd`、`resumes/../../../../windows/win.ini`、`C:/Windows/win.ini`、
+- 目录穿越（**历史记录：被测代码已随老简历链路于 2026-11 删除，见 §4.10**）：
+  `../../etc/passwd`、`resumes/../../../../windows/win.ini`、`C:/Windows/win.ini`、
   空串**全部被拒为 2001**；合法路径正常；下载文件名清洗掉换行与路径分隔符。
 
 #### 5.1.2 仍未验证
@@ -2106,7 +1985,8 @@ stage           submit='explore'  profile='explore'  一致=True
   6 轮（`start -> delta* -> tag -> done -> end`，无 error），`stream_chat()` 逐块产出被
   `stream_reply` 累积后落库；详见 §5.1.1 最新一轮。**仍然没有前端进程消费过真实事件流**
   （本轮用 httpx 直接读 SSE 文本），前端 `ReadableStream` 解析仍是纸面契约。
-  其余 Prompt（`resume_parse` / `resume_optimize` / `interview_*`）同样未真实调用过；
+  其余 Prompt（`interview_*`）同样未真实调用过；`resume_polish` 这一轮已用真 Key 跑通
+  （见 §5.1 最新一轮）；老的 `resume_parse` / `resume_optimize` 已随 ATS 链路移除，不在此列；
   `task_generate` 在配 Key 之前的那轮走的是 7.6 兜底任务；
 - **PostgreSQL 路径**：本机没有 PG，`psycopg2` 方言、JSONB DDL、`alembic upgrade` 均未跑过；
 - **Alembic**：`migrations/versions/` 为空，`alembic upgrade head` 是空操作，未生成过迁移；
@@ -2149,7 +2029,7 @@ stage           submit='explore'  profile='explore'  一致=True
 | 奖章（3 枚） | ✅ **DB** `badges` | 5.4「起步行动家」+ 11.12 | 定义源是 `badge_service.BADGE_RULES`（起步行动家 / 坚持打卡者 / 方向初现），`seed_data.BADGES` 由它派生、按 name **幂等 upsert** 落库（含 `condition.key` 前端美术标识）；`GET /badge` 返回全部奖章 + 进度 + 是否获得（`BadgeOverviewResponse`），定义读代码、获得记录读 DB |
 | 单用户作答/任务/画像 | ✅ **DB** | 5.3 | 运行时数据 |
 | 成长任务模板（4 个） | ⚠️ **代码常量** `task_service.TASK_TEMPLATES` | 附录E「6 个」 | **未落库的理由**：它只作为 `task_generate` Prompt 的参考样例喂给模型，不是用户可见数据，手册 5.2 也没有模板表。**影响**：数量少于附录E 的 6 个；管理员无法在线编辑模板；换模板要改代码重启 |
-| 岗位关键词库（3 个岗位） | ⚠️ **代码常量** `ai/schemas.py::JOB_KEYWORDS` | 附录F | **未落库的理由**：ATS 评分用到的词表，同样不是用户可见数据，5.2 无对应表。**影响**：加岗位要改代码；`resume_optimize` 传给模型的词表是硬编码的 |
+| 岗位关键词库（3 个岗位） | ⚠️ **代码常量** `ai/schemas.py::JOB_KEYWORDS` | 附录F | **未落库的理由**：原本是 ATS 评分用到的词表，不是用户可见数据，5.2 无对应表。**影响**：加岗位要改代码；⚠️ 用它的老 ATS 链路已于 2026-11 移除（见 §4.10），该常量现在只被 `db/init_db.py::seed_job_keywords` 的日志引用，保留备查 |
 
 **待办**：如果要让上面两项也能在线维护，需要按手册 5.3 变更流程新增
 `task_templates` / `job_keywords` 两张表，并把 `TASK_TEMPLATES` / `JOB_KEYWORDS`
@@ -2163,7 +2043,7 @@ stage           submit='explore'  profile='explore'  一致=True
 | `profile_service.submit_test()` 的文字补充 | ~~未接线~~ **已接线**：`submit_test()` 改为 `async def`，在落库并 `commit()` **之后**把 `free_text` 交给 `extract_tags_from_text(..., source="test")`（route `app/api/v1/test.py` 本来就是 `async def`，这次只是补上 `await`）。抽标签在**事务之外**：AI 不可用时只记日志、提交照样成功（实测 401 假 Key 场景 `code=0`）；`free_text` 为空/全空白直接短路不调 AI；`recompute_stage()` 沿用 `clarity_score`，分数口径未动 |
 | ~~`chat_service` 的追问计数（7.7 ≤3 轮）~~ | **已整体移除**（用户要求"要保证代码都是有用的"）：`conversations.followup_direction` / `followup_round` 两列、`dominant_dimension()` / `update_followup_state()`、Prompt 换维度硬约束、SSE 的 `followup_round` / `followup_direction` 字段全部删掉；真实库的两列也已用 `scripts/drop_followup_columns.py` 物理删除。**11.9 面试的追问（`MAX_FOLLOWUP_PER_QUESTION`）不在此列，保留不变。** |
 | `client_msg_id` 幂等 | **已实现**：独立列 `messages.client_msg_id` + 复合唯一约束（第 6 节 ⑤），已实测（重复插入被拒） |
-| `resume_service.keyword_coverage()` | 规则版关键词覆盖是降级实现；ATS 评分主要靠 AI |
+| ~~`resume_service.keyword_coverage()`~~ | **该功能已移除**（规则版关键词覆盖是老的 ATS 降级实现，2026-11 随 ATS 链路删除，见 §4.10） |
 | 任务模板 / 岗位关键词 | 代码常量，未落库（理由与影响见 §5.2） |
 | Electron / 站内通知 | 12.2 的「任务提醒」只返回提醒列表，没有推送通道（手册没有通知表） |
 | `admin` / 分页 | 10.2 没有分页与后台接口，未自创端点 |
@@ -2336,15 +2216,15 @@ payload JSONB / client_ts / created_at`），这属于手册 5.3 变更。
 4. 也不该"只在 DEBUG 挂载"：开发环境同样有真实简历，前端也不该依赖这个路径。
 
 现在：静态挂载已删除（含其 try/except 与 docstring 说明）；
-nginx 与 docker-compose 里对应的静态 location / 卷挂载也已删除；
-文件只能经 `GET /api/v1/resume/{resume_id}/file` 读取
-（JWT 鉴权 + 归属校验「不属于自己按不存在处理」+ 路径越界校验 + 文件名清洗）。
-完整实现与目录穿越写法见 §4.10。
+nginx 与 docker-compose 里对应的静态 location / 卷挂载也已删除。
+**2026-11 更新：老的简历链路（含唯一的读文件端点 `GET /api/v1/resume/{id}/file`）
+已整体移除（见 §4.10），现在没有任何对外读简历文件的端点；"不挂 StaticFiles" 的
+决策继续保持。**
 
 ⑮ **[已决策：安全修复] 越权一律按"不存在"，并扩到全仓库**：
 
-原来 `GET/PUT /resume/{id}`、`/{id}/optimize`、`/{id}/report`、`task` / `interview` /
-`chat` 的同类端点在「存在但不属于自己」时返回 **1003**，可用于反推 id 是否存在。
+原来 `GET/PUT /resume/{id}`（已移除）、`/{id}/optimize`（已移除）、`/{id}/report`（已移除）、
+`task` / `interview` / `chat` 的同类端点在「存在但不属于自己」时返回 **1003**，可用于反推 id 是否存在。
 现已按「查私有资源时不存在与不属于你必须返回同一个 2001」统一改造
 （编码规则见 §8.1，helper 是 `app.core.errors.not_found_unless_owner`）。
 
@@ -2352,7 +2232,7 @@ nginx 与 docker-compose 里对应的静态 location / 卷挂载也已删除；
 
 | service 函数 | 覆盖端点 | 改动 |
 |---|---|---|
-| `resume_service.get_resume()` | `GET /resume/{id}`、`PUT /resume/{id}`、`POST /{id}/optimize`、`GET /{id}/report`、`GET /{id}/file` | `1003` → `2001`；同时删除了临时的 `get_owned_resume_or_not_found()`（已无必要，两个函数合一） |
+| ~~`resume_service.get_resume()`~~ | ~~`GET /resume/{id}`、`PUT /resume/{id}`、`POST /{id}/optimize`、`GET /{id}/report`、`GET /{id}/file`~~ | **该函数已移除**（2026-11 随老简历链路删除，见 §4.10）；当年这里的改动是 `1003` → `2001` 并删掉临时的 `get_owned_resume_or_not_found()`。现行简历端点（`/resume/mine`、`/resume/polish`）按 `user_id` 取"唯一一份"，不做按 id 的归属查询 |
 | `task_service.get_task()` | `GET /task/{id}`、`POST /{id}/steps/{step_id}/complete`、`POST /{id}/abandon` | `1003` → `2001` |
 | `interview_service.get_interview()` | `GET /{id}/questions`、`POST /{id}/answer`、`POST /{id}/finish`、`GET /{id}/review` | `1003` → `2001` |
 | `chat_service.get_conversation()` | `GET/POST /conversations/{id}/messages`、`GET/POST /conversations/{id}/stream`、`GET /{id}/conclusion` | `1003` → `2001` |
@@ -2716,7 +2596,8 @@ PostgreSQL 分支不需要（天生强制）。
 > 1. Chat 的 SSE 端点**多了一个 POST 形式**（手册只有 GET）；
 > 2. **新增** `GET /api/v1/home/summary`（首页聚合，把首页 4 个请求合成 1 个）；
 > 3. **新增** `POST /api/v1/events`（行为埋点上报，当前只落日志、未持久化）；
-> 4. **新增** `GET /api/v1/resume/{id}/file`（简历文件**鉴权**下载，安全修复见 §4.10）；
+> 4. ~~**新增** `GET /api/v1/resume/{id}/file`~~ **[已移除]**：老简历 ATS 链路
+>    （上传/解析/优化/报告/文件下载）2026-11 整体删除，见 §4.10；
 > 5. **新增** `POST /api/v1/report/save`（报告快照，GET 改为纯实时，见 §4.15）
 >    与 `POST /api/v1/chat/conversations/{id}/opening`（AI 先开口，见 §4.16）；
 > 6. **新增** `GET /api/v1/daily/history`（每日一问历史，见 §4.18）。
@@ -2741,14 +2622,10 @@ PostgreSQL 分支不需要（天生强制）。
 | Chat | **POST** | `/api/v1/chat/conversations/{id}/stream`（SSE，**前端使用**） |
 | Chat | GET | `/api/v1/chat/conversations/{id}/stream?content=...`（SSE，**调试用，前端不调用**） |
 | Chat | GET | `/api/v1/chat/conversations/{id}/conclusion` |
-| Resume | GET | `/api/v1/resume` |
-| Resume | POST | `/api/v1/resume` |
-| Resume | GET | `/api/v1/resume/{id}` |
-| Resume | PUT | `/api/v1/resume/{id}` |
-| Resume | POST | `/api/v1/resume/upload` |
-| Resume | POST | `/api/v1/resume/{id}/optimize` |
-| Resume | GET | `/api/v1/resume/{id}/report` |
-| **Resume** | **GET** | `/api/v1/resume/{id}/file`（**鉴权下载**，安全修复，见 §4.10） |
+| Resume | GET | `/api/v1/resume/template`（**学生简历模板**："要问用户哪些字段"的唯一来源，纯静态配置不查库） |
+| **Resume** | **POST** | `/api/v1/resume/polish`（**AI 只润色用户已填内容**：服务端机械校验"数字子集 + 空字段不许被填"，越界字段回退成用户原文） |
+| **Resume** | **GET** | `/api/v1/resume/mine`（唯一一份简历；**没有就 `data=null`，不 404**） |
+| **Resume** | **PUT** | `/api/v1/resume/mine`（手动编辑后保存，不调 AI；同样刷新 `completeness` 与画像 `resume_score`） |
 | Interview | POST | `/api/v1/interview/start` |
 | Interview | GET | `/api/v1/interview/{id}/questions` |
 | Interview | POST | `/api/v1/interview/{id}/answer` |
@@ -2798,7 +2675,8 @@ PostgreSQL 分支不需要（天生强制）。
 > 与资源归属无关"的场景（管理员接口、被封禁用户等）；当前业务里没有任何这种场景，
 > 因此**用户私有资源相关的 1003 应当为零**。
 
-> **规则 2：私有文件不得经静态目录暴露。** 一律走带鉴权的下载端点（§4.10）。
+> **规则 2：私有文件不得经静态目录暴露。** `uploads/` 一律不挂静态目录；对外提供
+> 文件必须走带鉴权 + 归属校验的端点（老简历的下载端点已随 ATS 链路移除，见 §4.10）。
 
 > **规则 3：对外 `stage` 一律 slug + `stage_label`**（§4.11），转换只在 schema 层做。
 
@@ -2808,13 +2686,15 @@ PostgreSQL 分支不需要（天生强制）。
 - JWT `SECRET_KEY` 来自环境变量，默认值显式标注为"必须修改"。
 - 所有"按 id 取用户私有资源"的 service 都过 `not_found_unless_owner`
   （14.5：用户只能访问自己的数据）—— 见 §6 ⑮ 的完整端点清单。
-- **简历文件一律经鉴权端点读取，禁止静态目录直出**：
-  `uploads/` 不挂 `StaticFiles`、nginx 不配 `/uploads` location、
-  compose 不把 uploads 挂给 nginx；唯一入口是
-  `GET /api/v1/resume/{resume_id}/file`（JWT + 归属 + 路径越界校验 + 文件名清洗）。
-  详见 §4.10 与第 6 节 ⑭。
-- **目录穿越防护**：下载前 `Path.resolve()` 规范化，并校验仍在 `UPLOAD_DIR` 之内
-  （用路径层级比较，不用字符串前缀），越界按"不存在"拒绝。
+- **不要给 `uploads/` 挂静态目录**：`uploads/` 不挂 `StaticFiles`、nginx 不配
+  `/uploads` location、compose 不把 uploads 挂给 nginx（第 6 节 ⑭、§4.10）。
+  ⚠️ 2026-11 起老的简历文件链路（含唯一的读文件端点 `GET /resume/{id}/file`）
+  **已整体移除**，现在没有任何对外读简历文件的端点；这条禁令依然有效
+  （`uploads/` 下仍有历史文件，新增文件类功能也必须走带鉴权的端点）。
+- **目录穿越防护**：老链路的 `resolve_download_path`（`Path.resolve()` 后校验仍在
+  `UPLOAD_DIR` 之内、用路径层级比较而非字符串前缀）已随该链路删除。以后若要重新
+  对外提供文件下载，**必须**重新实现这层校验，不要直接用 `utils/file.py` 里的
+  `resolve_stored_path`（它刻意不做安全校验）。
 - **删除类操作只删该删的**：`DELETE /chat/conversations/{id}` 只清 `conversations` +
   `messages`，**绝不触碰 `profiles` / `profile_tags`**（画像按 `user_id` 独立存储，
   删聊天记录不等于删画像）。见 §4.14.3 与第 6 节 ㉟。
@@ -2822,8 +2702,10 @@ PostgreSQL 分支不需要（天生强制）。
   （决策理由见 §4.14.2）。以后要加"自动命名/自动改写用户可见字段"之前，先确认产品是否要。
 - `utils/logger.sanitize()` 对 `sk-*`、password、Authorization、secret_key 做脱敏（14.6）。
 - 系统 Prompt 与用户输入分不同 message role（14.7），AI 输出全部过 Pydantic 校验。
-- 上传校验扩展名 + 大小（13.2），磁盘文件名用 `{uuid}.{ext}`（丢弃用户原始名），
-  用户原始名清洗后仅作标题兜底（`utils/file.py`）。
+- ~~上传校验扩展名 + 大小（13.2），磁盘文件名用 `{uuid}.{ext}`（丢弃用户原始名），
+  用户原始名清洗后仅作标题兜底（`utils/file.py`）~~ **[已移除]**：上传/解析链路
+  2026-11 整体删除，`utils/file.py` 里 `validate_upload` / `safe_filename` /
+  `build_resume_path` 等函数已不存在（见 §4.10）。
 - 埋点 `payload` 写日志前同样过 `sanitize()` 并限长（14.6）。
 
 ---
@@ -2842,8 +2724,9 @@ PostgreSQL 分支不需要（天生强制）。
    不要再按老文档去找它们。
 4. ~~「有没有画像」的判据~~ **[已决策]**：前端看 `ProfileResponse.tested`，
    **不要**看画像对象是否存在（第 6 节 ⑧）。
-5. ~~`/uploads` 无鉴权静态目录~~ **[已决策：安全修复]**：已删除静态挂载，
-   简历文件改为 `GET /api/v1/resume/{id}/file` 鉴权下载（第 6 节 ⑭、§4.10）。
+5. ~~`/uploads` 无鉴权静态目录~~ **[已决策：安全修复]**：已删除静态挂载
+   （第 6 节 ⑭、§4.10）。当时配套加的 `GET /api/v1/resume/{id}/file` 鉴权下载端点
+   **已于 2026-11 随老简历链路移除**；「不挂静态目录」这条决策不变。
 6. ~~其余端点的 1003/2001 不一致~~ **[已决策：安全修复]**：全仓库统一为
    「不存在与不属于你都返回 2001」，helper 是 `not_found_unless_owner`，
    规则见 §8.1、端点清单见第 6 节 ⑮。
@@ -2852,8 +2735,9 @@ PostgreSQL 分支不需要（天生强制）。
    见 §4.12。
 9. **待办**：把补的列（`messages.client_msg_id`）回写到手册第 5 章
    （否则下一个读手册的人会漏列）。追问计数两列已删除，**不要**再回写进手册。
-10. **待办**：把 `/home/summary`、`/events`、`/resume/{id}/file` 补进手册第 10 章的
-    接口清单（前两个目前只在设计说明书 5.4 里有）。
+10. **待办**：把 `/home/summary`、`/events` 补进手册第 10 章的
+    接口清单（目前只在设计说明书 5.4 里有）。~~`/resume/{id}/file`~~ 已于 2026-11
+    随老简历链路移除，**不要**再补进手册（见 §4.10）。
 11. **待办**：把「越权一律 2001」与「stage 统一 slug」写进手册第 6 章后端规范
     （目前只在本文件 §8.1 / §4.11 里）。
 12. **待办**：补齐第 6 节 ⑱⑲⑳ 涉及的表结构缺口（`interview_questions` /
@@ -2869,8 +2753,11 @@ PostgreSQL 分支不需要（天生强制）。
     前端**不要**再实现进度环，SSE 事件里也没有这两个字段了（见 §4.6.5 的说明）。
 18. **待办**：前端首页改用 `GET /home/summary` 一次拿全，并按 §4.8 直接消费
     `next_action`（不要再自己拼「下一步」的逻辑）。
-19. **待办**：前端读取简历文件一律用 `GET /resume/{id}/file`（带 Authorization），
-    **不要**再拼 `/uploads/...` 这类路径（该路径已不存在）。
+19. ~~**待办**：前端读取简历文件一律用 `GET /resume/{id}/file`（带 Authorization），
+    **不要**再拼 `/uploads/...` 这类路径（该路径已不存在）~~ **[已作废：功能已移除]**：
+    老简历链路（含该下载端点）2026-11 整体删除，前端简历页面改为「模板 -> 用户填 ->
+    AI 只润色」三件套（`GET /resume/template`、`GET|PUT /resume/mine`、
+    `POST /resume/polish`），不再有文件读写。
 20. **待办**：前端面试流程按 §4.12 的 `action` 字段分派（`followup` 就地续问、
     `next_question` 追加、`finished` 调 finish）。
 21. **待办**：前端 `stage` 一律按 slug 处理，展示用 `stage_label`

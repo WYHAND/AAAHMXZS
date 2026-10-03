@@ -1,9 +1,14 @@
 /**
  * 路由表（设计说明书 2.1 全量路由）与 2.1 首次进入漏斗守卫装配。
+ *
+ * 整棵树套在**一个**根路由里，根路由只做两件事：
+ * 1. `element: <Outlet />` —— 什么都不加（不套布局、不套守卫），下面各段的布局与守卫照旧；
+ * 2. `errorElement: <RouteErrorFallback />` —— **全站最后一道网**（见文件内注释）。
  */
 
-import { createBrowserRouter } from 'react-router-dom'
+import { Outlet, createBrowserRouter } from 'react-router-dom'
 
+import { RouteErrorFallback } from '@/components/AppErrorFallback'
 import { AppLayout } from '@/layouts/AppLayout'
 import { BlankLayout } from '@/layouts/BlankLayout'
 import { RequireAuth, RequireProfile, RedirectIfAuthed } from '@/router/guards'
@@ -25,10 +30,7 @@ import TaskDetailPage from '@/pages/task/TaskDetailPage'
 import ProfilePage from '@/pages/profile/ProfilePage'
 import DailyPage from '@/pages/daily/DailyPage'
 
-import ResumeListPage from '@/pages/resume/ResumeListPage'
-import ResumeCreatePage from '@/pages/resume/ResumeCreatePage'
-import ResumeEditPage from '@/pages/resume/ResumeEditPage'
-import ResumeReportPage from '@/pages/resume/ResumeReportPage'
+import MyResumePage from '@/pages/resume/MyResumePage'
 
 import InterviewSelectPage from '@/pages/interview/InterviewSelectPage'
 import InterviewPreparePage from '@/pages/interview/InterviewPreparePage'
@@ -39,82 +41,105 @@ import GrowthReportPage from '@/pages/report/GrowthReportPage'
 import NotFoundPage from '@/pages/error/NotFoundPage'
 
 export const router = createBrowserRouter([
-  /* ---------------------------- 公开：登录 / 注册 ---------------------------- */
   {
-    element: <RedirectIfAuthed />,
+    /*
+     * ---------------------------------------------------------------
+     * 全站最后一道网（唯一一处，页面里不要再各写一份）
+     * ---------------------------------------------------------------
+     * 页面组件在渲染时抛异常，React 会卸载整棵树 → 用户看到白屏，
+     * 或者 React Router 自带的英文错误页（"Unexpected Application Error!" /
+     * "Hey developer 👋"）。数据路由里子路由抛出的错误会向上冒到**最近的**
+     * errorElement，所以把 errorElement 挂在最外层这一个根路由上，
+     * 就同时兜住了 /resume、/chat、/task…全部页面（以及以后新加的页面）。
+     *
+     * 兜底页长什么样见 components/AppErrorFallback.tsx：
+     * 一句中文人话 + 「重新加载」+「返回首页」，英文堆栈只进 console。
+     */
+    errorElement: <RouteErrorFallback />,
+    element: <Outlet />,
     children: [
+      /* ---------------------------- 公开：登录 / 注册 ---------------------------- */
       {
-        element: <BlankLayout />,
-        children: [
-          { path: '/login', element: <LoginPage /> },
-          { path: '/register', element: <RegisterPage /> },
-        ],
-      },
-    ],
-  },
-
-  /* --------------------------- 登录后：测试漏斗三页 --------------------------- */
-  /* 注意：/test/* 不套 RequireProfile，否则「无画像 → 强制 /test/intro」会自我循环 */
-  {
-    element: <RequireAuth />,
-    children: [
-      { path: '/test/intro', element: <TestIntroPage /> },
-      { path: '/test/question', element: <TestQuestionPage /> },
-      { path: '/test/result', element: <TestResultPage /> },
-    ],
-  },
-
-  /* ----------------- 登录后 + 已生成画像：主应用（AppLayout + 守卫） ----------------- */
-  {
-    element: <RequireAuth />,
-    children: [
-      {
-        element: <RequireProfile />,
+        element: <RedirectIfAuthed />,
         children: [
           {
-            element: <AppLayout />,
+            element: <BlankLayout />,
             children: [
-              { path: '/', element: <HomePage /> },
-              { path: '/chat', element: <ChatPage /> },
-              { path: '/task', element: <TaskListPage /> },
-              { path: '/task/:id', element: <TaskDetailPage /> },
-              { path: '/profile', element: <ProfilePage /> },
-              { path: '/daily', element: <DailyPage /> },
-
-              { path: '/resume', element: <ResumeListPage /> },
-              { path: '/resume/create', element: <ResumeCreatePage /> },
-              { path: '/resume/:id/edit', element: <ResumeEditPage /> },
-              { path: '/resume/:id/report', element: <ResumeReportPage /> },
-
-              { path: '/interview', element: <InterviewSelectPage /> },
-              { path: '/interview/prepare', element: <InterviewPreparePage /> },
-              { path: '/interview/review/:id', element: <InterviewReviewPage /> },
-
-              { path: '/report', element: <GrowthReportPage /> },
+              { path: '/login', element: <LoginPage /> },
+              { path: '/register', element: <RegisterPage /> },
             ],
           },
         ],
       },
-    ],
-  },
 
-  /* ------------- 面试进行中：全屏沉浸（BlankLayout，无侧栏，/interview/session） ------------- */
-  {
-    element: <RequireAuth />,
-    children: [
+      /* --------------------------- 登录后：测试漏斗三页 --------------------------- */
+      /* 注意：/test/* 不套 RequireProfile，否则「无画像 → 强制 /test/intro」会自我循环 */
       {
-        element: <RequireProfile />,
+        element: <RequireAuth />,
+        children: [
+          { path: '/test/intro', element: <TestIntroPage /> },
+          { path: '/test/question', element: <TestQuestionPage /> },
+          { path: '/test/result', element: <TestResultPage /> },
+        ],
+      },
+
+      /* ----------------- 登录后 + 已生成画像：主应用（AppLayout + 守卫） ----------------- */
+      {
+        element: <RequireAuth />,
         children: [
           {
-            element: <BlankLayout />,
-            children: [{ path: '/interview/session', element: <InterviewSessionPage /> }],
+            element: <RequireProfile />,
+            children: [
+              {
+                element: <AppLayout />,
+                children: [
+                  { path: '/', element: <HomePage /> },
+                  { path: '/chat', element: <ChatPage /> },
+                  { path: '/task', element: <TaskListPage /> },
+                  { path: '/task/:id', element: <TaskDetailPage /> },
+                  { path: '/profile', element: <ProfilePage /> },
+                  { path: '/daily', element: <DailyPage /> },
+
+                  /*
+                    /resume 是「我的简历」单份页（问一句填一句 → 润色 → 展示成一份简历）。
+                    老的列表 / 新建 / 编辑 / ATS 优化报告四个页面与它们的路由已随老链路整体删除
+                    （2026-11，与后端同批），这里只留新页面。
+                    ⚠️ 库里可能还留着老页面写下的**旧结构** parsed_data：新页面读取时
+                    统一过 pages/resume/resumeShape.ts 的收敛层，不会再整页崩。
+                  */
+                  { path: '/resume', element: <MyResumePage /> },
+
+                  { path: '/interview', element: <InterviewSelectPage /> },
+                  { path: '/interview/prepare', element: <InterviewPreparePage /> },
+                  { path: '/interview/review/:id', element: <InterviewReviewPage /> },
+
+                  { path: '/report', element: <GrowthReportPage /> },
+                ],
+              },
+            ],
           },
         ],
       },
+
+      /* ------------- 面试进行中：全屏沉浸（BlankLayout，无侧栏，/interview/session） ------------- */
+      {
+        element: <RequireAuth />,
+        children: [
+          {
+            element: <RequireProfile />,
+            children: [
+              {
+                element: <BlankLayout />,
+                children: [{ path: '/interview/session', element: <InterviewSessionPage /> }],
+              },
+            ],
+          },
+        ],
+      },
+
+      /* ---------------------------- 兜底：404 与通配 ---------------------------- */
+      { path: '/404', element: <NotFoundPage /> },
+      { path: '*', element: <NotFoundPage /> },
     ],
   },
-
-  /* ---------------------------- 兜底：404 与通配 ---------------------------- */
-  { path: '/404', element: <NotFoundPage /> },
-  { path: '*', element: <NotFoundPage /> },
 ])

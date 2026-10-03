@@ -43,7 +43,49 @@
     color: #444;
   }
 
+  /* --------- 简历（/resume 展示态）：白底黑字、铺满宽度、一条主色细线做分隔 --------- */
+
+  /* 展示态的外层：铺满纸张 */
+  .resume-page {
+    width: 100% !important;
+    max-width: none !important;
+    gap: 0 !important;
+  }
+
+  /* 简历卡片：印在白纸上，不是印成米黄色卡纸 */
+  .resume-sheet {
+    width: 100% !important;
+    max-width: none !important;
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    gap: 12pt !important;
+  }
+
+  .resume-sheet h2,
+  .resume-sheet h3,
+  .resume-sheet p,
+  .resume-sheet span,
+  .resume-sheet li {
+    color: #000 !important;
+  }
+
+  /* 章节标题下那条线：全篇唯一的颜色 */
+  .resume-section-title span {
+    height: 0.6pt !important;
+    background: var(--primary) !important;
+  }
+
+  /* 一段经历别被撕成两页 */
+  .resume-entry {
+    break-inside: avoid;
+  }
+
   @page {
-    margin: 16mm;
+    size: A4;
+    margin: 12mm;
   }
 }

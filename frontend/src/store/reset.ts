@@ -5,7 +5,7 @@
  *
  * 1. **凡是按用户缓存的前端状态，换号时必须清。**
  *    后端所有接口都按 token 里的 user_id 鉴权，但前端 store 是**内存单例、跨账号存活**：
- *    上一个账号的会话 id、画像、任务、简历、面试场次只要还留在内存里，新账号一进页面
+ *    上一个账号的会话 id、画像、任务、面试场次只要还留在内存里，新账号一进页面
  *    就会拿着旧 id 去请求 —— 落到后端就是「这条记录不属于你」→ code 2001，
  *    界面于是抱着一个已经不存在的选中项空转（「AI 对话」页永远转圈的现场）。
  *    只清画像是不够的：那只是被漏掉的那一类里最先被发现的一个。
@@ -15,8 +15,7 @@
  *    fetched/tested 是路由守卫的分流依据）。做法是每个按用户的 store 自带一个
  *    世代号，`reset()` 时 +1，异步结果落地前比一次，世代对不上就整份丢弃。
  *    已实现：chatStore.loadConversations / profileStore.fetchProfile /
- *    taskStore.fetchTasks·fetchTask / resumeStore.fetchList·fetchDetail·fetchReport /
- *    interviewStore.loadQuestions·fetchReview。
+ *    taskStore.fetchTasks·fetchTask / interviewStore.loadQuestions·fetchReview。
  *    （世代号只描述"请求属于哪一代"，不描述"某个东西渲染过"，因此不会变成
  *    手册 6.12 说的那种"登记与渲染分离"的副本簿记。）
  *
@@ -39,7 +38,6 @@
 import { useChatStore } from './chatStore'
 import { useInterviewStore } from './interviewStore'
 import { useProfileStore } from './profileStore'
-import { useResumeStore } from './resumeStore'
 import { useTaskStore } from './taskStore'
 import { STORAGE_KEY, storage } from '@/utils/storage'
 
@@ -66,8 +64,6 @@ export function resetUserScopedStores(): void {
   useProfileStore.getState().reset()
   /** 成长任务列表 / 当前任务详情 / 步骤 */
   useTaskStore.getState().reset()
-  /** 简历列表 / 当前简历 / 诊断报告 */
-  useResumeStore.getState().reset()
   /** 进行中的面试 / 题目 / 当前题号 / 待答追问 / 复盘 + sessionStorage 里的面试 id */
   useInterviewStore.getState().reset()
 

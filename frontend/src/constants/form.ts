@@ -2,9 +2,7 @@
  * 表单字段长度常量（与后端 Pydantic 的 max_length 对齐，避免提交才 422）
  */
 
-/** schemas/resume.ResumeCreate.title */
-export const RESUME_TITLE_MAX = 200
-/** schemas/resume.ResumeCreate.target_job */
+/** 简历「目标岗位」字段（后端 max_length=100） */
 export const RESUME_TARGET_JOB_MAX = 100
 
 /** schemas/daily_question.DailyAnswerRequest.answer */

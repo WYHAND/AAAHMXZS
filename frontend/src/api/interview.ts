@@ -36,8 +36,17 @@ export const interviewApi = {
   answer: (interviewId: string, payload: InterviewAnswerPayload) =>
     post<InterviewAnswerResponse>(`/interview/${interviewId}/answer`, payload),
 
+  /**
+   * 结束面试 -> 生成复盘。
+   *
+   * ⚠️ **必须给足超时**：后端要调 AI 生成"逐题点评 + 5 维评分 + 标签"的长 JSON
+   * （``max_tokens=3000``），默认的 20 秒会把请求掐断 —— 用户看到"生成复盘失败"，
+   * 而后端其实还在跑、报告也可能已经落库。
+   */
   finish: (interviewId: string) =>
-    post<InterviewFinishResponse>(`/interview/${interviewId}/finish`),
+    post<InterviewFinishResponse>(`/interview/${interviewId}/finish`, undefined, {
+      timeout: 120000,
+    }),
 
   review: (interviewId: string) =>
     get<InterviewReview>(`/interview/${interviewId}/review`),

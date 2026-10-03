@@ -64,17 +64,6 @@ def looks_like_stuck(text: str) -> bool:
     return any(k in stripped for k in keywords) and len(stripped) <= 20
 
 
-def top_keywords(text: str, top_n: int = 10, vocabulary: Optional[Iterable[str]] = None) -> List[str]:
-    """极简关键词命中（11.8 ATS 评分的规则部分，附录F 岗位关键词库）。
-
-    只做“词表逐个 in 判断”，不做分词——手册 2.5 明确不引入额外 NLP 依赖。
-    """
-    if not text or not vocabulary:
-        return []
-    hits = [word for word in vocabulary if word and word.lower() in text.lower()]
-    return hits[:top_n]
-
-
 # 过渡语模板 30 条（7.7）
 TRANSITION_PHRASES: List[str] = [
     "嗯，我理解了。",

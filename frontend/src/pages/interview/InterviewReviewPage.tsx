@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { toast } from 'sonner'
 import {
   PolarAngleAxis,
   PolarGrid,
@@ -38,6 +39,8 @@ export default function InterviewReviewPage() {
   const { id } = useParams<{ id: string }>()
   const [review, setReview] = useState<InterviewReview | null>(null)
   const [loading, setLoading] = useState(true)
+  /** 正在补生成复盘（POST /interview/{id}/finish，要调 AI，可能十几秒） */
+  const [generating, setGenerating] = useState(false)
 
   const load = useCallback(async () => {
     if (!id) return
@@ -51,6 +54,27 @@ export default function InterviewReviewPage() {
       setLoading(false)
     }
   }, [id])
+
+  /**
+   * 没有复盘时**就地补一份**：调 finish 生成，再读一次。
+   *
+   * 为什么要有这个按钮：复盘是 finish 的产物，而 finish 可能没被调用过
+   * （早期版本「结束面试」只是跳走）、也可能中途失败。没有它，用户在这个页面上
+   * 只有一个**永远点不出来**的「重新加载」—— 面试卡在"进行中"，复盘页永远空着。
+   */
+  const generate = useCallback(async () => {
+    if (!id) return
+    setGenerating(true)
+    try {
+      await interviewApi.finish(id)
+    } catch {
+      toast.error('生成复盘没成功，过一会儿再点一次。')
+      setGenerating(false)
+      return
+    }
+    setGenerating(false)
+    await load()
+  }, [id, load])
 
   useEffect(() => {
     void load()
@@ -69,11 +93,16 @@ export default function InterviewReviewPage() {
       <PageShell title="面试复盘" breadcrumb="模拟面试">
         <EmptyState
           title="这份复盘还没生成"
-          description="面试结束后由后端生成，稍后刷新看看。"
+          description="如果这场面试还没结束（或者结束那一步没成功），点下面这个按钮，我立刻按你已经答的内容补一份复盘。"
           action={
-            <Button variant="warm" onClick={() => void load()}>
-              重新加载
-            </Button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button variant="warm" onClick={() => void generate()} disabled={generating}>
+                {generating ? '正在生成复盘…' : '生成复盘'}
+              </Button>
+              <Button variant="outline" onClick={() => void load()} disabled={generating}>
+                重新加载
+              </Button>
+            </div>
           }
         />
       </PageShell>
@@ -99,12 +128,22 @@ export default function InterviewReviewPage() {
           <CardTitle className="text-base">整体表现</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <div className="flex items-baseline gap-2">
-            <span className="font-numeric text-4xl font-semibold text-foreground">
-              {Math.round(review.overall_score)}
-            </span>
-            <span className="text-sm text-muted-foreground">/ 100</span>
-          </div>
+          {/*
+            只有真的打过分才显示总分：兜底复盘（AI 没生成出来）里 overall_score 是 0，
+            把 0 当成"你考了 0 分"端出去是假信息。
+          */}
+          {dimensions.length ? (
+            <div className="flex items-baseline gap-2">
+              <span className="font-numeric text-4xl font-semibold text-foreground">
+                {Math.round(review.overall_score)}
+              </span>
+              <span className="text-sm text-muted-foreground">/ 100</span>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              本次没有 AI 评分（点评这次没生成出来，下面只有按作答情况给的建议）。
+            </p>
+          )}
           {dimensions.length ? (
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -123,9 +162,7 @@ export default function InterviewReviewPage() {
                 </RadarChart>
               </ResponsiveContainer>
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">维度数据还没生成。</p>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 

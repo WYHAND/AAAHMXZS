@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Plus, Send, Square, Trash2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { FileText, Plus, Send, Square, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { AIThinking } from '@/components/AIThinking'
@@ -49,6 +50,7 @@ import { cn } from '@/lib/utils'
  */
 
 export default function ChatPage() {
+  const navigate = useNavigate()
   const { isDesktop } = useResponsive()
   const { stage } = useStage()
   const [draft, setDraft] = useState('')
@@ -273,19 +275,34 @@ export default function ChatPage() {
             新对话是重新开始：不带上一段聊天的记忆，只看你的画像。
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void handleNewConversation()}
-          disabled={creating}
-          // 流式期间不禁用按钮（禁用等于"点了没反应"），而是点出提示；
-          // 悬停时也把原因说清楚
-          title={streaming ? '上一轮还在回复，等它说完再开新对话' : undefined}
-          className="gap-1.5"
-        >
-          <Plus className="size-4" />
-          新对话
-        </Button>
+        {/*
+          两个次级动作并排：生成简历（去 /resume 自己填）与 + 新对话。
+          这里**不说**"AI 自动生成"：简历页只润色用户写的内容，不替他编经历。
+        */}
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/resume')}
+            className="gap-1.5"
+          >
+            <FileText className="size-4" />
+            生成简历
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void handleNewConversation()}
+            disabled={creating}
+            // 流式期间不禁用按钮（禁用等于"点了没反应"），而是点出提示；
+            // 悬停时也把原因说清楚
+            title={streaming ? '上一轮还在回复，等它说完再开新对话' : undefined}
+            className="gap-1.5"
+          >
+            <Plus className="size-4" />
+            新对话
+          </Button>
+        </div>
       </header>
 
       <div className={cn('flex gap-4', isDesktop ? 'flex-row' : 'flex-col')}>

@@ -225,15 +225,24 @@ async def chat_prompt_json(
     schema: Type[TModel],
     default: Optional[TModel] = None,
     temperature: float = 0.2,
+    max_tokens: int = 2048,
 ) -> TModel:
-    """从 ``app/ai/prompts/{prompt_name}.txt`` 载入模板并做结构化输出。"""
+    """从 ``app/ai/prompts/{prompt_name}.txt`` 载入模板并做结构化输出。
+
+    ``max_tokens`` 必须透传给 :func:`chat_json`：面试复盘那种"逐题点评 + 多维评分 + 标签"
+    的结构化输出比一般调用长得多，调用方会给到 3000；这个参数**曾经漏在签名外**，
+    于是 ``interview_service._build_review`` 的 ``max_tokens=3000`` 直接抛 TypeError，
+    ``POST /interview/{id}/finish`` 永远 500、复盘永远生成不出来（见勘误 9.21）。
+    """
     template = load_prompt(prompt_name)
     rendered = render_prompt(template, variables)
     messages = build_messages(
         system="你是一个严格输出 JSON 的助手，只输出 JSON，不要任何解释或 Markdown 代码块。",
         user=rendered,
     )
-    return await chat_json(messages, schema, default=default, temperature=temperature)
+    return await chat_json(
+        messages, schema, default=default, temperature=temperature, max_tokens=max_tokens
+    )
 
 
 async def chat_prompt_text(

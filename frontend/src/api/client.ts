@@ -181,13 +181,13 @@ export const get = <T>(url: string, config?: AxiosRequestConfig) =>
 export const post = <T>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
   request<T>({ ...config, url, method: 'POST', data })
 
-/** 后端目前只有 PUT /resume/{id} 一处写操作使用 PUT */
+/** 后端目前只有 PUT /resume/mine 一处写操作使用 PUT */
 export const put = <T>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
   request<T>({ ...config, url, method: 'PUT', data })
 
 /*
- * 未提供 patch / del 助手：后端 37 条路由里原本**没有任何 PATCH 或 DELETE**。
- * 现在只多了一条 DELETE /chat/conversations/{id}，还没有多到值得抽助手，
- * 调用方按 api/resume.ts 里 downloadFile 的先例直接用 client.delete(...)，
- * 见 api/chat.ts 的 chatApi.deleteConversation。
+ * 未提供 patch / del 助手：后端目前只有两条写操作不是 PUT ——
+ * DELETE /chat/conversations/{id} 与 DELETE /task/{id}，两条而已，
+ * 还没有多到值得抽助手。调用方直接用 client.delete(...)：
+ * 见 api/chat.ts 的 chatApi.deleteConversation 与 api/task.ts 的 taskApi.remove。
  */

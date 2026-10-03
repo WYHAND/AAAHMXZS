@@ -42,7 +42,7 @@ export const chatApi = {
    * 删除会话。
    *
    * client.ts 刻意没有 del 助手（见那里的注释：原先后端没有任何 DELETE 路由），
-   * 所以这里按 resumeApi.downloadFile 的先例直接用 client.delete。
+   * 所以这里直接调 client.delete，把 silent 当成请求配置传进去。
    * 拦截器已把信封解开 → 这里拿到的是 data(null)。
    * silent：失败提示统一由 chatStore.deleteConversation 负责（它还要保证
    * 「失败就一个字节都不改列表」），交给拦截器会变成两个 toast。

@@ -243,13 +243,14 @@ def create_app() -> FastAPI:
     # 就能下载别人的简历 —— 简历含姓名、手机号、学校、经历，是典型 PII；
     # 而 `resumes.file_path` 里就带 user_id，路径完全可枚举。
     #
-    # 现在简历文件**只能**经带鉴权的端点读取：
-    #     GET /api/v1/resume/{resume_id}/file   （见 app/api/v1/resume.py）
-    # 该端点校验归属（不属于自己一律按"不存在"处理），并强制路径不越出 UPLOAD_DIR。
+    # 现在**没有任何**对外读简历文件的端点：老的「上传 PDF -> 解析 -> ATS 评分 ->
+    # 报告 -> 鉴权下载」链路已于 2026-11 整体移除（见 README §4.10），
+    # 现行的简历功能（template / mine / polish）不落文件。
+    # 这条"不挂 StaticFiles"的决策仍然保留：uploads 下还有历史文件，
+    # 以后新增任何文件类功能也必须走带鉴权的端点，不许静态直出。
     # 也**不要**改成"只在 DEBUG 挂载"：开发环境同样有真实简历，前端也不该依赖这个路径。
     logger.info(
-        "uploads 目录不提供静态访问：简历文件只能经 %s/resume/{id}/file 鉴权下载（14.5）",
-        API_V1_PREFIX,
+        "uploads 目录不提供静态访问：需要读文件的一律走带鉴权的端点（14.5）"
     )
 
     @application.middleware("http")

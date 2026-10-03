@@ -38,10 +38,10 @@ bcrypt==4.0.1
 # --- HTTP 客户端（2.3：调用 DeepSeek） ---
 httpx==0.28.1
 
-# --- 简历文件解析（2.3 / 13.3） ---
-pdfplumber==0.11.4
-python-docx==1.1.2
-python-multipart==0.0.20
+# --- 简历文件解析：随老简历链路（上传 PDF → 解析 → ATS → 报告 → 下载）一并删除 ---
+# pdfplumber / python-docx / python-multipart 已无任何代码引用（2026-11 删除，见
+# docs/开发手册-勘误与决策记录.md 9.17）。现在的简历是「问答式生成」：前端一个字段
+# 一个字段地问，走 JSON 接口，不经过文件。若以后重新引入文件上传/解析，再装回来。
 
 # --- 定时任务（2.3 / 12.1） ---
 apscheduler==3.11.0

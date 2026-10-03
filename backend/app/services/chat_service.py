@@ -18,7 +18,6 @@ import random
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from difflib import SequenceMatcher
 from typing import Any, AsyncGenerator, Dict, Iterable, List, Optional, Tuple
 from uuid import UUID
 
@@ -51,6 +50,7 @@ from app.schemas.chat import (
 )
 from app.services import idempotency, profile_service
 from app.utils.logger import get_logger, sanitize
+from app.utils.reference_match import drop_referenced, looks_referenced
 from app.utils.text import (
     MAX_ASSISTANT_CHARS,
     build_history_text,
@@ -494,62 +494,13 @@ class CrossSessionContext:
         return "\n".join(lines)
 
 
-def _looks_referenced(term: str, text: str) -> bool:
-    """判断 ``text`` 是不是"提到了"某个任务标题 / 标签。
-
-    用于服务端剔除，**宁可多剔、不可漏剔** —— 漏剔的后果就是用户连续两次被问同一件事，
-    那正是这次要修的 bug；多剔的后果只是这次开场退化成聊日常（Prompt 允许）。
-
-    两条信号，命中任一即算提到：
-    1. **最长公共子串 ≥ 3**：关键词被原样写出（标题『…通讯录小项目』-> 开场白里的"通讯录"）；
-    2. **短词的单字覆盖率 ≥ 0.5**：模型改写了措辞
-       （标签『剪辑』-> 开场白的"剪视频"，只共用"剪"一个字）。
-       只对短词（去重后 ≤6 字）用这条，避免长标题跟随便一句话撞出高覆盖率。
-    3. **短词里的英文词根出现**：标签『C语言』-> 开场白只写"用C做个…"（把"语言"省了）。
-       实测就是这个漏网之鱼：『C语言』没被判成已问过，于是连着三个会话都在聊 C。
-    """
-    if not term or not text:
-        return False
-    # 去掉空白再比：模型经常写成"用 C 做个通讯录"，而标题是"用C语言…"
-    left = re.sub(r"\s+", "", term)
-    right = re.sub(r"\s+", "", text)
-    if not left or not right:
-        return False
-    if left in right:
-        return True
-    longest = SequenceMatcher(None, left, right).find_longest_match(0, len(left), 0, len(right)).size
-    if longest >= 3:
-        return True
-    unique = set(left)
-    if len(unique) > 6:
-        return False  # 长标题不走下面两条宽松信号，避免误剔
-    if len(unique & set(right)) / len(unique) >= 0.5:
-        return True
-    tokens = re.findall(r"[A-Za-z]+", left)
-    lowered = right.lower()
-    return bool(tokens) and all(token.lower() in lowered for token in tokens)
-
-
-def _drop_already_asked(candidates: List[str], asked: List[str]) -> Tuple[List[str], List[str]]:
-    """把**已经聊过的内容**命中的候选剔出去，返回 ``(保留, 剔除)``。
-
-    ``asked`` 现在有**两个来源**，缺一不可：
-    1. **最近 N 条开场白**（不只最近一条）：只剔最近一条的话，第 3 个会话仍可能重新捡起
-       第 1 个会话问过的那件事 —— 而验收要求"连续 4 个新会话不能有两条落在同一件事上"，
-       所以剔的范围要覆盖我们喂给模型的全部 ``recent_openings``；
-    2. **用户最近说过的话**（第二次修正新增）：开场白路径里模型最容易被这些原话带跑
-       （用户说"健身、刷视频、看短句" -> 新会话开场白就问健身）。把用户原话也并进 ``asked``，
-       刚聊过的话题对应的标签/任务就会被从候选里剔掉，**模型就算想顺着问也没有素材**。
-       判定直接复用 ``_looks_referenced``（宁可多剔、不可漏剔）。
-    """
-    kept: List[str] = []
-    dropped: List[str] = []
-    for candidate in candidates:
-        if any(_looks_referenced(candidate, text) for text in asked):
-            dropped.append(candidate)
-        else:
-            kept.append(candidate)
-    return kept, dropped
+# ``_looks_referenced`` / ``_drop_already_asked`` 的**实现**已抽到
+# ``app/utils/reference_match.py``：任务生成侧要用同一套判据把"已出现在
+# 【进行中】任务标题里的标签"从主题素材里机械剔掉（见
+# ``task_service._plan_theme_material``），两处口径必须完全一致。
+# 这里保留原私有名做别名，本模块的调用点与**行为一个字都没变**。
+_looks_referenced = looks_referenced
+_drop_already_asked = drop_referenced
 
 
 def _collect_cross_session(

@@ -189,8 +189,9 @@ def not_found_unless_owner(
 
     用法::
 
-        def get_resume(db, user, resume_id) -> Resume:
-            return not_found_unless_owner(db.get(Resume, resume_id), user.id, "简历不存在")
+        def get_private_resource(db, user, resource_id):
+            resource = db.get(Model, resource_id)
+            return not_found_unless_owner(resource, user.id, "资源不存在")
 
     注意：``resource`` 为 ``None`` 时不访问其属性；``owner_id`` 也从 ``resource`` 上取，
     因此传 ``None`` 是安全的。归属不符时**不记日志**（避免被当成探测信号刷日志，

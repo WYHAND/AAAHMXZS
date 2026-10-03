@@ -393,62 +393,125 @@ export interface DailyHistory {
 
 /* ------------------------------- 简历 ------------------------------- */
 
-/** 后端 schemas/resume.ResumeResponse */
-export interface Resume {
-  id: string
-  user_id: string
-  title: string
-  /** 本地磁盘相对路径（13.1），静态预览走 /uploads/{file_path} */
-  file_path?: string | null
-  /** 结构化内容：basics/education/experience/projects/skills */
-  parsed_data?: Record<string, unknown> | null
-  ats_score?: number | null
-  completeness?: number | null
-  target_job?: string | null
-  created_at: string
-  updated_at: string
-}
+/* --------- 「我的简历」单份简历契约（GET /resume/template，字段由后端下发） --------- */
 
-/** 后端 schemas/resume.ResumeCreate */
-export interface ResumeCreatePayload {
-  title?: string
-  target_job?: string | null
-  parsed_data?: Record<string, unknown> | null
-}
-
-/** 后端 schemas/resume.ResumeUpdate */
-export interface ResumeUpdatePayload {
-  title?: string | null
-  target_job?: string | null
-  parsed_data?: Record<string, unknown> | null
-}
-
-/** 后端 schemas/resume.ResumeOptimizeRequest */
-export interface ResumeOptimizePayload {
-  target_job?: string | null
-  focus?: string | null
-}
-
-/** 后端 schemas/resume 里 suggestions 的元素结构 */
-export interface ResumeSuggestion {
-  section?: string
-  problem?: string
-  suggestion?: string
-  example?: string
+/**
+ * 模板里的一个字段。
+ *
+ * `key` 的语义随所在 section 变：
+ * - `repeatable: false` 的 section（基本信息 / 求职意向 / 技能 / 自我评价）：
+ *   key 相对**这个 section 本身**（如 basic.name、skills.items）；
+ * - `repeatable: true` 的 section（教育背景 / 项目经历 / 校园与实践经历）：
+ *   key 相对**单条经历**（如 school、star.situation）。
+ *
+ * `multiple: true` 表示这个字段是字符串数组（如教育经历的 highlights）。
+ * `question` 是给用户看的问句 —— 界面上只显示它，**不在前端另写一份文案**。
+ */
+export interface ResumeField {
+  key: string
+  label: string
+  question?: string | null
+  example?: string | null
+  required?: boolean
+  /** 字符串数组字段（逗号分隔输入 / 一行一项） */
+  multiple?: boolean
+  /**
+   * `multiple` 且 `lines: true`：**一项一行**地编辑（多行输入框，换行分隔）。
+   * 技能用这个 —— 润色会把关键词展开成一句能力表述（"Java" ->
+   * "熟悉 Java 基础语法、面向对象编程…"），句子本身带顿号逗号，
+   * 再用顿号分隔的输入框会把一句话切成好几项。
+   */
+  lines?: boolean
   [key: string]: unknown
 }
 
-/** 后端 schemas/resume.ResumeOptimizeResponse（optimize 与 report 共用） */
-export interface ResumeReport {
-  resume_id: string
-  /** ATS 评分 0-100 */
-  ats_score: number
-  completeness: number
-  matched_keywords: string[]
-  missing_keywords: string[]
-  suggestions: ResumeSuggestion[]
-  summary: string
-  generated_at?: string | null
+export interface ResumeSection {
+  key: string
+  label: string
+  /** true = 可增删的一条条经历 */
+  repeatable?: boolean
+  fields: ResumeField[]
+  [key: string]: unknown
+}
+
+/** 后端 schemas/resume.ResumeTemplateResponse（data.sections） */
+export interface ResumeTemplateData {
+  sections: ResumeSection[]
+}
+
+/* -------- parsed_data（提交给 POST /resume/polish 与 PUT /resume/mine 的结构） -------- */
+
+export interface ResumeBasic {
+  name: string
+  grade: string
+  major: string
+  school: string
+  contact: string
+}
+
+export interface ResumeTarget {
+  direction: string
+  city: string
+}
+
+export interface ResumeEducationItem {
+  school: string
+  major: string
+  period: string
+  highlights: string[]
+}
+
+/** STAR 四段：情境 / 任务 / 行动 / 结果 —— 界面上只允许出现中文小标题 */
+export interface ResumeStar {
+  situation: string
+  task: string
+  action: string
+  result: string
+}
+
+export interface ResumeExperienceItem {
+  name: string
+  role: string
+  period: string
+  star: ResumeStar
+}
+
+export interface ResumeData {
+  basic: ResumeBasic
+  target: ResumeTarget
+  education: ResumeEducationItem[]
+  /** 技能：扁平字符串数组 */
+  skills: string[]
+  projects: ResumeExperienceItem[]
+  campus: ResumeExperienceItem[]
+  self_evaluation: string
+}
+
+/** 后端 schemas/resume.ResumeResponse（单份简历；ats_score 前端不展示） */
+export interface ResumeResponse {
+  id: string
+  title?: string | null
+  target_job?: string | null
+  parsed_data?: ResumeData | null
+  completeness?: number | null
+  /** ⚠️ 界面上不展示它 */
+  ats_score?: number | null
+  file_path?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+/** 后端 schemas/resume.ResumePolishRequest */
+export interface ResumePolishPayload {
+  parsed_data: ResumeData
+  target_job?: string | null
+}
+
+/** 后端 schemas/resume.ResumeUpdateMine */
+export interface ResumeMineUpdatePayload {
+  title?: string | null
+  target_job?: string | null
+  parsed_data: ResumeData
 }
 
 /* ------------------------------- 面试 ------------------------------- */

@@ -1,7 +1,7 @@
 /**
  * render-check.mjs — 独立浏览器渲染冒烟测试（playwright-core + 本机 Edge）
  *
- * 目的：回答「frontend/ 的 21 条路由在真实浏览器里能不能渲染、有没有运行时崩溃」。
+ * 目的：回答「frontend/ 的 18 条路由在真实浏览器里能不能渲染、有没有运行时崩溃」。
  * 手段：对 vite preview 出来的生产构建发真实 HTTP 请求，用 page.route 把 /api/v1/**
  *      全部 mock 掉（后端不存在），逐路由采集 pageerror / console error / 白屏 /
  *      ErrorBoundary 文案 / 最终 URL / 截图。
@@ -175,33 +175,6 @@ const taskSteps = [
 
 const taskDetail = { ...task, steps: taskSteps }
 
-const resumeList = [
-  {
-    id: RESUME_ID,
-    user_id: user.id,
-    title: '林小满-鸿蒙客户端开发-2026 秋招',
-    file_path: `${user.id}/resume_20260912.pdf`,
-    parsed_data: null,
-    ats_score: 76,
-    completeness: 0.82,
-    target_job: '鸿蒙应用开发工程师',
-    created_at: '2026-09-12T15:30:00+08:00',
-    updated_at: NOW,
-  },
-  {
-    id: 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e',
-    user_id: user.id,
-    title: '旧版-通用技术岗简历',
-    file_path: null,
-    parsed_data: null,
-    ats_score: 52,
-    completeness: 0.6,
-    target_job: '后端开发工程师',
-    created_at: '2026-08-20T11:00:00+08:00',
-    updated_at: '2026-08-20T11:00:00+08:00',
-  },
-]
-
 const resumeDetail = {
   id: RESUME_ID,
   user_id: user.id,
@@ -249,31 +222,6 @@ const resumeDetail = {
   target_job: '鸿蒙应用开发工程师',
   created_at: '2026-09-12T15:30:00+08:00',
   updated_at: NOW,
-}
-
-const resumeReport = {
-  resume_id: RESUME_ID,
-  ats_score: 76,
-  completeness: 0.82,
-  matched_keywords: ['ArkTS', 'ArkUI', 'TypeScript', 'Git', '数据结构'],
-  missing_keywords: ['分布式软总线', 'HarmonyOS NEXT', '性能优化', '单元测试'],
-  suggestions: [
-    {
-      section: 'projects',
-      problem: '项目描述只写了做了什么，没写结果。',
-      suggestion: '补一条可量化的结果，例如覆盖多少用户、启动耗时降低多少。',
-      example: '把列表首屏渲染从 480ms 优化到 210ms。',
-    },
-    {
-      section: 'skills',
-      problem: '技能栏没有和目标岗位 JD 的高频词对齐。',
-      suggestion: '把「分布式软总线」「HarmonyOS NEXT」补进技能或项目描述。',
-      example: '熟悉 HarmonyOS NEXT 应用开发与分布式软总线基础调用。',
-    },
-  ],
-  summary:
-    '整体结构完整，教育背景与目标岗位匹配度高。主要短板是缺少可量化成果，以及与岗位关键词重合度不足。',
-  generated_at: NOW,
 }
 
 const interviewQuestions = {
@@ -646,19 +594,8 @@ async function installApiMock(page, opts = {}) {
     }
 
     /* ---- 简历 ---- */
-    if (method === 'GET' && p === '/resume') return json(route, resumeList)
-    if (method === 'POST' && p === '/resume') return json(route, resumeDetail)
-    if (method === 'POST' && p === '/resume/upload') return json(route, resumeDetail)
-    if (method === 'GET' && /^\/resume\/[^/]+\/report$/.test(p)) return json(route, resumeReport)
-    if (method === 'POST' && /^\/resume\/[^/]+\/optimize$/.test(p)) return json(route, resumeReport)
-    if (method === 'GET' && /^\/resume\/[^/]+\/file$/.test(p)) {
-      // 1x1 PNG，够 resumeApi.downloadFile 走通了
-      const png = Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
-        'base64',
-      )
-      return route.fulfill({ status: 200, contentType: 'image/png', body: png })
-    }
+    // 新链路只用 GET /resume/template、GET|PUT /resume/mine、POST /resume/polish（无 stub）。
+    // 这三条 GET/PUT 端点都落在下面这条通配的上，所以它不能跟着老端点一起删。
     if (method === 'GET' && /^\/resume\/[^/]+$/.test(p)) return json(route, resumeDetail)
     if (method === 'PUT' && /^\/resume\/[^/]+$/.test(p)) return json(route, resumeDetail)
 
@@ -971,17 +908,14 @@ const ROUTES = [
   { n: 9, path: '/task/:id', name: 'task-detail', auth: true, path2: `/task/${TASK_ID}`, expect: `/task/${TASK_ID}` },
   { n: 10, path: '/profile', name: 'profile', auth: true, expect: '/profile' },
   { n: 11, path: '/daily', name: 'daily', auth: true, expect: '/daily' },
-  { n: 12, path: '/resume', name: 'resume-list', auth: true, expect: '/resume' },
-  { n: 13, path: '/resume/create', name: 'resume-create', auth: true, expect: '/resume/create' },
-  { n: 14, path: '/resume/:id/edit', name: 'resume-edit', auth: true, path2: `/resume/${RESUME_ID}/edit`, expect: `/resume/${RESUME_ID}/edit` },
-  { n: 15, path: '/resume/:id/report', name: 'resume-report', auth: true, path2: `/resume/${RESUME_ID}/report`, expect: `/resume/${RESUME_ID}/report` },
-  { n: 16, path: '/interview', name: 'interview-select', auth: true, expect: '/interview' },
-  { n: 17, path: '/interview/prepare', name: 'interview-prepare', auth: true, expect: '/interview/prepare' },
-  { n: 18, path: '/interview/session', name: 'interview-session', auth: true, expect: '/interview/session', session: true },
-  { n: 19, path: '/interview/review/:id', name: 'interview-review', auth: true, path2: `/interview/review/${SESSION_ID}`, expect: `/interview/review/${SESSION_ID}` },
-  { n: 20, path: '/report', name: 'growth-report', auth: true, expect: '/report' },
-  { n: 21, path: '/404', name: '404', auth: false, expect: '/404' },
-  { n: 22, path: '*', name: 'wildcard-404', auth: false, path2: '/this-route-does-not-exist', expect: '/this-route-does-not-exist' },
+  { n: 12, path: '/resume', name: 'resume', auth: true, expect: '/resume' },
+  { n: 13, path: '/interview', name: 'interview-select', auth: true, expect: '/interview' },
+  { n: 14, path: '/interview/prepare', name: 'interview-prepare', auth: true, expect: '/interview/prepare' },
+  { n: 15, path: '/interview/session', name: 'interview-session', auth: true, expect: '/interview/session', session: true },
+  { n: 16, path: '/interview/review/:id', name: 'interview-review', auth: true, path2: `/interview/review/${SESSION_ID}`, expect: `/interview/review/${SESSION_ID}` },
+  { n: 17, path: '/report', name: 'growth-report', auth: true, expect: '/report' },
+  { n: 18, path: '/404', name: '404', auth: false, expect: '/404' },
+  { n: 19, path: '*', name: 'wildcard-404', auth: false, path2: '/this-route-does-not-exist', expect: '/this-route-does-not-exist' },
 ]
 
 /* ------------------------------------------------------------------- runner */

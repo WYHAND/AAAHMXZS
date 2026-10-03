@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -14,6 +14,8 @@ from pydantic import BaseModel, Field
 ALLOWED_DIMENSIONS = ("兴趣", "能力", "技能", "痛点", "焦虑", "认知", "其他")
 
 # 附录F 岗位关键词库（骨架内置三个岗位）
+# ⚠️ 使用它的老 ATS 评分链路已整体移除（2026-11，见 README §4.10）：
+#    现在只剩 ``db/init_db.py::seed_job_keywords`` 的日志引用它，保留为代码常量备查。
 JOB_KEYWORDS: Dict[str, List[str]] = {
     "产品经理": ["需求分析", "原型", "PRD", "用户调研", "竞品分析", "数据指标", "Axure", "流程图"],
     "前端开发": ["React", "Vue", "TypeScript", "Webpack", "CSS", "性能优化", "组件化", "Git"],
@@ -51,50 +53,92 @@ class ProfileExtractResult(BaseModel):
     summary: str = Field(default="", description="一句话归纳用户当前状态")
 
 
-# ---------- 7.4 resume_parse ----------
+# ---------- 11.8 简历润色（POST /resume/polish） ----------
+#
+# ⚠️ 这一组 schema 与"从一份简历 PDF 里解析出什么"的那套（basics/title/role/period/…）
+# **不共用**：那套契约（``ResumeParsed`` / ``ResumeOptimizeResult`` 等）已随老的
+# 「上传 -> 解析 -> ATS 评分 -> 报告」链路整体移除（2026-11，见 README §4.10）。
+# 这里描述的是"把用户在表单里填的内容润色成简历口吻"（basic/target/education/skills/
+# projects/campus+STAR），落库结构 ``parsed_data`` 就是它的形状。
+#
+# ⚠️ 这一轮**没有 evidence 字段**（与早期"从对话生成"的设计不同）：素材不再是历史对话，
+# 而是**用户此刻在表单里亲手填的这一份内容**，它本身就是唯一依据。
+# 所以护栏换成了 `resume_service` 的两条机械校验：
+#   ① 润色结果里的数字必须是用户原文数字的子集（见 ``app/utils/fact_guard.py``）；
+#   ② 用户没填的字段不许被填（空 -> 非空一律回退成空）。
+# 命中任一条就把**那个字段**回退成用户原文（不整份丢弃）。
 
-class ResumeBasics(BaseModel):
-    name: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    target_job: Optional[str] = None
+class ResumeStar(BaseModel):
+    """STAR 表述（情境/任务/行动/结果）—— 只许在用户已写下的信息范围内组织。"""
 
-
-class ResumeSectionItem(BaseModel):
-    title: Optional[str] = Field(default=None, description="学校/公司/项目名")
-    role: Optional[str] = Field(default=None, description="专业/职位/角色")
-    period: Optional[str] = Field(default=None, description="起止时间")
-    description: Optional[str] = Field(default=None, description="描述原文要点")
-    highlights: List[str] = Field(default_factory=list, description="可量化的成果")
-
-
-class ResumeParsed(BaseModel):
-    """简历解析结果（13.3 文本 -> 结构化）。"""
-
-    basics: ResumeBasics = Field(default_factory=ResumeBasics)
-    education: List[ResumeSectionItem] = Field(default_factory=list)
-    experience: List[ResumeSectionItem] = Field(default_factory=list)
-    projects: List[ResumeSectionItem] = Field(default_factory=list)
-    skills: List[str] = Field(default_factory=list)
-    completeness: float = Field(default=0.0, ge=0.0, le=1.0, description="信息完整度 0-1")
+    situation: str = Field(default="", description="S 情境：用户写的背景/问题，改写说法而已")
+    task: str = Field(default="", description="T 任务：用户写过的目标；没写就留空")
+    action: str = Field(default="", description="A 行动：用户写过的具体做法；没写就留空")
+    result: str = Field(default="", description="R 结果：用户写过的产出/反馈；没写就留空")
 
 
-# ---------- 7.4 resume_optimize ----------
+class ResumeBasicInfo(BaseModel):
+    """基本信息（短事实，润色只做措辞规整，不许补全）。"""
 
-class ResumeSuggestion(BaseModel):
-    section: str = Field(description="basic/education/experience/project/skill 等小节")
-    problem: str = Field(description="问题描述")
-    suggestion: str = Field(description="修改建议")
-    example: Optional[str] = Field(default=None, description="改写示例")
+    name: str = Field(default="", description="姓名；用户没填就留空")
+    grade: str = Field(default="", description="年级；用户没填就留空")
+    major: str = Field(default="", description="专业；用户没填就留空")
+    school: str = Field(default="", description="学校；用户没填就留空")
+    contact: str = Field(default="", description="联系方式；用户没填就留空")
 
 
-class ResumeOptimizeResult(BaseModel):
-    ats_score: float = Field(default=0.0, ge=0.0, le=100.0)
-    completeness: float = Field(default=0.0, ge=0.0, le=100.0)
-    matched_keywords: List[str] = Field(default_factory=list)
-    missing_keywords: List[str] = Field(default_factory=list)
-    suggestions: List[ResumeSuggestion] = Field(default_factory=list)
-    summary: str = ""
+class ResumeTargetInfo(BaseModel):
+    """求职意向。"""
+
+    direction: str = Field(default="", description="求职方向；用户没填就留空")
+    city: str = Field(default="", description="意向城市；用户没填就留空")
+
+
+class ResumeEducationItem(BaseModel):
+    """教育经历一条。"""
+
+    school: str = Field(default="")
+    major: str = Field(default="")
+    period: str = Field(default="", description="起止时间；用户没填就留空，**不许推算**")
+    highlights: List[str] = Field(default_factory=list, description="用户写过的亮点，逐条改写措辞")
+
+
+class ResumeProjectItem(BaseModel):
+    """项目经历一条（``star`` 为润色后的 STAR 表述）。"""
+
+    name: str = Field(default="")
+    role: str = Field(default="", description="担任角色；用户没填就留空")
+    period: str = Field(default="", description="起止时间；用户没填就留空")
+    star: ResumeStar = Field(default_factory=ResumeStar)
+
+
+class ResumeCampusItem(BaseModel):
+    """校园与实践经历一条（字段与项目经历同构）。"""
+
+    name: str = Field(default="")
+    role: str = Field(default="")
+    period: str = Field(default="")
+    star: ResumeStar = Field(default_factory=ResumeStar)
+
+
+class ResumePolishResult(BaseModel):
+    """``resume_polish`` Prompt 的结构化输出（模型只输出这一个 JSON 对象）。
+
+    结构与 ``parsed_data`` **逐键一致**（这是刻意的：服务端按同一份模板做字段级
+    回退与完整度计算，模型换个形状就没有可比对的基准）。
+
+    ⚠️ ``skills`` 只收 ``List[str]``（用户填的就是技能词，模型没有需要改写的成分）。
+    这里用 ``Union`` 容错模型写成 ``[{"name": "Vue"}]`` 的情况，
+    ``resume_service._coerce_skills`` 会把它归一回字符串。
+    """
+
+    basic: ResumeBasicInfo = Field(default_factory=ResumeBasicInfo)
+    target: ResumeTargetInfo = Field(default_factory=ResumeTargetInfo)
+    education: List[ResumeEducationItem] = Field(default_factory=list)
+    skills: List[Union[str, Dict[str, Any]]] = Field(default_factory=list)
+    projects: List[ResumeProjectItem] = Field(default_factory=list)
+    campus: List[ResumeCampusItem] = Field(default_factory=list)
+    self_evaluation: str = Field(default="", description="自我评价，≤3 句，只许基于用户写下的内容")
 
 
 # ---------- 7.4 interview_question / interview_followup ----------
@@ -212,12 +256,13 @@ def empty_profile_extract() -> ProfileExtractResult:
     return ProfileExtractResult(tags=[], pain_points=[], summary="")
 
 
-def empty_resume_parsed() -> ResumeParsed:
-    return ResumeParsed()
+def empty_resume_polish() -> ResumePolishResult:
+    """润色的兜底（7.6）：**全空**。
 
-
-def empty_resume_optimize() -> ResumeOptimizeResult:
-    return ResumeOptimizeResult()
+    刻意不给任何"默认文案"：润色失败时服务端会退回**用户原文**，
+    返回全空只用于"AI 完全不可用"这一种情况，绝不能凭空冒出用户没写过的话。
+    """
+    return ResumePolishResult()
 
 
 def empty_interview_review() -> InterviewReviewResult:
@@ -250,11 +295,13 @@ __all__ = [
     "CORE_DIMENSIONS",
     "ProfileTagItem",
     "ProfileExtractResult",
-    "ResumeBasics",
-    "ResumeSectionItem",
-    "ResumeParsed",
-    "ResumeSuggestion",
-    "ResumeOptimizeResult",
+    "ResumeStar",
+    "ResumeBasicInfo",
+    "ResumeTargetInfo",
+    "ResumeEducationItem",
+    "ResumeProjectItem",
+    "ResumeCampusItem",
+    "ResumePolishResult",
     "InterviewQuestionItem",
     "InterviewQuestionResult",
     "InterviewFollowupResult",
@@ -265,8 +312,7 @@ __all__ = [
     "OpeningResult",
     "ConclusionCardResult",
     "empty_profile_extract",
-    "empty_resume_parsed",
-    "empty_resume_optimize",
+    "empty_resume_polish",
     "empty_interview_review",
     "empty_task_generate",
     "empty_conclusion",

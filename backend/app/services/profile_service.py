@@ -494,7 +494,12 @@ def recompute_stage(db: Session, user_id, *, commit: bool = True) -> Profile:
 
 
 def update_resume_score(db: Session, user_id, completeness: float, *, commit: bool = True) -> Profile:
-    """11.8 画像回流钩子：简历解析/优化后更新 resume_score 并重算阶段。"""
+    """11.8 画像回流钩子：简历落库后更新 resume_score 并重算阶段。
+
+    现行调用点：``resume_service.polish_resume`` / ``save_my_resume``（新链路
+    「模板 -> 用户填 -> AI 只润色」）；老链路的 ``parse_uploaded_resume`` /
+    ``optimize_resume`` 已随 ATS 链路移除（2026-11，见 README §4.10）。
+    """
     profile = get_or_create_profile(db, user_id, commit=commit)
     profile.resume_score = clamp_score(completeness)
     profile.total_score = calc_total_score(profile.clarity_score, profile.action_score, profile.resume_score)
@@ -594,10 +599,11 @@ async def extract_tags_from_text(
 
     调用点（骨架已预留）：
     - ``chat_service.stream_reply``：每轮对话结束后
-    - ``resume_service.parse_uploaded_resume`` / ``optimize_resume``：简历解析与优化后
-    - ``interview_service.finish_interview``：面试复盘后（由复盘结果直接带 tags）
     - ``task_service.complete_step``：打卡反馈后
+    - ``interview_service.finish_interview``：面试复盘后（由复盘结果直接带 tags）
     - ``daily_question_service.answer_question``：累计 7 题后
+    - ``resume_service``：老链路的解析/优化已在 2026-11 随 ATS 链路移除，
+      新链路（polish / mine）**不调**本函数，只回流 ``update_resume_score``
 
     ⚠️⚠️ **``text`` 必须只包含"用户自己写的东西"**（本期踩过的坑，别再踩）：
 
