@@ -5,11 +5,11 @@
  *   GET    /chat/conversations                           对话列表（裸数组）
  *   DELETE /chat/conversations/{id}                      删除对话
  *   GET    /chat/conversations/{id}/messages?limit=      消息列表（裸数组，用 limit 不是 page）
- *   POST   /chat/conversations/{id}/messages             发送消息（非流式完整回复）
+ *   POST   /chat/conversations/{id}/messages             发送消息（一次性完整回复，前端唯一使用的发送方式）
  *   POST   /chat/conversations/{id}/opening              AI 主动开场白（幂等，见下）
- *   POST   /chat/conversations/{id}/stream               SSE 流式（前端正式使用，见 api/sse.ts）
- *   GET    /chat/conversations/{id}/stream?content=      调试端点，前端不调用
  *   GET    /chat/conversations/{id}/conclusion           结论卡片
+ *
+ * （后端仍保留 /stream 的 SSE 端点，但前端已不再使用，不在这里封装。）
  *
  * DELETE 契约（后端新增）：需登录；成功 → HTTP 200 + {code:0,message:"success",data:null}；
  * 会话不存在 / 不属于当前用户 → HTTP 404 + {code:2001}（前端映射成「内容不存在」）。
@@ -56,7 +56,7 @@ export const chatApi = {
       params: { limit },
     }),
 
-  /** 非流式发送：流式不可用时的降级路径 */
+  /** 发送一句话，AI 整条回复生成完才返回（期间前端显示加载动画） */
   sendMessage: (conversationId: string, payload: ChatRequest) =>
     post<ChatResponse>(`/chat/conversations/${conversationId}/messages`, payload),
 

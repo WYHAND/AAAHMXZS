@@ -32,8 +32,8 @@ const TEST_PREFIX = '/test'
 
 function FullScreenHint({ text, onRetry }: { text: string; onRetry?: () => void }) {
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center gap-3 bg-background px-6">
-      <p className="text-center text-sm text-muted-foreground">{text}</p>
+    <div className="flex min-h-svh flex-col items-center justify-center gap-3 bg-canvas px-6">
+      <p className="text-center text-body-md text-on-surface-variant">{text}</p>
       {onRetry ? (
         <Button variant="outline" size="sm" onClick={onRetry}>
           重试

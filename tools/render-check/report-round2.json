@@ -1,7 +1,7 @@
 {
-  "baseUrl": "http://localhost:4173",
+  "baseUrl": "http://localhost:5173",
   "round": 2,
-  "startedAt": "2026-09-18T13:22:12.855Z",
+  "startedAt": "2026-10-11T14:20:17.640Z",
   "routes": [
     {
       "index": 1,
@@ -12,11 +12,11 @@
       "finalUrl": "/login",
       "urlOk": true,
       "expectedUrl": "/login",
-      "renderedText": 66,
+      "renderedText": 110,
       "rootChildren": 2,
       "blank": false,
       "errorBoundary": false,
-      "bodySample": "登录 AI 就业助手\n先做一次职业测评，我就能开始陪你走\n用户名\n密码\n登录\n\n还没有账号？注册一个\n\n高校学生 AI 就业辅助系统",
+      "bodySample": "登录 AI 就业助手\n\n先做一次职业测评，我就能开始陪你走。\n\n用户名\n密码\n登录\n\n还没有账号？注册一个\n\nAI 会从对话里了解你 · 任务拆成当天能做完的小步 · 简历只改你写过的内容\n\n高校学生 AI 就业辅助系统",
       "apiCalls": [],
       "pageErrors": [],
       "consoleErrorCount": 0,
@@ -34,11 +34,11 @@
       "finalUrl": "/register",
       "urlOk": true,
       "expectedUrl": "/register",
-      "renderedText": 77,
+      "renderedText": 121,
       "rootChildren": 2,
       "blank": false,
       "errorBoundary": false,
-      "bodySample": "创建你的账号\n只用用户名和密码，不用填一堆资料\n用户名\n学校（可选）\n密码\n确认密码\n注册并开始测评\n\n已经有账号？去登录\n\n高校学生 AI 就业辅助系统",
+      "bodySample": "创建你的账号\n\n只用用户名和密码，不用填一堆资料。\n\n用户名\n学校（可选）\n密码\n确认密码\n注册并开始测评\n\n已经有账号？去登录\n\nAI 会从对话里了解你 · 任务拆成当天能做完的小步 · 简历只改你写过的内容\n\n高校学生 AI 就业辅助系统",
       "apiCalls": [],
       "pageErrors": [],
       "consoleErrorCount": 0,
@@ -56,14 +56,14 @@
       "finalUrl": "/",
       "urlOk": true,
       "expectedUrl": "/",
-      "renderedText": 355,
+      "renderedText": 459,
       "rootChildren": 2,
       "blank": false,
       "errorBoundary": false,
-      "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n首页\n求职准备期\n林\n今天做一件小事就够了\n\n当前阶段：求职准备期 · 我会跟着你的进度调整建议\n\n求职准备期\n今日一问\n\n「最近一次投递没回音，你觉得卡在哪个环节？」\n\n随手答一句\nAI 发现\n查看全部\n缺项目经验\n三轮对话里都提到没有能写进简历的项目。\n去看看\n进行中的任务\n全部任务\n做一个鸿蒙待办清单小应用\n1/2 步\n\n当前：实现待办列表页与本地存储\n\n继续\n我的画像速览\n综合分 54，只有一份数据，不跟别人比\n完善画",
+      "bodySample": "AI 就业助手\n桌面版\n求职准备期\n林\n核心导航\n首页\n成长任务\nAI 对话\n每日一问\n就业求职\n简历\n模拟面试\n成长报告\n个人中心\n10月11日星期日\n今天，做一件小事就够了\n当前阶段：求职准备期。我会跟着你的心理舒适度与日常节奏调整建议\n今日焦点\n预计 14 天\n先把这个鸿蒙小项目的删除交互补完\n\nAI 随行手记任务已经做到一半。\n\n2\n当前停在：实现待办列表页与本地存储\n已完成 1/2 步\n继续任务\n支持随时暂存，无打卡压力\n今日一问 · 每天一题\n你的回答只进你的私有画像，不做对错评判\n「最近一次投递没回音",
       "apiCalls": [
-        "GET /auth/me",
         "GET /profile",
+        "GET /auth/me",
         "GET /home/summary"
       ],
       "pageErrors": [],
@@ -108,13 +108,12 @@
       "finalUrl": "/test/result",
       "urlOk": true,
       "expectedUrl": "/test/result",
-      "renderedText": 121,
+      "renderedText": 152,
       "rootChildren": 2,
       "blank": false,
       "errorBoundary": false,
-      "bodySample": "你的当前阶段\n求职准备期\n方向大体确定，重点是简历、项目与表达\n54\n/ 100 综合分\n方向清晰度\n68\n行动力\n54\n简历准备度\n41\n\n测评时间：2026-09-18\n\n接下来我会先给你一件小事做，不用一次想清楚所有事。\n进入我的工作台",
+      "bodySample": "首页\n测评结果\n你的当前阶段\n求职准备期\n\n方向大体确定，重点是简历、项目与表达\n\n你现在的阶段是「求职准备期」，这是这次测评算出来的结果\n68\n方向清晰度\n54\n行动力\n41\n简历完整度\n看这次的分数明细\n接下来我会先给你一件小事做，不用一次想清楚所有事。\n进入我的工作台\n高校学生 AI 就业辅助系统",
       "apiCalls": [
-        "GET /auth/me",
         "GET /profile",
         "GET /test/result"
       ],
@@ -134,11 +133,11 @@
       "finalUrl": "/",
       "urlOk": true,
       "expectedUrl": "/",
-      "renderedText": 355,
+      "renderedText": 459,
       "rootChildren": 2,
       "blank": false,
       "errorBoundary": false,
-      "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n首页\n求职准备期\n林\n今天做一件小事就够了\n\n当前阶段：求职准备期 · 我会跟着你的进度调整建议\n\n求职准备期\n今日一问\n\n「最近一次投递没回音，你觉得卡在哪个环节？」\n\n随手答一句\nAI 发现\n查看全部\n缺项目经验\n三轮对话里都提到没有能写进简历的项目。\n去看看\n进行中的任务\n全部任务\n做一个鸿蒙待办清单小应用\n1/2 步\n\n当前：实现待办列表页与本地存储\n\n继续\n我的画像速览\n综合分 54，只有一份数据，不跟别人比\n完善画",
+      "bodySample": "AI 就业助手\n桌面版\n求职准备期\n林\n核心导航\n首页\n成长任务\nAI 对话\n每日一问\n就业求职\n简历\n模拟面试\n成长报告\n个人中心\n10月11日星期日\n今天，做一件小事就够了\n当前阶段：求职准备期。我会跟着你的心理舒适度与日常节奏调整建议\n今日焦点\n预计 14 天\n先把这个鸿蒙小项目的删除交互补完\n\nAI 随行手记任务已经做到一半。\n\n2\n当前停在：实现待办列表页与本地存储\n已完成 1/2 步\n继续任务\n支持随时暂存，无打卡压力\n今日一问 · 每天一题\n你的回答只进你的私有画像，不做对错评判\n「最近一次投递没回音",
       "apiCalls": [
         "GET /auth/me",
         "GET /profile",
@@ -148,8 +147,17 @@
       "consoleErrorCount": 0,
       "consoleErrors": [],
       "consoleReal": [],
-      "verdict": "PASS",
-      "notes": []
+      "homeLayout": {
+        "focusCardShown": false,
+        "reasonShown": true,
+        "rhythmShown": true,
+        "newStatRendered": true,
+        "radarRemoved": true
+      },
+      "verdict": "FAIL",
+      "notes": [
+        "顶部没有「今日建议聚焦」主角卡"
+      ]
     },
     {
       "index": 7,
@@ -160,11 +168,11 @@
       "finalUrl": "/chat",
       "urlOk": true,
       "expectedUrl": "/chat",
-      "renderedText": 157,
+      "renderedText": 178,
       "rootChildren": 2,
       "blank": false,
       "errorBoundary": false,
-      "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\nAI 对话\n求职准备期\n林\n职业指导对话\n\n主题：跟着你的阶段走 · 正在挖「项目经历」\n\n新对话\n投了几家没回音\n\n先从你投的岗位和简历逐条对一遍关键词。\n\n发送\n\n追问进度 1/3 · 达到 3 轮后我会换一个方向继续挖",
+      "bodySample": "AI 就业助手\n桌面版\n求职准备期\n林\n核心导航\n首页\n成长任务\nAI 对话\n每日一问\n就业求职\n简历\n模拟面试\n成长报告\n个人中心\n投了几家没回音\nAI 对话\n\n主题：跟着你的阶段走。新对话是重新开始：不带上一段聊天的记忆，只看你的画像。\n\n生成简历\n新对话\n\n先从你投的岗位和简历逐条对一遍关键词。\n\n答不上来也没关系，说半句、说错都行，我顺着往下问。",
       "apiCalls": [
         "GET /auth/me",
         "GET /profile",
@@ -187,15 +195,16 @@
       "finalUrl": "/task",
       "urlOk": true,
       "expectedUrl": "/task",
-      "renderedText": 165,
+      "renderedText": 278,
       "rootChildren": 2,
       "blank": false,
       "errorBoundary": false,
-      "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n成长任务\n求职准备期\n林\n首页\n成长任务\n成长任务\n\n每个任务都拆成能当天做完的小步，做完就打卡。\n\n让 AI 生成任务\n做一个鸿蒙待办清单小应用\n\n关联痛点：缺项目经验\n\n进行中\n40%\n预计 14 天 · 更新于 11 小时前\n查看步骤",
+      "bodySample": "AI 就业助手\n桌面版\n求职准备期\n林\n核心导航\n首页\n成长任务\nAI 对话\n每日一问\n就业求职\n简历\n模拟面试\n成长报告\n个人中心\n首页\n成长任务\n成长任务\n小步打卡\n\n每个任务都拆成能当天做完的小步，做完就打卡。\n\n让 AI 生成任务\n全部\n1\n进行中\n1\n已完成\n0\n做一个鸿蒙待办清单小应用\n40%\n\n简历上能写成一个完整项目。\n\n任务路径\n1/2 步\n\n当前行动：\n实现待办列表页与本地存储\n\n难度\n中等\n预计\n14 天\n更新于\n2026-09-18\n关联痛点：缺项目经验\n查看步骤\n卡住的时候，与其硬扛，不如",
       "apiCalls": [
         "GET /auth/me",
         "GET /profile",
-        "GET /task"
+        "GET /task",
+        "GET /home/summary"
       ],
       "pageErrors": [],
       "consoleErrorCount": 0,
@@ -213,11 +222,11 @@
       "finalUrl": "/task/d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
       "urlOk": true,
       "expectedUrl": "/task/d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
-      "renderedText": 290,
+      "renderedText": 374,
       "rootChildren": 2,
       "blank": false,
       "errorBoundary": false,
-      "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n成长任务\n求职准备期\n林\n首页\n成长任务\n做一个鸿蒙待办清单小应用\n返回列表\n进行中\n难度：中等\n预计 14 天\n关联痛点：缺项目经验\n\n从 0 到 1 写一个能跑在真机上的 ArkTS 小应用。\n\n简历上能写成一个完整项目。\n\n40%\n任务步骤\n1. 装好 DevEco Studio 并跑通 Hello World\n已完成\n2. 实现待办列表页与本地存储\n当前\n第 2 步：行动指引\n实现待办列表页与本地存储\n\n用 List ",
+      "bodySample": "AI 就业助手\n桌面版\n求职准备期\n林\n核心导航\n首页\n成长任务\nAI 对话\n每日一问\n就业求职\n简历\n模拟面试\n成长报告\n个人中心\n首页\n成长任务\n做一个鸿蒙待办清单小应用\n进行中\n\n关联痛点：缺项目经验\n\n返回列表\n已完成的部分\n40%已经过半\n难度 中等\n·\n预计 14 天\n·\n已完成 1/2 步\n\n从 0 到 1 写一个能跑在真机上的 ArkTS 小应用。\n\n第 2 步 · 待完成\n实现待办列表页与本地存储\n\n用 List 渲染，preferences 存本地。\n\n打卡\n任务步骤\n共 2 步 · 已完成 1",
       "apiCalls": [
         "GET /auth/me",
         "GET /profile",
@@ -239,11 +248,11 @@
       "finalUrl": "/profile",
       "urlOk": true,
       "expectedUrl": "/profile",
-      "renderedText": 386,
+      "renderedText": 504,
       "rootChildren": 2,
       "blank": false,
       "errorBoundary": false,
-      "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n个人中心\n求职准备期\n林\n首页\n个人中心\n个人中心\n\n这里是你自己的画像，只有一份数据，不跟别人比。\n\n重新测评\n完善画像\n当前阶段\n方向大体确定，重点是简历、项目与表达\n求职准备期\n54\n/ 100 综合分\n方向清晰度\n68\n行动力\n54\n简历准备度\n41\n\n测评结果会随你的打卡与对话持续更新，想重测随时可以。\n\n我的奖章\n完成第一个任务就能拿到第一枚\n2\n起步行动家\n第一份简历\n能力雷达\n只有一个系列，主色 + 20% 透",
+      "bodySample": "AI 就业助手\n桌面版\n求职准备期\n林\n核心导航\n首页\n成长任务\nAI 对话\n每日一问\n就业求职\n简历\n模拟面试\n成长报告\n个人中心\n首页\n个人中心\n个人中心\n\n这里是你自己的画像，只有一份数据，不跟别人比。\n\n继续今天的任务\n重新测评\n完善画像\n当前阶段\n\n方向大体确定，重点是简历、项目与表达\n\n求职准备期\n54\n/ 100 综合分\n看分数明细\n\n方向清晰度来自基础测评；继续打卡和聊天，上面的画像雷达会跟着变，想重测随时可以。\n\n我的奖章\n已获得 2 / 3\n\n做任务、答题、完善画像，一枚一枚点亮它们。\n\n起步行",
       "apiCalls": [
         "GET /auth/me",
         "GET /profile",
@@ -265,63 +274,80 @@
       "finalUrl": "/daily",
       "urlOk": true,
       "expectedUrl": "/daily",
-      "renderedText": 131,
+      "renderedText": 402,
       "rootChildren": 2,
       "blank": false,
       "errorBoundary": false,
-      "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n每日一问\n求职准备期\n林\n首页\n每日一问\n每日一问\n\n一天一句话就够，不用写小作文。\n\n今天的问题\n连续 4 天\n最近一次投递没回音，你觉得卡在哪个环节？\n0/200\n提交",
+      "bodySample": "AI 就业助手\n桌面版\n求职准备期\n林\n核心导航\n首页\n成长任务\nAI 对话\n每日一问\n就业求职\n简历\n模拟面试\n成长报告\n个人中心\n首页\n每日一问\n每日一问\n轻量记录\n\n一天一句话，不用写小作文。\n\n连续记录 4 天\n已积累 3 条思考\n\nTODAY'S REFLECTION\n·\n今日一问\n\n今天还没答\n\n「最近一次投递没回音，你觉得卡在哪个环节？」\n\n答不上来也没关系，写半句都行，AI 会顺着你的想法往下聊。\n和 AI 聊聊 ›\n0/200\n记下这一句\n以前答过的题与心声\n回望与复盘\n共 3 条\n9 月 17 ",
       "apiCalls": [
         "GET /auth/me",
         "GET /profile",
-        "GET /daily/today"
+        "GET /daily/today",
+        "GET /daily/history"
       ],
       "pageErrors": [],
       "consoleErrorCount": 0,
       "consoleErrors": [],
       "consoleReal": [],
+      "dailyHistory": {
+        "sectionShown": true,
+        "firstItemShown": true,
+        "emptyStateShown": false
+      },
       "verdict": "PASS",
       "notes": []
     },
     {
       "index": 12,
       "path": "/resume",
-      "name": "resume-list",
-      "screenshot": "shots/12-resume-list.png",
+      "name": "resume",
+      "screenshot": "shots/12-resume.png",
       "waitMode": "networkidle",
       "finalUrl": "/resume",
       "urlOk": true,
       "expectedUrl": "/resume",
-      "renderedText": 210,
+      "renderedText": 836,
       "rootChildren": 2,
       "blank": false,
       "errorBoundary": false,
-      "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n简历\n求职准备期\n林\n首页\n简历\n我的简历\n\n可以上传现成的，也可以让我带你 5 步生成一份。\n\n新建简历\n\n把简历拖到这里，或点击选择文件\n\n支持 PDF / DOC / DOCX，最大 10MB\n\n林小满-鸿蒙客户端开发-2026 秋招\n\n目标岗位：鸿蒙应用开发工程师 · 更新于 11 小时前\n\nATS 76\n编辑\n优化报告",
+      "bodySample": "AI 就业助手\n桌面版\n求职准备期\n林\n核心导航\n首页\n成长任务\nAI 对话\n每日一问\n就业求职\n简历\n模拟面试\n成长报告\n个人中心\n首页\n简历\n我的简历\n\n我把简历要问的每一项都当成一个问题问出来。你写什么，我只帮你改得更像简历。\n\n编辑简历\n\n这份简历还没保存到服务器\n\n简历完整度\n0%\n\n已填 0/27 项 · 空着的不影响保存，随时回来补；我不会替你编经历。\n\n我不会替你编经历：你写什么，我只帮你改得更像简历。空着的项目会一直空着。\n\n下面每一项都是简历会问到的问题，想到多少写多少，写半句也行。\n\n开始填写",
       "apiCalls": [
         "GET /auth/me",
         "GET /profile",
-        "GET /resume"
+        "GET /resume/template",
+        "GET /resume/mine"
       ],
       "pageErrors": [],
       "consoleErrorCount": 0,
       "consoleErrors": [],
       "consoleReal": [],
+      "resumeForm": {
+        "failureCardShown": false,
+        "skillsQuestionShown": true,
+        "skillsField": {
+          "found": true,
+          "tag": "textarea"
+        },
+        "inputCount": 7,
+        "textareaCount": 2
+      },
       "verdict": "PASS",
       "notes": []
     },
     {
       "index": 13,
-      "path": "/resume/create",
-      "name": "resume-create",
-      "screenshot": "shots/13-resume-create.png",
+      "path": "/interview",
+      "name": "interview-select",
+      "screenshot": "shots/13-interview-select.png",
       "waitMode": "networkidle",
-      "finalUrl": "/resume/create",
+      "finalUrl": "/interview",
       "urlOk": true,
-      "expectedUrl": "/resume/create",
-      "renderedText": 159,
+      "expectedUrl": "/interview",
+      "renderedText": 339,
       "rootChildren": 2,
       "blank": false,
       "errorBoundary": false,
-      "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n简历\n求职准备期\n林\n首页\n新建简历\n新建简历\n\n我问你答，5 步之后给你一份能投的简历。\n\n返回列表\n第 1 / 5 步 · 基本信息\n20%\n基本信息\n只要面试官真的会看的那几项\n姓名\n联系电话\n邮箱（可选）\n上一步\n下一步",
+      "bodySample": "AI 就业助手\n桌面版\n求职准备期\n林\n核心导航\n首页\n成长任务\nAI 对话\n每日一问\n就业求职\n简历\n模拟面试\n成长报告\n个人中心\n首页\n模拟面试\n模拟面试\n\n先在安全的地方把话说一遍，真面试时才不慌。\n\n面试配置\n/\n2\n准备设备\n/\n3\n模拟面试\n/\n4\n复盘报告\n目标岗位\n\n越具体，问题越像真的（可留空，我会按你的简历出题）\n\n岗位名称\n面试强度\n\n先小测试找感觉，再上全真\n\n小测试\n3-5 题，先熟悉一下节奏\n全真模拟\n完整流程，更接近真实面试\n面试场景\n\n不同场景问的东西完全不一样\n\nHR 面\n动机、稳",
       "apiCalls": [
         "GET /auth/me",
         "GET /profile"
@@ -335,22 +361,21 @@
     },
     {
       "index": 14,
-      "path": "/resume/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d/edit",
-      "name": "resume-edit",
-      "screenshot": "shots/14-resume-edit.png",
+      "path": "/interview/prepare",
+      "name": "interview-prepare",
+      "screenshot": "shots/14-interview-prepare.png",
       "waitMode": "networkidle",
-      "finalUrl": "/resume/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d/edit",
+      "finalUrl": "/interview/prepare",
       "urlOk": true,
-      "expectedUrl": "/resume/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d/edit",
-      "renderedText": 251,
+      "expectedUrl": "/interview/prepare",
+      "renderedText": 222,
       "rootChildren": 2,
       "blank": false,
       "errorBoundary": false,
-      "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n简历\n求职准备期\n林\n首页\n简历\n编辑简历\n返回列表\n基础信息\n名称只给自己看，用于区分不同版本\n简历名称\n目标岗位\n\n已上传文件：11111111-2222-4333-8444-555555555555/resume.pdf\n\n结构化内容\n对应后端 parsed_data（basics / education / projects / skills），JSON 格式\n下载原件\n浏览器打印\n保存\n去看优化报告",
+      "bodySample": "AI 就业助手\n桌面版\n求职准备期\n林\n核心导航\n首页\n成长任务\nAI 对话\n每日一问\n就业求职\n简历\n模拟面试\n成长报告\n个人中心\n首页\n模拟面试\n面试准备\n\n花 30 秒确认环境，比中途被打断划算。\n\n返回\n开始前确认\n\n点一下就是勾选，没有真实设备检测\n\n麦克风可用\n语音模式下需要，文字模式可跳过\n网络稳定\n断流会导致面试中断\n环境安静\n找个能开口说话的地方\n\n还没有创建面试场次，先去上一步选岗位和形式。\n\n去选择\n先勾选上面的确认项",
       "apiCalls": [
         "GET /auth/me",
-        "GET /profile",
-        "GET /resume/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
+        "GET /profile"
       ],
       "pageErrors": [],
       "consoleErrorCount": 0,
@@ -361,94 +386,18 @@
     },
     {
       "index": 15,
-      "path": "/resume/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d/report",
-      "name": "resume-report",
-      "screenshot": "shots/15-resume-report.png",
-      "waitMode": "networkidle",
-      "finalUrl": "/resume/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d/report",
-      "urlOk": true,
-      "expectedUrl": "/resume/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d/report",
-      "renderedText": 255,
-      "rootChildren": 2,
-      "blank": false,
-      "errorBoundary": false,
-      "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n简历\n求职准备期\n林\n首页\n简历\n简历优化报告\n返回列表\nATS 评分\n整体结构完整，主要短板是缺少可量化成果。\n76\n/ 100\n完整度\n1\n命中的关键词\n这些保留，别删\nArkTS\nTypeScript\n缺失的关键词\n有相关经历就补上\n分布式软总线\n待改进\n1. projects\n问题：项目描述没写结果。\n\n建议：补一条量化结果。\n\n示例：首屏 480ms → 210ms。\n\n忽略\n采纳建议\n浏览器打印\n重新优化",
-      "apiCalls": [
-        "GET /auth/me",
-        "GET /profile",
-        "GET /resume/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d/report"
-      ],
-      "pageErrors": [],
-      "consoleErrorCount": 0,
-      "consoleErrors": [],
-      "consoleReal": [],
-      "verdict": "PASS",
-      "notes": []
-    },
-    {
-      "index": 16,
-      "path": "/interview",
-      "name": "interview-select",
-      "screenshot": "shots/16-interview-select.png",
-      "waitMode": "networkidle",
-      "finalUrl": "/interview",
-      "urlOk": true,
-      "expectedUrl": "/interview",
-      "renderedText": 259,
-      "rootChildren": 2,
-      "blank": false,
-      "errorBoundary": false,
-      "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n模拟面试\n求职准备期\n林\n首页\n模拟面试\n模拟面试\n\n先在安全的地方把话说一遍，真面试时才不慌。\n\n目标岗位\n越具体，问题越像真的（可留空，我会按你的简历出题）\n岗位名称\n面试强度\n先小测试找感觉，再上全真\n小测试\n3-5 题，先熟悉一下节奏\n全真模拟\n完整流程，更接近真实面试\n面试场景\n不同场景问的东西完全不一样\nHR 面\n动机、稳定性、沟通表达\n项目面\n你做过的项目与细节追问\n技术面\n岗位相关的专业知识\n下一步：准备设备",
-      "apiCalls": [
-        "GET /auth/me",
-        "GET /profile"
-      ],
-      "pageErrors": [],
-      "consoleErrorCount": 0,
-      "consoleErrors": [],
-      "consoleReal": [],
-      "verdict": "PASS",
-      "notes": []
-    },
-    {
-      "index": 17,
-      "path": "/interview/prepare",
-      "name": "interview-prepare",
-      "screenshot": "shots/17-interview-prepare.png",
-      "waitMode": "networkidle",
-      "finalUrl": "/interview/prepare",
-      "urlOk": true,
-      "expectedUrl": "/interview/prepare",
-      "renderedText": 207,
-      "rootChildren": 2,
-      "blank": false,
-      "errorBoundary": false,
-      "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n模拟面试\n求职准备期\n林\n首页\n模拟面试\n面试准备\n\n花 30 秒确认环境，比中途被打断划算。\n\n返回\n开始前确认\n点一下就是勾选，没有真实设备检测\n麦克风可用\n语音模式下需要，文字模式可跳过\n网络稳定\n断流会导致面试中断\n环境安静\n找个能开口说话的地方\n\n还没有创建面试场次，先去上一步选岗位和形式。\n\n先勾选上面的确认项",
-      "apiCalls": [
-        "GET /auth/me",
-        "GET /profile"
-      ],
-      "pageErrors": [],
-      "consoleErrorCount": 0,
-      "consoleErrors": [],
-      "consoleReal": [],
-      "verdict": "PASS",
-      "notes": []
-    },
-    {
-      "index": 18,
       "path": "/interview/session",
       "name": "interview-session",
-      "screenshot": "shots/18-interview-session.png",
+      "screenshot": "shots/15-interview-session.png",
       "waitMode": "networkidle",
       "finalUrl": "/interview/session",
       "urlOk": true,
       "expectedUrl": "/interview/session",
-      "renderedText": 80,
+      "renderedText": 78,
       "rootChildren": 2,
       "blank": false,
       "errorBoundary": false,
-      "bodySample": "第 1 / 1 题\n0%\n先花一分钟介绍一下你自己，重点讲鸿蒙客户端开发相关的部分。\n0/5000\n结束面试\n跳过这题\n提交并继续\n高校学生 AI 就业辅助系统",
+      "bodySample": "第 1 / 1 题\n\n结束面试\n先花一分钟介绍一下你自己，重点讲鸿蒙客户端开发相关的部分。\n0/5000\n跳过这题\n提交并继续\n高校学生 AI 就业辅助系统",
       "apiCalls": [
         "GET /auth/me",
         "GET /profile",
@@ -462,19 +411,19 @@
       "notes": []
     },
     {
-      "index": 19,
+      "index": 16,
       "path": "/interview/review/b7c1e2d3-4f5a-4b6c-8d7e-9f0a1b2c3d4e",
       "name": "interview-review",
-      "screenshot": "shots/19-interview-review.png",
+      "screenshot": "shots/16-interview-review.png",
       "waitMode": "networkidle",
       "finalUrl": "/interview/review/b7c1e2d3-4f5a-4b6c-8d7e-9f0a1b2c3d4e",
       "urlOk": true,
       "expectedUrl": "/interview/review/b7c1e2d3-4f5a-4b6c-8d7e-9f0a1b2c3d4e",
-      "renderedText": 365,
+      "renderedText": 360,
       "rootChildren": 2,
       "blank": false,
       "errorBoundary": false,
-      "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n模拟面试\n求职准备期\n林\n首页\n模拟面试\n面试复盘\n\n整体在及格线以上，项目能讲但不够深。\n\n整体表现\n单系列雷达，颜色只表示维度强弱\n71\n/ 100\n表达清晰度\n项目深度\n技术基础\n岗位匹配\n答得好的地方\n能把项目背景讲清楚，技术选型有理由。\n对 ArkUI 声明式写法理解扎实。\n下次可以改\n回答里缺少量化结果。\n被追问边界情况时容易泛泛而谈。\n逐题点评\n1. 先花一分钟介绍一下你自己。\n68\n你的回答\n\n我是软件工程大三",
+      "bodySample": "AI 就业助手\n桌面版\n求职准备期\n林\n核心导航\n首页\n成长任务\nAI 对话\n每日一问\n就业求职\n简历\n模拟面试\n成长报告\n个人中心\n首页\n模拟面试\n面试复盘\n\n整体在及格线以上，项目能讲但不够深。\n\n整体表现\n71\n/ 100\n表达清晰度\n项目深度\n技术基础\n岗位匹配\n答得好的地方\n能把项目背景讲清楚，技术选型有理由。\n对 ArkUI 声明式写法理解扎实。\n下次可以改\n回答里缺少量化结果。\n被追问边界情况时容易泛泛而谈。\n逐题点评\n1. 先花一分钟介绍一下你自己。\n68 分\n你的回答\n\n我是软件工程大三学生，做过",
       "apiCalls": [
         "GET /auth/me",
         "GET /profile",
@@ -488,19 +437,19 @@
       "notes": []
     },
     {
-      "index": 20,
+      "index": 17,
       "path": "/report",
       "name": "growth-report",
-      "screenshot": "shots/20-growth-report.png",
+      "screenshot": "shots/17-growth-report.png",
       "waitMode": "networkidle",
       "finalUrl": "/report",
       "urlOk": true,
       "expectedUrl": "/report",
-      "renderedText": 331,
+      "renderedText": 514,
       "rootChildren": 2,
       "blank": false,
       "errorBoundary": false,
-      "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n成长报告\n求职准备期\n林\n首页\n成长报告\n成长报告\n\n生成于 2026-09-18 09:24\n\n浏览器打印\n重新计算\n当前阶段\n这一周期阶段发生变化了\n求职准备期\n54\n/ 100 综合分\n方向清晰度\n68\n+8\n行动力\n54\n+12\n简历准备度\n41\n+5\n完成任务\n1个\n完成步骤\n7步\n活跃天数\n12天\n与上一份报告相比\n只有变化过的维度会出现在这里\nclarity_score\n+8\naction_score\n+12\nr",
+      "bodySample": "AI 就业助手\n桌面版\n求职准备期\n林\n核心导航\n首页\n成长任务\nAI 对话\n每日一问\n就业求职\n简历\n模拟面试\n成长报告\n个人中心\n首页\n成长报告\n成长报告\n\n上次保存于 9 月 18 日 09:24 · 本页每次打开都是最新数据\n\n浏览器打印\n重新载入\n保存这一份\n当前阶段\n\n求职准备期 · 这一周期阶段发生变化了\n\n求职准备期\n54\n/ 100 综合分\n看分数明细\nAI 阶段建议\n\n你现在的方向清晰度是 68 分；点「去做」我会把建议拆成能当天做完的小步。\n\n把项目描述补上量化结果。\n这段时间的节奏\n1个\n完",
       "apiCalls": [
         "GET /auth/me",
         "GET /profile",
@@ -514,19 +463,19 @@
       "notes": []
     },
     {
-      "index": 21,
+      "index": 18,
       "path": "/404",
       "name": "404",
-      "screenshot": "shots/21-404.png",
+      "screenshot": "shots/18-404.png",
       "waitMode": "networkidle",
       "finalUrl": "/404",
       "urlOk": true,
       "expectedUrl": "/404",
-      "renderedText": 59,
+      "renderedText": 76,
       "rootChildren": 2,
       "blank": false,
       "errorBoundary": false,
-      "bodySample": "这个页面不存在\n链接可能写错了，或者这个功能还没上线。回首页看看下一步该做什么。\n回到首页\n和 AI 聊聊我现在的情况",
+      "bodySample": "这个页面不存在\n\n链接可能写错了，或者这个功能还没上线。回首页看看下一步该做什么。\n\n回到首页\n和 AI 聊聊我现在的情况\n高校学生 AI 就业辅助系统",
       "apiCalls": [],
       "pageErrors": [],
       "consoleErrorCount": 0,
@@ -536,19 +485,19 @@
       "notes": []
     },
     {
-      "index": 22,
+      "index": 19,
       "path": "/this-route-does-not-exist",
       "name": "wildcard-404",
-      "screenshot": "shots/22-wildcard-404.png",
+      "screenshot": "shots/19-wildcard-404.png",
       "waitMode": "networkidle",
       "finalUrl": "/this-route-does-not-exist",
       "urlOk": true,
       "expectedUrl": "/this-route-does-not-exist",
-      "renderedText": 59,
+      "renderedText": 76,
       "rootChildren": 2,
       "blank": false,
       "errorBoundary": false,
-      "bodySample": "这个页面不存在\n链接可能写错了，或者这个功能还没上线。回首页看看下一步该做什么。\n回到首页\n和 AI 聊聊我现在的情况",
+      "bodySample": "这个页面不存在\n\n链接可能写错了，或者这个功能还没上线。回首页看看下一步该做什么。\n\n回到首页\n和 AI 聊聊我现在的情况\n高校学生 AI 就业辅助系统",
       "apiCalls": [],
       "pageErrors": [],
       "consoleErrorCount": 0,
@@ -562,9 +511,9 @@
     "A": {
       "finalUrl": "/login",
       "redirectedToLogin": true,
-      "renderedText": 66,
+      "renderedText": 110,
       "hasPasswordInput": true,
-      "bodySample": "登录 AI 就业助手\n先做一次职业测评，我就能开始陪你走\n用户名\n密码\n登录\n\n还没有账号？注册一个\n\n高校学生 AI 就业辅助系统",
+      "bodySample": "登录 AI 就业助手\n\n先做一次职业测评，我就能开始陪你走。\n\n用户名\n密码\n登录\n\n还没有账号？注册一个\n\nAI 会从对话里了解你 · 任务拆成当天能做完的小步 · 简历只改你写过的内容\n\n高校学生 AI 就业辅助系统",
       "blank": false,
       "pageErrors": [],
       "verdict": "PASS"
@@ -580,24 +529,26 @@
         "navType": "navigate",
         "navCount": 1,
         "frameNavigations": [
-          "http://localhost:4173/",
-          "http://localhost:4173/",
-          "http://localhost:4173/login",
-          "http://localhost:4173/login"
+          "http://localhost:5173/",
+          "http://localhost:5173/",
+          "http://localhost:5173/login",
+          "http://localhost:5173/login"
         ],
         "frameNavigationCount": 4
       },
       "waitMode": "networkidle",
       "finalUrl": "/login",
       "redirectedToLogin": true,
-      "renderedText": 90,
+      "renderedText": 158,
       "hasPasswordInput": true,
       "blank": false,
-      "bodySample": "登录 AI 就业助手\n先做一次职业测评，我就能开始陪你走\n用户名\n密码\n登录\n\n还没有账号？注册一个\n\n高校学生 AI 就业辅助系统\n登录已过期，请重新登录\n登录已过期，请重新登录",
+      "bodySample": "登录 AI 就业助手\n\n先做一次职业测评，我就能开始陪你走。\n\n用户名\n密码\n登录\n\n还没有账号？注册一个\n\nAI 会从对话里了解你 · 任务拆成当天能做完的小步 · 简历只改你写过的内容\n\n高校学生 AI 就业辅助系统\n登录已过期，请重新登录\n登录已过期，请重新登录\n登录已过期，请重新登录\n登录已过期，请重新登录",
       "n1_verdict": "PASS",
       "n1_reason": [],
       "pageErrors": [],
       "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
         "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
         "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
       ],
@@ -609,7 +560,7 @@
       "funnelRedirectToIntro": true,
       "introFinalUrl": "/test/intro",
       "introRendersGuide": true,
-      "introText": "先花 3 分钟做个职业测评\n只有这一次需要你主动填东西，之后我不再弹问卷，靠对话和打卡慢慢认识你。\n· 全是选择题，一次一屏，答完一题自动跳下一题\n· 答不上来可以直接跳过，跳过不扣分\n· 答完立刻给出你的阶段和初始画像\n开始测评",
+      "introText": "先花 3 分钟做个职业测评\n\n只有这一次需要你主动填东西，之后我不再弹问卷，靠对话和打卡慢慢认识你。\n\n· 全是选择题，一次一屏，答完一题自动跳下一题\n· 答不上来可以直接跳过，跳过不扣分\n· 答完立刻给出你的阶段和初始画像\n开始测评\n高校学生 AI 就业辅助系统",
       "pageErrors": [],
       "verdict": "PASS"
     },
@@ -623,14 +574,21 @@
       "textareaCount": 1,
       "finalFullTextPresent": true,
       "userEcho": true,
-      "followupProgressText": "追问进度 2/3",
       "conclusionCardVisible": true,
       "streamRequest": {
         "method": "POST",
         "path": "/chat/conversations/c1/stream",
-        "body": "{\"content\":\"我投了几家都没回音，简历我也改过。\",\"client_msg_id\":\"920fffd4-e26a-4c16-ae5a-3d93472acc80\"}"
+        "body": "{\"content\":\"我投了几家都没回音，简历我也改过。\",\"client_msg_id\":\"aea9dc4d-47ee-45b4-9d69-6a390998e9c2\"}"
       },
       "pageErrors": [],
+      "consoleErrors": [],
+      "checks": {
+        "streamRequestSent": true,
+        "deltaFullTextOnScreen": true,
+        "userMessageEchoed": true,
+        "conclusionCardVisible": true,
+        "noPageError": true
+      },
       "verdict": "PASS"
     }
   },
@@ -648,10 +606,10 @@
         "navType": "navigate",
         "navCount": 1,
         "frameNavigations": [
-          "http://localhost:4173/",
-          "http://localhost:4173/",
-          "http://localhost:4173/login",
-          "http://localhost:4173/login"
+          "http://localhost:5173/",
+          "http://localhost:5173/",
+          "http://localhost:5173/login",
+          "http://localhost:5173/login"
         ],
         "frameNavigationCount": 4
       },
@@ -674,7 +632,7 @@
           "mainQuestionStillShown": true,
           "placeholderAfter": "针对这个追问再补两句",
           "mainButtonAfter": "回答追问",
-          "bodySample": "第 1 / 1 题 · 追问 1/2\n0%\n\n主问题\n\n先花一分钟介绍一下你自己，重点讲鸿蒙客户端开发相关的部分。\n\n（追问）能举个具体例子吗？\n\n0/5000\n结束面试\n跳过这题\n回答追问\n高校学生 AI 就业辅助系统"
+          "bodySample": "第 1 / 1 题 · 追问 1/2\n\n结束面试\n主问题\n\n先花一分钟介绍一下你自己，重点讲鸿蒙客户端开发相关的部分。\n\n（追问）能举个具体例子吗？\n\n0/5000\n跳过这题\n回答追问\n高校学生 AI 就业辅助系统"
         },
         {
           "step": 2,
@@ -687,7 +645,7 @@
           "qTotalAfter": 1,
           "followupTextRendered": true,
           "followupRoundBadge": "追问 2/2",
-          "bodySample": "第 1 / 1 题 · 追问 2/2\n0%\n\n主问题\n\n先花一分钟介绍一下你自己，重点讲鸿蒙客户端开发相关的部分。\n\n（追问·第2轮）那这个例子里的数字是多少？\n\n0/5000\n结束面试\n跳过这题\n回答追问\n高校学生 AI 就业辅助系统"
+          "bodySample": "第 1 / 1 题 · 追问 2/2\n\n结束面试\n主问题\n\n先花一分钟介绍一下你自己，重点讲鸿蒙客户端开发相关的部分。\n\n（追问·第2轮）那这个例子里的数字是多少？\n\n0/5000\n跳过这题\n回答追问\n高校学生 AI 就业辅助系统"
         },
         {
           "step": 3,
@@ -701,14 +659,14 @@
           "newQuestionRendered": true,
           "followupTextGone": true,
           "followupBadgeGone": true,
-          "bodySample": "第 2 / 2 题\n50%\n（新题）说说你项目里最得意的一次性能优化。\n0/5000\n结束面试\n跳过这题\n提交并继续\n高校学生 AI 就业辅助系统"
+          "bodySample": "第 2 / 2 题\n\n结束面试\n（新题）说说你项目里最得意的一次性能优化。\n0/5000\n跳过这题\n提交并继续\n高校学生 AI 就业辅助系统"
         },
         {
           "step": 4,
           "expectAction": "finished",
           "finalUrl": "/interview/review/b7c1e2d3-4f5a-4b6c-8d7e-9f0a1b2c3d4e",
           "reviewRendered": true,
-          "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n模拟面试\n求职准备期\n林\n首页\n模拟面试\n面试复盘\n\n整体在及格线以上，项目能讲但不够深。\n\n整体表现\n单系列雷达，颜色只表示维度强弱\n71\n/ 100\n表达清晰度\n项目深度\n技术基础\n岗位匹配\n答得好的地方\n能把项目背景讲清楚，技术选型有理由。\n对 ArkUI 声明式写法理解扎实。\n下次可以改\n回答里缺少量化结果。\n被追问边界情况时容易泛泛而谈。\n逐题点评\n1. 先花一分钟介绍一下你自己。\n68\n你的回答\n\n我是软件工程大三学生，做过一个鸿蒙待办清单应用，负责全部客户端开发。\n\n结构完整但缺亮点，建议把最有说服力的一段经历前置。\n\n更好的答法\n\n先说结论：两年鸿蒙客户端经验，做过一个 800 日活的小应用，再展开细节。\n\n再面一次"
+          "bodySample": "AI 就业助手\n桌面版\n求职准备期\n林\n核心导航\n首页\n成长任务\nAI 对话\n每日一问\n就业求职\n简历\n模拟面试\n成长报告\n个人中心\n首页\n模拟面试\n面试复盘\n\n整体在及格线以上，项目能讲但不够深。\n\n整体表现\n71\n/ 100\n表达清晰度\n项目深度\n技术基础\n岗位匹配\n答得好的地方\n能把项目背景讲清楚，技术选型有理由。\n对 ArkUI 声明式写法理解扎实。\n下次可以改\n回答里缺少量化结果。\n被追问边界情况时容易泛泛而谈。\n逐题点评\n1. 先花一分钟介绍一下你自己。\n68 分\n你的回答\n\n我是软件工程大三学生，做过一个鸿蒙待办清单应用，负责全部客户端开发。\n\n结构完整但缺亮点，建议把最有说服力的一段经历前置。\n\n更好的答法\n\n先说结论：两年鸿蒙客户端经验，做过一个 800 日活的小应用，再展开细节。\n\n再面一次"
         }
       ],
       "answerCalls": [
@@ -735,7 +693,7 @@
     },
     "N3": {
       "name": "复盘逐题点评按字段渲染，无原始 JSON",
-      "bodyText": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n模拟面试\n求职准备期\n林\n首页\n模拟面试\n面试复盘\n\n整体在及格线以上，项目能讲但不够深。\n\n整体表现\n单系列雷达，颜色只表示维度强弱\n71\n/ 100\n表达清晰度\n项目深度\n技术基础\n岗位匹配\n答得好的地方\n能把项目背景讲清楚，技术选型有理由。\n对 ArkUI 声明式写法理解扎实。\n下次可以改\n回答里缺少量化结果。\n被追问边界情况时容易泛泛而谈。\n逐题点评\n1. 先花一分钟介绍一下你自己。\n68\n你的回答\n\n我是软件工程大三学生，做过一个鸿蒙待办清单应用，负责全部客户端开发。\n\n结构完整但缺亮点，建议把最有说服力的一段经历前置。\n\n更好的答法\n\n先说结论：两年鸿蒙客户端经验，做过一个 800 日活的小应用，再展开细节。\n\n再面一次",
+      "bodyText": "AI 就业助手\n桌面版\n求职准备期\n林\n核心导航\n首页\n成长任务\nAI 对话\n每日一问\n就业求职\n简历\n模拟面试\n成长报告\n个人中心\n首页\n模拟面试\n面试复盘\n\n整体在及格线以上，项目能讲但不够深。\n\n整体表现\n71\n/ 100\n表达清晰度\n项目深度\n技术基础\n岗位匹配\n答得好的地方\n能把项目背景讲清楚，技术选型有理由。\n对 ArkUI 声明式写法理解扎实。\n下次可以改\n回答里缺少量化结果。\n被追问边界情况时容易泛泛而谈。\n逐题点评\n1. 先花一分钟介绍一下你自己。\n68 分\n你的回答\n\n我是软件工程大三学生，做过一个鸿蒙待办清单应用，负责全部客户端开发。\n\n结构完整但缺亮点，建议把最有说服力的一段经历前置。\n\n更好的答法\n\n先说结论：两年鸿蒙客户端经验，做过一个 800 日活的小应用，再展开细节。\n\n再面一次",
       "answerSummaryRendered": true,
       "commentRendered": true,
       "betterAnswerRendered": true,
@@ -758,11 +716,14 @@
       "hasSection": true,
       "badgeNames": [
         "起步行动家",
-        "第一份简历"
+        "坚持打卡者",
+        "方向初现"
       ],
       "emptyStateText": null,
+      "staleEmptyTextGone": true,
+      "overviewCounter": "2 / 3",
       "loadingText": null,
-      "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n个人中心\n求职准备期\n林\n首页\n个人中心\n个人中心\n\n这里是你自己的画像，只有一份数据，不跟别人比。\n\n重新测评\n完善画像\n当前阶段\n方向大体确定，重点是简历、项目与表达\n求职准备期\n54\n/ 100 综合分\n方向清晰度\n68\n行动力\n54\n简历准备度\n41\n\n测评结果会随你的打卡与对话持续更新，想重测随时可以。\n\n我的奖章\n完成第一个任务就能拿到第一枚\n2\n起步行动家\n第一份简历\n能力雷达\n只有一个系列，主色 + 20% 透明填充\n方向清晰度\n行动力\n简历准备度\n我的标签\n标签来自你的真实行为，认可与否会调整权重\n痛点\n缺项目经验\n86%\n能力\n算法基础扎实\n72%\n兴趣\n对鸿蒙应用开发感兴趣\n64%\n\n画像最近更新：2026-09-18 09:24 · 阶段：求职准备期",
+      "bodySample": "AI 就业助手\n桌面版\n求职准备期\n林\n核心导航\n首页\n成长任务\nAI 对话\n每日一问\n就业求职\n简历\n模拟面试\n成长报告\n个人中心\n首页\n个人中心\n个人中心\n\n这里是你自己的画像，只有一份数据，不跟别人比。\n\n继续今天的任务\n重新测评\n完善画像\n当前阶段\n\n方向大体确定，重点是简历、项目与表达\n\n求职准备期\n54\n/ 100 综合分\n看分数明细\n\n方向清晰度来自基础测评；继续打卡和聊天，上面的画像雷达会跟着变，想重测随时可以。\n\n我的奖章\n已获得 2 / 3\n\n做任务、答题、完善画像，一枚一枚点亮它们。\n\n起步行动家\n已获得\n坚持打卡者\n已获得\n方向初现\n还差 2 个步骤\n画像雷达\n兴趣\n能力\n技能\n痛点\n焦虑\n认知\n\n真实数值（雷达按最大的那一项等比放大，只有形状可比）\n\n兴趣\n0.64\n能力\n0.72\n技能\n0\n痛点\n0.86\n焦虑\n0\n认知\n0\n\n六个方面：兴趣、能力、技能、痛点、焦虑、认知。按你聊过的内容算出的证据分布，不是打分； 哪一项靠外都不代表好或差。\n\n数值是 0 的方面只是还没聊到，聊到之后就会长出来。\n\n画像最近更新：2026-09-18 09:24 · 阶段：求职准备期",
       "pageErrors": [],
       "problems": [],
       "verdict": "PASS"
@@ -773,9 +734,11 @@
       "badgeRequested": true,
       "hasSection": true,
       "badgeNames": [],
-      "emptyStateText": "还没有奖章。去任务列表做一个小任务，完成第一步就能拿到。",
+      "emptyStateText": "奖章还在铸造，过一会儿再来看看。",
+      "staleEmptyTextGone": true,
+      "overviewCounter": null,
       "loadingText": null,
-      "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n个人中心\n求职准备期\n林\n首页\n个人中心\n个人中心\n\n这里是你自己的画像，只有一份数据，不跟别人比。\n\n重新测评\n完善画像\n当前阶段\n方向大体确定，重点是简历、项目与表达\n求职准备期\n54\n/ 100 综合分\n方向清晰度\n68\n行动力\n54\n简历准备度\n41\n\n测评结果会随你的打卡与对话持续更新，想重测随时可以。\n\n我的奖章\n完成第一个任务就能拿到第一枚\n\n还没有奖章。去任务列表做一个小任务，完成第一步就能拿到。\n\n能力雷达\n只有一个系列，主色 + 20% 透明填充\n方向清晰度\n行动力\n简历准备度\n我的标签\n标签来自你的真实行为，认可与否会调整权重\n痛点\n缺项目经验\n86%\n能力\n算法基础扎实\n72%\n兴趣\n对鸿蒙应用开发感兴趣\n64%\n\n画像最近更新：2026-09-18 09:24 · 阶段：求职准备期",
+      "bodySample": "AI 就业助手\n桌面版\n求职准备期\n林\n核心导航\n首页\n成长任务\nAI 对话\n每日一问\n就业求职\n简历\n模拟面试\n成长报告\n个人中心\n首页\n个人中心\n个人中心\n\n这里是你自己的画像，只有一份数据，不跟别人比。\n\n继续今天的任务\n重新测评\n完善画像\n当前阶段\n\n方向大体确定，重点是简历、项目与表达\n\n求职准备期\n54\n/ 100 综合分\n看分数明细\n\n方向清晰度来自基础测评；继续打卡和聊天，上面的画像雷达会跟着变，想重测随时可以。\n\n我的奖章\n\n做任务、答题、完善画像，一枚一枚点亮它们。\n\n奖章还在铸造，过一会儿再来看看。\n\n画像雷达\n兴趣\n能力\n技能\n痛点\n焦虑\n认知\n\n真实数值（雷达按最大的那一项等比放大，只有形状可比）\n\n兴趣\n0.64\n能力\n0.72\n技能\n0\n痛点\n0.86\n焦虑\n0\n认知\n0\n\n六个方面：兴趣、能力、技能、痛点、焦虑、认知。按你聊过的内容算出的证据分布，不是打分； 哪一项靠外都不代表好或差。\n\n数值是 0 的方面只是还没聊到，聊到之后就会长出来。\n\n画像最近更新：2026-09-18 09:24 · 阶段：求职准备期",
       "pageErrors": [],
       "problems": [],
       "verdict": "PASS"
@@ -788,14 +751,14 @@
           "url": "/test/intro?retest=1",
           "seedProgress": false,
           "finalUrl": "/test/intro?retest=1",
-          "renderedText": 118,
+          "renderedText": 135,
           "hasRetestCard": true,
           "hasRetestConfirmDesc": true,
           "hasNormalIntro": false,
           "hasContinuePrompt": false,
           "continueButton": false,
           "startButton": "开始重新测评",
-          "bodySample": "重新做一次职业测评\n重测会更新你当前的三项分数与阶段判断，已获得的标签和任务不受影响。\n· 全是选择题，一次一屏，答完一题自动跳下一题\n· 答不上来可以直接跳过，跳过不扣分\n· 答完立刻给出你的阶段和初始画像\n开始重新测评\n算了，回首页",
+          "bodySample": "重新做一次职业测评\n\n重测会更新你当前的三项分数与阶段判断，已获得的标签和任务不受影响。\n\n· 全是选择题，一次一屏，答完一题自动跳下一题\n· 答不上来可以直接跳过，跳过不扣分\n· 答完立刻给出你的阶段和初始画像\n开始重新测评\n算了，回首页\n高校学生 AI 就业辅助系统",
           "pageErrors": [],
           "problems": [],
           "verdict": "PASS"
@@ -805,14 +768,14 @@
           "url": "/test/intro",
           "seedProgress": false,
           "finalUrl": "/",
-          "renderedText": 355,
+          "renderedText": 459,
           "hasRetestCard": false,
           "hasRetestConfirmDesc": false,
           "hasNormalIntro": false,
           "hasContinuePrompt": false,
           "continueButton": false,
           "startButton": null,
-          "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n首页\n求职准备期\n林\n今天做一件小事就够了\n\n当前阶段：求职准备期 · 我会跟着你的进度调整建议\n\n求职准备期\n今日一问\n\n「最近一次投递没回音，你觉得卡在哪个环节？」\n\n随手答一句\nAI 发现\n查看全部\n缺项目经验\n三轮对话里都提到没有能写进简历的项目。\n去看看\n进行中的任务\n全部任务\n做一个鸿蒙待办清单小应用\n1/2 步\n\n当前：实现待办列表页与本地存储\n\n继续\n我的画像速览\n综合分 54，只有一份数据，不跟别人比\n完善画像\n方向清晰度\n行动力\n简历准备度\n缺项目经验\n算法基础扎实\n对鸿蒙应用开发感兴趣\n\n下一步建议\n\n先把这个鸿蒙小项目的删除交互补完\n\n任务已经做到一半。\n\n先把这个鸿蒙小项目的删除交互补完",
+          "bodySample": "AI 就业助手\n桌面版\n求职准备期\n林\n核心导航\n首页\n成长任务\nAI 对话\n每日一问\n就业求职\n简历\n模拟面试\n成长报告\n个人中心\n10月11日星期日\n今天，做一件小事就够了\n当前阶段：求职准备期。我会跟着你的心理舒适度与日常节奏调整建议\n今日焦点\n预计 14 天\n先把这个鸿蒙小项目的删除交互补完\n\nAI 随行手记任务已经做到一半。\n\n2\n当前停在：实现待办列表页与本地存储\n已完成 1/2 步\n继续任务\n支持随时暂存，无打卡压力\n今日一问 · 每天一题\n你的回答只进你的私有画像，不做对错评判\n「最近一次投递没回音，你觉得卡在哪个环节？」\n随手写一句\nAI 发现与画像动态\n探索轨迹全览\n兴趣\n能力\n技能\n痛点\n焦虑\n认知\n缺项目经验\n来自对话\n0\n\n三轮对话里都提到没有能写进简历的项目。\n\n想对上面的分析提出修正或聊聊困惑吗？\n聊一句\n成长节律\n按微步前进中\n1\n完成小探索\n7\n累计微步\n12天\n活跃天数\n其它任务\n全部任务\n目",
           "pageErrors": [],
           "problems": [],
           "verdict": "PASS"
@@ -822,14 +785,14 @@
           "url": "/test/intro?retest=1",
           "seedProgress": true,
           "finalUrl": "/test/intro?retest=1",
-          "renderedText": 146,
+          "renderedText": 163,
           "hasRetestCard": true,
           "hasRetestConfirmDesc": true,
           "hasNormalIntro": false,
           "hasContinuePrompt": true,
           "continueButton": true,
           "startButton": "开始重新测评",
-          "bodySample": "重新做一次职业测评\n重测会更新你当前的三项分数与阶段判断，已获得的标签和任务不受影响。\n· 全是选择题，一次一屏，答完一题自动跳下一题\n· 答不上来可以直接跳过，跳过不扣分\n· 答完立刻给出你的阶段和初始画像\n\n上次还有没提交完的作答，可以接着答。\n\n继续上次答题\n开始重新测评\n算了，回首页",
+          "bodySample": "重新做一次职业测评\n\n重测会更新你当前的三项分数与阶段判断，已获得的标签和任务不受影响。\n\n· 全是选择题，一次一屏，答完一题自动跳下一题\n· 答不上来可以直接跳过，跳过不扣分\n· 答完立刻给出你的阶段和初始画像\n\n上次还有没提交完的作答，可以接着答。\n\n继续上次答题\n开始重新测评\n算了，回首页\n高校学生 AI 就业辅助系统",
           "pageErrors": [],
           "problems": [],
           "verdict": "PASS"
@@ -839,14 +802,14 @@
           "url": "/test/intro",
           "seedProgress": true,
           "finalUrl": "/",
-          "renderedText": 355,
+          "renderedText": 459,
           "hasRetestCard": false,
           "hasRetestConfirmDesc": false,
           "hasNormalIntro": false,
           "hasContinuePrompt": false,
           "continueButton": false,
           "startButton": null,
-          "bodySample": "AI 就业助手\n首页\n简历\n成长任务\nAI 对话\n模拟面试\n每日一问\n成长报告\n个人中心\n首页\n求职准备期\n林\n今天做一件小事就够了\n\n当前阶段：求职准备期 · 我会跟着你的进度调整建议\n\n求职准备期\n今日一问\n\n「最近一次投递没回音，你觉得卡在哪个环节？」\n\n随手答一句\nAI 发现\n查看全部\n缺项目经验\n三轮对话里都提到没有能写进简历的项目。\n去看看\n进行中的任务\n全部任务\n做一个鸿蒙待办清单小应用\n1/2 步\n\n当前：实现待办列表页与本地存储\n\n继续\n我的画像速览\n综合分 54，只有一份数据，不跟别人比\n完善画像\n方向清晰度\n行动力\n简历准备度\n缺项目经验\n算法基础扎实\n对鸿蒙应用开发感兴趣\n\n下一步建议\n\n先把这个鸿蒙小项目的删除交互补完\n\n任务已经做到一半。\n\n先把这个鸿蒙小项目的删除交互补完",
+          "bodySample": "AI 就业助手\n桌面版\n求职准备期\n林\n核心导航\n首页\n成长任务\nAI 对话\n每日一问\n就业求职\n简历\n模拟面试\n成长报告\n个人中心\n10月11日星期日\n今天，做一件小事就够了\n当前阶段：求职准备期。我会跟着你的心理舒适度与日常节奏调整建议\n今日焦点\n预计 14 天\n先把这个鸿蒙小项目的删除交互补完\n\nAI 随行手记任务已经做到一半。\n\n2\n当前停在：实现待办列表页与本地存储\n已完成 1/2 步\n继续任务\n支持随时暂存，无打卡压力\n今日一问 · 每天一题\n你的回答只进你的私有画像，不做对错评判\n「最近一次投递没回音，你觉得卡在哪个环节？」\n随手写一句\nAI 发现与画像动态\n探索轨迹全览\n兴趣\n能力\n技能\n痛点\n焦虑\n认知\n缺项目经验\n来自对话\n0\n\n三轮对话里都提到没有能写进简历的项目。\n\n想对上面的分析提出修正或聊聊困惑吗？\n聊一句\n成长节律\n按微步前进中\n1\n完成小探索\n7\n累计微步\n12天\n活跃天数\n其它任务\n全部任务\n目",
           "pageErrors": [],
           "problems": [],
           "verdict": "PASS"
@@ -856,14 +819,14 @@
           "url": "/test/intro",
           "seedProgress": true,
           "finalUrl": "/test/intro",
-          "renderedText": 143,
+          "renderedText": 160,
           "hasRetestCard": false,
           "hasRetestConfirmDesc": false,
           "hasNormalIntro": true,
           "hasContinuePrompt": true,
           "continueButton": true,
           "startButton": "开始测评",
-          "bodySample": "先花 3 分钟做个职业测评\n只有这一次需要你主动填东西，之后我不再弹问卷，靠对话和打卡慢慢认识你。\n· 全是选择题，一次一屏，答完一题自动跳下一题\n· 答不上来可以直接跳过，跳过不扣分\n· 答完立刻给出你的阶段和初始画像\n\n上次还有没提交完的作答，可以接着答。\n\n继续上次答题\n开始测评",
+          "bodySample": "先花 3 分钟做个职业测评\n\n只有这一次需要你主动填东西，之后我不再弹问卷，靠对话和打卡慢慢认识你。\n\n· 全是选择题，一次一屏，答完一题自动跳下一题\n· 答不上来可以直接跳过，跳过不扣分\n· 答完立刻给出你的阶段和初始画像\n\n上次还有没提交完的作答，可以接着答。\n\n继续上次答题\n开始测评\n高校学生 AI 就业辅助系统",
           "pageErrors": [],
           "problems": [],
           "observation": {
@@ -879,10 +842,12 @@
   },
   "summary": {
     "regressionRoutes": {
-      "total": 22,
-      "pass": 22,
-      "fail": 0,
-      "failed": []
+      "total": 19,
+      "pass": 18,
+      "fail": 1,
+      "failed": [
+        "/ (顶部没有「今日建议聚焦」主角卡)"
+      ]
     },
     "scenarios": {
       "A": "PASS",
@@ -903,5 +868,5 @@
     "anyErrorBoundary": false,
     "consoleErrorTotal": 0
   },
-  "finishedAt": "2026-09-18T13:23:28.093Z"
+  "finishedAt": "2026-10-11T14:21:44.459Z"
 }

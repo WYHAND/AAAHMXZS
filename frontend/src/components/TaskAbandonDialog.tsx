@@ -77,8 +77,8 @@ export function TaskAbandonDialog({ task, onOpenChange, onAbandoned }: TaskAband
               onClick={() => setReason(item)}
               className={
                 reason === item
-                  ? 'rounded-md border border-primary bg-primary-soft px-3 py-2 text-left text-sm'
-                  : 'rounded-md border px-3 py-2 text-left text-sm hover:bg-secondary'
+                  ? 'rounded-md border border-primary bg-primary-soft px-3 py-2 text-left text-sm ring-1 ring-primary/30'
+                  : 'rounded-md border px-3 py-2 text-left text-sm hover:bg-primary-soft'
               }
             >
               {item}

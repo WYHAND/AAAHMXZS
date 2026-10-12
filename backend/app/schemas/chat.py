@@ -79,6 +79,8 @@ class ChatResponse(BaseModel):
     assistant_message: MessageResponse
     # 7.8 画像回流：本轮抽取到的标签（已写库），前端可选展示“AI 对你的新认识”
     extracted_tags: list[Dict[str, Any]] = Field(default_factory=list)
+    # 与流式 done 事件的 conclusion_ready 同义：该会话是否已有可拉取的结论卡片
+    conclusion_ready: bool = False
 
 
 class PendingChatResponse(BaseModel):

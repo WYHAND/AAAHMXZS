@@ -1,11 +1,12 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate } from 'react-router-dom'
+import { Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
+import { Panel } from '@/components/Panel'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/hooks/useAuth'
@@ -17,6 +18,9 @@ import { useAuth } from '@/hooks/useAuth'
  * 后端**没有 email 字段**（设计说明书写的可选邮箱后端未实现），
  * 所以这里的可选字段改成「学校」——它真的会入库。
  * 后端注册直接返回 token + user，注册成功即登录态。
+ *
+ * 版式与登录页同一套骨架（身份头 + Panel + 16px 字段间距 + 唯一 warm/lg 主按钮），
+ * 让 /login → /register 的跳转不像是换了个产品。
  */
 const registerSchema = z
   .object({
@@ -66,26 +70,41 @@ export default function RegisterPage() {
   })
 
   return (
-    <Card className="shadow-pop">
-      <CardHeader className="gap-2">
-        <CardTitle className="text-xl">创建你的账号</CardTitle>
-        <CardDescription>只用用户名和密码，不用填一堆资料</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <div className="flex flex-col gap-6">
+      {/* 身份头：与登录页同构，卡片外先说清这是什么产品 */}
+      <header className="flex flex-col gap-3">
+        <span className="flex size-9 items-center justify-center rounded-lg bg-secondary-fixed text-on-secondary-fixed">
+          <Sparkles className="size-4" aria-hidden />
+        </span>
+        <h1 className="text-headline-xl font-bold text-primary">创建你的账号</h1>
+        <p className="text-body-md text-on-surface-variant">只用用户名和密码，不用填一堆资料。</p>
+      </header>
+
+      <Panel>
         <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
           <div className="flex flex-col gap-2">
             <Label htmlFor="username">用户名</Label>
-            <Input id="username" placeholder="登录用，3 个字符以上" {...register('username')} />
+            <Input
+              id="username"
+              type="text"
+              placeholder="登录用，3 个字符以上"
+              {...register('username')}
+            />
             {errors.username ? (
-              <p className="text-xs text-destructive">{errors.username.message}</p>
+              <p className="text-body-sm text-destructive">{errors.username.message}</p>
             ) : null}
           </div>
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="school">学校（可选）</Label>
-            <Input id="school" placeholder="填了方便后面给针对性建议" {...register('school')} />
+            <Input
+              id="school"
+              type="text"
+              placeholder="填了方便后面给针对性建议"
+              {...register('school')}
+            />
             {errors.school ? (
-              <p className="text-xs text-destructive">{errors.school.message}</p>
+              <p className="text-body-sm text-destructive">{errors.school.message}</p>
             ) : null}
           </div>
 
@@ -99,7 +118,7 @@ export default function RegisterPage() {
               {...register('password')}
             />
             {errors.password ? (
-              <p className="text-xs text-destructive">{errors.password.message}</p>
+              <p className="text-body-sm text-destructive">{errors.password.message}</p>
             ) : null}
           </div>
 
@@ -113,22 +132,34 @@ export default function RegisterPage() {
               {...register('confirm')}
             />
             {errors.confirm ? (
-              <p className="text-xs text-destructive">{errors.confirm.message}</p>
+              <p className="text-body-sm text-destructive">{errors.confirm.message}</p>
             ) : null}
           </div>
 
-          <Button type="submit" variant="warm" size="lg" disabled={isSubmitting || loading}>
+          {/* 整屏唯一实心主按钮（规格同登录页：lg + rounded-xl + 15px/600） */}
+          <Button
+            type="submit"
+            variant="warm"
+            size="lg"
+            className="w-full rounded-xl text-[15px] font-semibold"
+            disabled={isSubmitting || loading}
+          >
             {isSubmitting || loading ? '注册中…' : '注册并开始测评'}
           </Button>
 
-          <p className="text-center text-sm text-muted-foreground">
+          <p className="text-center text-body-md text-on-surface-variant">
             已经有账号？
             <Link to="/login" className="ml-1 text-primary hover:underline">
               去登录
             </Link>
           </p>
         </form>
-      </CardContent>
-    </Card>
+      </Panel>
+
+      {/* 与登录页同一行可信信息：注册只要用户名和密码，剩下边聊边补 */}
+      <p className="text-center text-body-sm text-on-surface-variant">
+        AI 会从对话里了解你 · 任务拆成当天能做完的小步 · 简历只改你写过的内容
+      </p>
+    </div>
   )
 }

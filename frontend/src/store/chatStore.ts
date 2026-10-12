@@ -3,29 +3,27 @@ import { toast } from 'sonner'
 
 import { chatApi } from '@/api/chat'
 import { ApiError } from '@/api/client'
-import { streamChat, type SSEMessage } from '@/api/sse'
 import { ERROR_CODE } from '@/constants/errorCode'
-import { useAuthStore } from '@/store/authStore'
 import {
   resolveLoadFailureAction,
   shouldEnsureOpening,
   type HistoryLoad,
 } from '@/store/chatHistory'
 import { useProfileStore } from '@/store/profileStore'
-import type { ChatConclusionCard, ChatMessage, Conversation, StreamState } from '@/types'
+import type { ChatConclusionCard, ChatMessage, Conversation } from '@/types'
 import { uuid } from '@/utils/format'
 import { normalizeList } from '@/utils/list'
 import { track } from '@/utils/track'
 
 /**
- * chatStore（4.1 / 4.3 + 后端 SSE 契约）
+ * chatStore（4.1 / 4.3）
  *
- * - streamState 驱动 UI：streaming 时显示「停止」、禁用输入、打字机光标
- * - start → 连接建立；delta → 追加到当前 assistant 消息
- * - tag → 后端抽到新标签 → profileStore.bumpVersion()
- * - pending → 幂等命中（重复提交），不是错误：提示用户等上一轮
- * - done → conclusion_ready（结论卡片入口）
- * - code !== 0 / 断流：保留已收内容，尾巴标「（回答中断，点击重试）」，重试复用同一 client_msg_id
+ * 发送是**一次性**的（POST .../messages）：用户气泡立刻上屏；AI 整条回复生成完才一起上屏。
+ * 等待期间 `replyingIds` 里有当前会话，ChatPage 显示加载动画，不做任何逐字增量。
+ *
+ * - 幂等：同一 client_msg_id 重试复用，后端不会重复生成
+ * - 失败：在消息列表末尾放一个「回答中断，点击重试」气泡（interrupted），重试复用同一 client_msg_id
+ * - conclusion_ready：回复里带上，结论卡片入口
  *
  * 不持久化。
  */
@@ -34,14 +32,17 @@ interface ChatState {
   conversations: Conversation[]
   activeId: string | null
   messages: ChatMessage[]
-  streamState: StreamState
+  /**
+   * 正在等 AI 整条回复的会话 id 列表。
+   * 列表而不是单值：切到别的会话再发一句时，前一个会话的回复可能还没回来。
+   */
+  replyingIds: string[]
   conclusionReady: boolean
   conclusion: ChatConclusionCard | null
-  error: string | null
   loading: boolean
   /**
    * 正在拉开场白的会话 id；null 表示没有在途请求。
-   * UI 靠它显示等待态（AIThinking），而不是显示静态空态文案。
+   * UI 靠它显示等待态（三点加载），而不是显示静态空态文案。
    */
   openingFor: string | null
   /**
@@ -77,7 +78,7 @@ interface ChatState {
    * 上一个会话**原样留在侧栏**（产品决定，见实现处的注释：前端不自动删任何会话）。
    */
   newConversation: () => Promise<string | null>
-  /** 没有会话时先建一个（流式接口必须带 conversation_id） */
+  /** 没有会话时先建一个（发送消息必须带 conversation_id） */
   ensureConversation: () => Promise<string | null>
   /**
    * 空会话自动拉开场白（「AI 主动挖掘」的入口）。
@@ -95,27 +96,20 @@ interface ChatState {
   /** clientMsgId 传入时复用（重试幂等），否则新生成 */
   send: (content: string, clientMsgId?: string) => Promise<void>
   retry: (messageId: string) => Promise<void>
-  stop: () => void
   reset: () => void
 }
-
-/** 模块级 AbortController：stop() 即 ctrl.abort() */
-let streamCtrl: AbortController | null = null
 
 /**
  * 本地对 messages 的写入序号（每本地写一次 +1）。
  *
  * 解决的是什么问题：新建会话时 `ensureConversation()` 会 `set({ activeId })`，
  * 而 ChatPage 有个 `useEffect([activeId])` 会去 `loadMessages()`。那个请求返回时执行
- * `set({ messages: list })` —— **整个数组替换**。但此刻本地已经插入了
- * 「用户消息 + 空的 AI 气泡」，流式增量也正在往里写；而这份"历史"里
- * **只有用户消息**（后端开流前先落库用户消息，AI 回复要等流结束才写库）。
- * 于是气泡被冲掉：delta 按 id 找不到消息 → 界面不显示 → 但后端已落库，
- * 所以「切走再切回 / 刷新」又能看到。表现为「第一次对话的回复不显示」。
+ * `set({ messages: list })` —— **整个数组替换**。但此刻本地已经插入了用户消息，
+ * 而这份"历史"里还没有 AI 回复（回复要等生成完才落库）。
+ * 如果历史是在 AI 回复上屏之前返回的，它会把刚上屏的回复冲掉。
  *
  * 解法：`loadMessages` 发请求前记下序号，返回后若序号变了，说明这期间本地写过
- * 消息，这份历史比本地状态旧 → **丢弃它**。标记点覆盖乐观插入与每个流式增量，
- * 因此无论竞态发生在哪个时刻都能拦住。
+ * 消息，这份历史比本地状态旧 → **丢弃它**。标记点覆盖乐观插入与回复上屏。
  */
 let localWriteSeq = 0
 
@@ -226,9 +220,6 @@ function dropGoneConversation(conversationId: string): void {
     return
   }
 
-  // 正在流式时才发现当前会话没了：先停流，否则流会继续往一个不存在的会话里写
-  if (state.streamState === 'streaming' || state.streamState === 'connecting') state.stop()
-
   const index = state.conversations.findIndex((c) => c.id === conversationId)
   const rest = state.conversations.filter((c) => c.id !== conversationId)
   // "下一条"= 原来紧邻它的那一条（与 deleteConversation 同一取法）；
@@ -296,10 +287,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   conversations: [],
   activeId: null,
   messages: [],
-  streamState: 'idle',
+  replyingIds: [],
   conclusionReady: false,
   conclusion: null,
-  error: null,
   loading: false,
   openingFor: null,
   openingFailedFor: null,
@@ -415,11 +405,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
      *
      * ⚠️ 这里**有意不碰 profileStore**（不清画像、不 bumpVersion）：
      * 画像标签与成长任务由后端按 user_id 独立存储，删聊天记录**不影响**用户画像 ——
-     * 这是产品需求。只有对话里**新抽出标签**才算画像写操作（见 send() 的 onTag）。
+     * 这是产品需求。只有对话里**新抽出标签**才算画像写操作（见 send()）。
      */
-    // 正在流式时删掉当前会话：先停流，否则流会继续往一个已删除的会话里写
-    if (get().streamState === 'streaming' || get().streamState === 'connecting') get().stop()
-
     // "下一条"= 原来紧邻它的那一条；它本来就是最后一条时没有下一条 → null，
     // 此时消息区由空态兜住（ChatPage 的 useEffect 只有 activeId 真值才 loadMessages）
     const next = rest[index] ?? null
@@ -674,8 +661,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
     try {
       const list = normalizeList(await chatApi.listMessages(conversationId))
-      // 这期间本地写过消息（乐观插入 / 流式增量）→ 这份历史是旧的，丢弃，
-      // 否则会把正在流式渲染的 AI 气泡冲掉（见 localWriteSeq 的说明）
+      // 这期间本地写过消息（乐观插入 / 回复上屏）→ 这份历史是旧的，丢弃，
+      // 否则会把刚上屏的 AI 回复冲掉（见 localWriteSeq 的说明）
       if (seqAtStart !== localWriteSeq) return
       // 这期间切换了会话 → 结果已不属于当前会话，同样丢弃
       if (get().activeId !== conversationId) return
@@ -691,13 +678,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
        * 只有 `client_msg_id` 两边一致（开场白是后端写死的 `sys:opening`）。
        * 用本地 id 比对会把"同一条消息"误判成"两条不同的消息"。
        *
-       * `m.client_msg_id &&` 这个前置条件很重要：本地**还没有落库凭据**的消息
-       * （最典型的是流式中的乐观 assistant 气泡 `assistant-<uuid>`，它没有
-       * client_msg_id）一律不保留，交给服务端那一份。这里不存在"把屏幕上正在
-       * 显示的内容删掉"的风险，因为这种气泡活着就说明流还没结束，而流每来一个
-       * 增量都会 markLocalWrite()，使 seqAtStart !== localWriteSeq 在上一行整段丢弃 ——
-       * 也就是说：**能走到合并这一步，就说明本地没有未落库的乐观气泡**。
-       * 唯一被主动丢掉的"有内容"情况是它，而它的内容本来就会由服务端补回来。
+       * 本地保留的只有两类：带 client_msg_id 的用户消息（服务端已落库就按 key 去重，
+       * 还没落库就留着）和失败占位（interrupted，服务端本来就没有它）。
+       * AI 回复没有本地占位：它上屏时会 markLocalWrite()，让在途的历史请求整份作废，
+       * 所以走到这一步时屏幕上不会有"还没落库的回复"被误删。
        *
        * 兜底去重（serverKeys 里那条消息没有 client_msg_id 时用服务端 id）：
        * 只可能命中"服务端没给 key、本地却有"的错位场景，此时按 id 再拦一次，
@@ -705,7 +689,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
        */
       const serverKeys = new Set(list.map(syncKey))
       const localOnly = get().messages.filter(
-        (m) => m.client_msg_id && !serverKeys.has(syncKey(m)),
+        (m) => (m.client_msg_id || m.interrupted) && !serverKeys.has(syncKey(m)),
       )
       /*
        * ready = "服务端这一份历史拿到了，并且它适用于当前会话此刻的视图"。
@@ -748,10 +732,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   async send(content, reuseClientMsgId) {
     const text = content.trim()
-    const busy = get().streamState === 'streaming' || get().streamState === 'connecting'
-    if (!text || busy) return
+    if (!text) return
+    // 当前会话上一句还在等回复：不重复发（后端也会以「请勿重复提交」拒绝）
+    const current = get().activeId
+    if (current && get().replyingIds.includes(current)) return
 
-    // Fix A：拿不到 conversation_id 就**不发请求**（后端没有无会话的流式端点）
+    // 拿不到 conversation_id 就**不发请求**
     let conversationId: string | null = null
     try {
       conversationId = await get().ensureConversation()
@@ -759,11 +745,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       conversationId = null
     }
     if (!conversationId) {
-      const message = '会话创建失败，请稍后再试'
-      set({ streamState: 'error', error: message })
-      toast.error(message)
+      toast.error('会话创建失败，请稍后再试')
       return
     }
+    const generation = sessionGeneration
 
     // 重试时复用同一个 client_msg_id，供后端幂等去重
     const clientMsgId = reuseClientMsgId ?? uuid()
@@ -775,19 +760,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       client_msg_id: clientMsgId,
       created_at: new Date().toISOString(),
     }
-    const assistantId = `assistant-${clientMsgId}`
-    const assistantMessage: ChatMessage = {
-      id: assistantId,
-      conversation_id: conversationId,
-      role: 'assistant',
-      content: '',
-      created_at: new Date().toISOString(),
-    }
-
+    // 用户气泡立刻上屏（它的弹出动画就是「发送即出现」）；AI 那一条等整条回复到了再加
     set((state) => ({
-      messages: [...state.messages, userMessage, assistantMessage],
-      streamState: 'connecting',
-      error: null,
+      messages:
+        state.activeId === conversationId ? [...state.messages, userMessage] : state.messages,
+      replyingIds: state.replyingIds.includes(conversationId)
+        ? state.replyingIds
+        : [...state.replyingIds, conversationId],
       /*
        * 用户开口之后，这个会话就不再是"等着 AI 开场"的空会话了。
        * 这里**只清失败标记**：不再需要"清掉开场白簿记"这种动作 ——
@@ -803,85 +782,60 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     track('chat_round', { conversation_id: conversationId })
 
-    const appendDelta = (delta: string) => {
-      // 每个增量都算一次本地写入：只要流还在推进，在途的历史请求就不该生效
-      markLocalWrite()
-      set((state) => ({
-        messages: state.messages.map((m) =>
-          m.id === assistantId ? { ...m, content: m.content + delta } : m,
-        ),
-      }))
-    }
-
-    const interrupt = (message: string) => {
-      set((state) => ({
-        streamState: 'error',
-        error: message,
-        messages: state.messages.map((m) =>
-          m.id === assistantId ? { ...m, interrupted: true } : m,
-        ),
-      }))
-    }
-
-    streamCtrl = new AbortController()
     try {
-      await streamChat({
-        conversationId,
+      const reply = await chatApi.sendMessage(conversationId, {
         content: text,
-        clientMsgId,
-        token: useAuthStore.getState().token,
-        signal: streamCtrl.signal,
-        onOpen: () => set({ streamState: 'streaming' }),
-        onDelta: (delta) => appendDelta(delta),
-        onTag: (message: SSEMessage) => {
-          // 后端从对话里抽到新标签：画像变了，广播全局失效
-          const count = message.data?.data?.tags?.length ?? 0
-          if (count) useProfileStore.getState().bumpVersion()
-        },
-        onPending: () => {
-          // 幂等命中：同一条消息已在生成或已完成，后端不会重复生成
-          set((state) => ({
-            streamState: 'done',
-            messages: state.messages.filter((m) => m.id !== assistantId),
-          }))
-          toast.info('这句话已经提交过了，正在等上一轮的结果')
-          void get().loadMessages(conversationId)
-        },
-        onDone: (message: SSEMessage) => {
-          if (message.data?.conclusion_ready) {
-            set({ conclusionReady: true })
-          }
-        },
-        onError: (error: ApiError) => set({ error: error.message }),
+        client_msg_id: clientMsgId,
       })
+      // 期间换过账号：整份丢弃（新账号的界面不许出现上一个账号的回复）
+      if (generation !== sessionGeneration) return
 
-      if (streamCtrl?.signal.aborted) {
-        set({ streamState: 'idle' })
-        return
-      }
-
-      // 流结束：本地已经握着完整回复，同样让在途的历史请求作废
+      // 回复到了：让在途的历史请求作废（它要是此刻才返回，会把这条回复冲掉）
       markLocalWrite()
-      set({ streamState: 'done' })
+      set((state) => {
+        const isActive = state.activeId === conversationId
+        // 切走再切回时，历史可能已经带上了这条回复：按 id 去重
+        const shown = state.messages.some((m) => m.id === reply.assistant_message.id)
+        return {
+          messages:
+            isActive && !shown
+              ? [...state.messages, { ...reply.assistant_message, interrupted: false }]
+              : state.messages,
+          conclusionReady: isActive && reply.conclusion_ready ? true : state.conclusionReady,
+        }
+      })
       // 对话结束属于画像写操作
       useProfileStore.getState().bumpVersion()
     } catch (error) {
-      if (streamCtrl?.signal.aborted) {
-        set({ streamState: 'idle' })
+      if (generation !== sessionGeneration) return
+      if (isConversationGone(error)) {
+        dropGoneConversation(conversationId)
         return
       }
-      const message = error instanceof ApiError ? error.message : '回答中断，请点击重试'
-      interrupt(message)
-      // AI 失败类 toast 带「重试」action（6.5）
-      toast.error(message, {
-        action: { label: '重试', onClick: () => void get().retry(assistantId) },
-      })
+      // 失败：在列表末尾放一个「重试」气泡（ChatBubble 的 interrupted 入口）
+      markLocalWrite()
+      const failed: ChatMessage = {
+        id: `failed-${clientMsgId}`,
+        conversation_id: conversationId,
+        role: 'assistant',
+        content: '',
+        created_at: new Date().toISOString(),
+        interrupted: true,
+      }
+      set((state) => ({
+        messages: state.activeId === conversationId ? [...state.messages, failed] : state.messages,
+      }))
     } finally {
-      streamCtrl = null
+      set((state) => ({
+        replyingIds: state.replyingIds.filter((id) => id !== conversationId),
+      }))
     }
   },
 
-  /** 重试：删掉失败的气泡，重新发送上一条用户消息（复用原 client_msg_id） */
+  /**
+   * 重试：删掉失败的气泡和它对应的那条用户消息，再按**原 client_msg_id** 重新发一次。
+   * 用户消息也要一起拿掉：send() 会用同一个 id 重新插入它，否则会出现两条一模一样的用户气泡。
+   */
   async retry(messageId) {
     const { messages } = get()
     const index = messages.findIndex((m) => m.id === messageId)
@@ -889,20 +843,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const userMessage = messages[index - 1]
     if (userMessage.role !== 'user') return
 
-    set({ messages: messages.slice(0, index), streamState: 'idle', error: null })
+    set({ messages: messages.slice(0, index - 1) })
     await get().send(userMessage.content, userMessage.client_msg_id ?? undefined)
   },
 
-  stop() {
-    streamCtrl?.abort()
-    streamCtrl = null
-    set({ streamState: 'idle' })
-  },
-
   reset() {
-    streamCtrl?.abort()
-    streamCtrl = null
-    // 换号世代 +1：上一个账号在途的 loadConversations 回来时会被丢掉
+    // 换号世代 +1：上一个账号在途的请求（列表 / 历史 / 回复）回来时会被丢掉
     sessionGeneration += 1
     /*
      * 登出/切换账号：会话 id 全部作废，开场白簿记也必须跟着清空。
@@ -916,10 +862,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       conversations: [],
       activeId: null,
       messages: [],
-      streamState: 'idle',
+      replyingIds: [],
       conclusionReady: false,
       conclusion: null,
-      error: null,
       // loading 也是按用户的：上一个账号在途的请求不该让新账号停在加载态
       loading: false,
       openingFor: null,

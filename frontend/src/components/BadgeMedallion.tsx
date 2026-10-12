@@ -212,7 +212,14 @@ function Ribbon({ dimmed }: { dimmed: boolean }) {
 
 export interface BadgeMedallionProps {
   badge: BadgeItem
-  /** 视觉直径，默认 112px（用户要求「大一点」） */
+  /**
+   * 视觉直径，默认 112px（用户要求「大一点」）。
+   *
+   * 2026-10 个人中心改成「奖章架」后新增一个**小档位**（只加档位，几何与 SVG 结构一个没动）：
+   * 置物架上一行 chip 用 30px（最多 32），点开某一枚才用默认 112px 展开；
+   * 所有坐标都基于 128×128 的 viewBox，靠 `width/height: 100%` 等比缩放，
+   * 所以任何尺寸都不会画歪。**不要**把默认值改小——展开态与其它调用点都靠它。
+   */
   size?: number
   className?: string
 }

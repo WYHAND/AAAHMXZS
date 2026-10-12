@@ -165,14 +165,6 @@ export interface TestResult {
 
 /* ------------------------------- 对话 ------------------------------- */
 
-export type StreamState =
-  | 'idle'
-  | 'connecting'
-  | 'streaming'
-  | 'done'
-  | 'error'
-  | 'template_fallback'
-
 /** 后端 schemas/chat.ConversationResponse */
 export interface Conversation {
   id: string
@@ -194,7 +186,7 @@ export interface ChatMessage {
   client_msg_id?: string | null
   created_at: string
   /* ---- 以下为前端本地状态，后端不返回 ---- */
-  /** 流式中断标记（不清空已收到内容） */
+  /** 回复失败：这条气泡只是一个「重试」入口，没有真正的回复内容 */
   interrupted?: boolean
 }
 
@@ -204,12 +196,14 @@ export interface ChatRequest {
   client_msg_id?: string | null
 }
 
-/** 后端 schemas/chat.ChatResponse（非流式完整回复） */
+/** 后端 schemas/chat.ChatResponse（一次性完整回复） */
 export interface ChatResponse {
   conversation_id: string
   user_message: ChatMessage
   assistant_message: ChatMessage
   extracted_tags: Record<string, unknown>[]
+  /** 该会话是否已有可拉取的结论卡片 */
+  conclusion_ready: boolean
 }
 
 /** 后端 schemas/chat.ChatConclusionCard（11.11） */
@@ -220,27 +214,6 @@ export interface ChatConclusionCard {
   suggestions: string[]
   next_actions: string[]
   generated_at?: string | null
-}
-
-/**
- * 后端 schemas/chat.SSEEvent —— SSE 事件 data 的负载。
- * 外层恒为 {code,message,data}，data.type 与 `event:` 行一致。
- */
-export interface SSEPayload {
-  type?: 'start' | 'delta' | 'tag' | 'done' | 'error' | 'pending'
-  /** 增量文本，仅 delta 有值 */
-  content?: string
-  conversation_id?: string
-  /** 本轮 assistant 消息 id，仅 done 有值 */
-  message_id?: string
-  /** 仅 done：是否有结论卡片可拉取 */
-  conclusion_ready?: boolean | null
-  /** 扩展数据；tag 事件的新标签在 data.data.tags */
-  data?: { tags?: ProfileTag[] } & Record<string, unknown>
-  /* ---- pending（幂等命中）---- */
-  user_message_id?: string
-  replay_message_id?: string
-  pending?: boolean
 }
 
 /* ------------------------------- 任务 ------------------------------- */
@@ -820,6 +793,16 @@ export interface HomeAiFinding {
   reason: string
   /** 点这条建议应该去哪：/chat /task /resume /interview */
   target_route: string
+  /** 该痛点标签的证据强度（权重），用于信号条的长度；不是打分 */
+  weight: number
+}
+
+/** 后端 schemas/home.HomeActivityPoint：近 N 天每日完成步数 */
+export interface HomeActivityPoint {
+  /** 本地日期 YYYY-MM-DD */
+  date: string
+  /** 当天完成的步骤数 */
+  steps: number
 }
 
 /** 后端 schemas/home.HomeOngoingTask（最多 2 条） */
@@ -856,6 +839,14 @@ export interface HomeSummary {
   daily_question: HomeDailyQuestion | null
   ai_findings: HomeAiFinding[]
   ongoing_tasks: HomeOngoingTask[]
+  /** 已完成任务数（与成长报告同一口径，后端 report_service.collect_growth_counts） */
+  completed_tasks: number
+  /** 已打卡步骤数（同上） */
+  completed_steps: number
+  /** 活跃天数（同上） */
+  active_days: number
+  /** 近 14 天每日完成步数（含今天，升序，缺数据天补 0）；用于活动柱状图 */
+  activity: HomeActivityPoint[]
   next_action: HomeNextAction
 }
 

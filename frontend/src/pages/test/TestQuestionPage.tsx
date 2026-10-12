@@ -165,10 +165,16 @@ export default function TestQuestionPage() {
         description="题库接口没返回内容。稍后重试，或先直接进入工作台。"
         action={
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => void load()}>
+            <Button variant="outline" size="sm" onClick={() => void load()}>
               重新加载
             </Button>
-            <Button variant="warm" onClick={() => navigate('/', { replace: true })}>
+            {/* 空态的**唯一**主 CTA（warm + lg + 12px 圆角 / 15px·600） */}
+            <Button
+              variant="warm"
+              size="lg"
+              className="rounded-xl text-[15px] font-semibold"
+              onClick={() => navigate('/', { replace: true })}
+            >
               先去首页
             </Button>
           </div>
@@ -180,21 +186,39 @@ export default function TestQuestionPage() {
   const percent = total ? Math.round(((index + 1) / total) * 100) : 0
 
   return (
-    // 高度来源（改 AppLayout 的间距时必须同步这里，否则按钮就不再固定）：
-    //   移动端(<768px)：顶栏 h-14(3.5rem) + main pt py-6(1.5rem) + main pb pb-24(6rem)  = 11rem
-    //   ≥768px        ：顶栏 h-14(3.5rem) + main pt py-6(1.5rem) + main pb pb-10(2.5rem) = 7.5rem
-    // ⚠️ 这里**不能**用 h-full（height:100%）：AppLayout 外层是 min-h-svh，
-    //    min-height 不构成"确定高度"，百分比会退化成 auto —— 实测过，按钮照样跳 54px。
-    //   只要容器高度确定：「题目区 flex-1」吃掉剩余空间、「操作区 shrink-0」钉在底部，
-    //   选项 3 个还是 4 个都不影响按钮位置。
-    <div className="mx-auto flex h-[calc(100svh-11rem)] w-full max-w-2xl flex-col gap-5 md:h-[calc(100svh-7.5rem)]">
+    // 高度来源（2026-10 收口，**全部实测过**，别再退回魔法数）：
+    //   ⚠️ 本页在 router/index.tsx 里是 RequireAuth 下的**裸路由，不在 AppLayout 里**
+    //      （实测 DOM 祖先链只有 body → 一层无类名的 div）：拿不到 main 的
+    //      pt-shell / px-margin / pb-margin，所以顶距与高度要自己补。
+    //   ⚠️ 补顶距必须用 **padding（pt-shell）不能用 margin**：margin 不会被外层合并，
+    //      会把整页往下推、html.scrollHeight 超过视口（实测 976 > 900），而 padding 走 border-box
+    //      （html/body 都是 border-box，Tailwind preflight 给过），高度里已经扣掉它，不会撑出滚动。
+    //   高度就用共享 token `--spacing-shell-total`(= 顶部 76 + 底部留白 32 = 108px)：
+    //      1440×900 下 = 792px，`pt-shell` 把进度行推到 y=76（与其它页标题起始线一致），
+    //      容器底边 792，底部操作区（69px 高）落在 y=723~792，整页不滚动（docScrollH=900）。
+    //      ⚠️ 实测按钮 y = 上一题 750 / 跳过 740；父智能体给的基线目标是 734 / 724，差 16px。
+    //      逐层量过（tools/render-check/a1-action-row.mjs）：容器内容区 716 − 操作区 69 = 操作区顶 723，
+    //      按钮在 69px 高的操作区里垂直居中 = 750/740。要对齐 734 需把高度再减 16px
+    //      （页面会多出 16px 底部空白）。以"换题不跳 + 整页不滚动 + 顶距与其它页对齐"为准，不为此改结构。
+    //      ⚠️ 别写成多段 calc（`100svh-var(--spacing-shell)-var(--spacing-margin)-44px`）：
+    //      实测本项目的 Tailwind 编译会丢段——那条在浏览器里只减了第一段，
+    //      `...-2rem-44px` 那条更是整条类名都没生成（computed height=0）。单变量的 calc 才稳。
+    //   ⚠️ 这里**不能**用 h-full（height:100%）：外层是 min-h-svh，
+    //      min-height 不构成"确定高度"，百分比会退化成 auto —— 实测过，按钮照样跳 54px。
+    //      只要容器高度确定：「题目区 flex-1」吃掉剩余空间、「操作区 shrink-0」钉在底部，
+    //      选项 3 个还是 4 个都不影响按钮位置（工具：tools/render-check/a1-question-geometry.mjs）。
+    //   ⚠️ 容器**不要**加 `px-margin`：内容列会从 672px 缩到 608px，
+    //      底部那行 caption「答不上来没关系，跳过也不会扣分」就只剩一行放不下的宽度 → 折成两行，
+    //      操作区被撑高、整排按钮跟着下移（实测过 750/740）。
+    //      max-w-2xl(672px) 在桌面端本来就不会贴边，横向不用再加留白。
+    <div className="mx-auto flex h-[calc(100svh-var(--spacing-shell-total))] min-h-0 w-full max-w-2xl flex-col gap-5 pt-shell">
       {/* 顶部进度：固定高度 */}
       <div className="flex shrink-0 flex-col gap-2">
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <div className="flex items-center justify-between text-body-sm text-on-surface-variant">
           <span>
             第 {index + 1} / {total} 题 · 已作答 {answeredCount}
           </span>
-          <span className="font-numeric">{percent}%</span>
+          <span className="tabular-nums">{percent}%</span>
         </div>
         <Progress value={percent} className="h-1.5" />
       </div>
@@ -205,9 +229,13 @@ export default function TestQuestionPage() {
         <div className="flex min-h-full items-center justify-center">
           <Card className="w-full">
             <CardContent className="flex flex-col gap-4 pt-6">
-              <h1 className="text-lg font-semibold text-foreground">{current.content}</h1>
+              <h1 className="text-[20px] leading-relaxed font-semibold text-primary">
+                {current.content}
+              </h1>
               {current.multiple ? (
-                <p className="text-xs text-muted-foreground">这题可选多项（骨架阶段按单选提交）</p>
+                <p className="text-body-sm text-on-surface-variant">
+                  这题可选多项（骨架阶段按单选提交）
+                </p>
               ) : null}
 
               <div className="flex flex-col gap-2">
@@ -219,13 +247,13 @@ export default function TestQuestionPage() {
                       type="button"
                       onClick={() => choose(option.key)}
                       className={cn(
-                        'flex items-center gap-3 rounded-lg border px-4 py-3 text-left text-sm transition-colors',
+                        'flex items-center gap-3 rounded-lg border px-4 py-3 text-left text-body-md transition-colors',
                         selected
-                          ? 'border-primary bg-primary-soft text-foreground'
-                          : 'border-border bg-card hover:bg-secondary',
+                          ? 'border-primary bg-primary-soft text-primary ring-1 ring-primary/35'
+                          : 'border-border bg-card text-on-surface hover:bg-surface-container',
                       )}
                     >
-                      <span className="font-numeric text-xs text-muted-foreground">
+                      <span className="w-4 shrink-0 text-label-md text-caption-foreground">
                         {option.key}
                       </span>
                       <span>{option.text}</span>
@@ -238,20 +266,28 @@ export default function TestQuestionPage() {
         </div>
       </div>
 
-      {/* 底部操作区：固定在底部，任何题目都在同一位置 */}
+      {/* 底部操作区：固定在底部，任何题目都在同一位置（几何由 a1-question-geometry.mjs 量过） */}
       <div className="flex shrink-0 items-center justify-between border-t pt-4">
         <Button
           variant="outline"
+          size="sm"
           disabled={index === 0}
           onClick={() => setIndex((i) => Math.max(0, i - 1))}
         >
           上一题
         </Button>
         <div className="flex flex-col items-end gap-1">
-          <Button variant="ghost" onClick={skip} disabled={submitting}>
+          <Button variant="ghost" size="sm" onClick={skip} disabled={submitting}>
             {index + 1 === total ? '跳过并提交' : '跳过这题'}
           </Button>
-          <span className="text-xs text-muted-foreground">
+          {/*
+            ⚠️ 这行必须留在 `text-caption`（12/16），**不能**升成 text-body-sm(13/20)：
+            底部操作区的高度由这行撑起来（3 个选项时它就是最高的一列），
+            行高 20 会让操作区 +4px、整排按钮下移 16px（实测「上一题」y 从 734 → 750）。
+            颜色同理不能用 text-caption-foreground(#94a3b8)：在画布底上对比度只有 2.44，
+            体检脚本 probe 会判「低对比」。
+          */}
+          <span className="text-caption text-on-surface-variant">
             答不上来没关系，跳过也不会扣分
           </span>
         </div>

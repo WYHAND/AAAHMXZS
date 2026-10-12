@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Printer, RefreshCw, TrendingUp } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Lightbulb, Printer, RefreshCw, RotateCcw, TrendingUp } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { AIThinking } from '@/components/AIThinking'
 import { EmptyState } from '@/components/EmptyState'
+import { Panel } from '@/components/Panel'
 import { StageBadge } from '@/components/StageBadge'
+import { Stat, StatGroup } from '@/components/StatGroup'
 import { Button } from '@/components/ui/button'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
 import { PageShell } from '@/components/PageShell'
@@ -41,6 +41,21 @@ import { cn } from '@/lib/utils'
  *   成为「与上一份报告相比」的基线；不点保存就不会落库。
  * - 「重新载入」只是重新拉一次实时数据，**不是**"点了才更新"。
  * - 页面上**不允许出现任何英文字段名**：四个维度一律走 constants/score.ts 的中文 label。
+ *
+ * 版式（视觉参考稿 2026-10，只取配色/排版/文案风格，形态仍按本项目的真实数据与功能）：
+ * - 「当前阶段」一张卡：左边综合分、右边三条维度条；**三条维度条与 +x 默认收起**
+ *   （Collapsible「看分数明细」）—— 原来一打开就是"四条进度条 + 四个 +8/+12/+5"的报表脸；
+ * - 三个统计数字走 StatGroup + Stat（数字 24/700、标签 12px，单位与 statCaption 原样保留）；
+ * - AI 阶段建议**提到统计面板之前**（它是这一页真正能推着人往下走的东西，
+ *   不是排在第二屏的补充说明）。
+ *
+ * ⚠️ 与参考稿的两处**有意偏离**（都是因为本项目没有那个东西，不造假）：
+ * 1. 参考稿空态里有个「查看历史模版」按钮 —— 本项目**没有**报告历史功能
+ *    （无路由、无接口），所以那个位置放**已有的「保存这一份」**，与旁边那句
+ *    「点击右上角「保存这一份」记录当下起点」说的是同一件事；
+ * 2. 参考稿把三个统计数字下面写死成「待开启第一项微行动」等文案 —— 那是**零值场景**的
+ *    话。本项目里这几个数字会随用户行为变化，所以只在真的为 0 时用参考稿文案，
+ *    大于 0 时改成由数字派生的实话（见 statCaption）。
  */
 
 /** 保存时间的中文写法（今年的省略年份） */
@@ -200,6 +215,7 @@ export default function GrowthReportPage() {
   const savedAt = report.last_saved_at ? formatSavedAt(report.last_saved_at) : null
   const suggestions = report.suggestions ?? []
   const delta = report.score_delta ?? {}
+  const clarity = Math.round(report.clarity_score)
 
   return (
     <PageShell
@@ -232,204 +248,256 @@ export default function GrowthReportPage() {
             size="sm"
             onClick={() => void handleSave()}
             disabled={saving}
-            className="gap-1.5"
+            className="gap-1.5 rounded-lg"
           >
             {saving ? '保存中…' : '保存这一份'}
           </Button>
         </div>
       }
     >
-      <Card data-print="card">
-        <CardHeader className="flex-row items-center justify-between gap-3">
+      {/* ① 当前阶段：综合分 + StageBadge；三条维度条与 +x 收进「看分数明细」（默认收起） */}
+      <Panel data-print="card" className="gap-5">
+        <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col gap-1">
-            <CardTitle className="text-base">当前阶段</CardTitle>
-            <CardDescription>
+            <h2 className="text-headline-sm text-primary">当前阶段</h2>
+            <p className="text-body-sm text-on-surface-variant">
               {stageLabel} · {report.stage_changed ? '这一周期阶段发生变化了' : '阶段保持稳定'}
-            </CardDescription>
+            </p>
           </div>
-          <StageBadge stage={normalizeStage(report.stage ?? stage)} showStepper />
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex items-baseline gap-2">
-            <span className="font-numeric text-4xl font-semibold text-foreground">
-              {Math.round(report.total_score)}
-            </span>
-            <span className="text-sm text-muted-foreground">/ 100 综合分</span>
+          <StageBadge stage={normalizeStage(report.stage ?? stage)} size="sm" />
+        </div>
+
+        {/*
+          综合分：48px → 32px。它是个参考值，这一屏的主角是紧随其后的 AI 建议。
+          三条维度条与相比基线的 +x 一起收进「看分数明细」（默认收起）——
+          中文 label 全部来自 constants/score.ts，一个都没少，只是不再一打开就铺在脸上。
+        */}
+        <Collapsible className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-numeric text-[32px] font-semibold leading-none text-primary">
+                {Math.round(report.total_score)}
+              </span>
+              <span className="text-body-sm text-on-surface-variant">/ 100 综合分</span>
+            </div>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="group gap-1 text-on-surface-variant">
+                看分数明细
+                <ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" />
+              </Button>
+            </CollapsibleTrigger>
           </div>
-
-          <div className="flex flex-col gap-3">
-            {SCORE_ITEMS.map((item) => {
-              const value = report[item.key] ?? 0
-              const change = delta[item.key]
-              return (
-                <div key={item.key} className="flex items-center gap-3">
-                  <span className="w-24 shrink-0 text-sm text-muted-foreground">
-                    {item.label}
-                  </span>
-                  <Progress value={value} className="h-1.5 flex-1" />
-                  <span className="w-10 shrink-0 text-right font-numeric text-sm text-foreground">
-                    {Math.round(value)}
-                  </span>
-                  {hasBaseline && typeof change === 'number' ? (
-                    <span
-                      className={cn(
-                        'w-12 shrink-0 text-right font-numeric text-xs',
-                        scoreDeltaTone(change),
-                      )}
-                    >
-                      {formatScoreDelta(change)}
-                    </span>
-                  ) : (
-                    <span className="w-12 shrink-0" />
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="完成任务" value={report.completed_tasks} unit="个" />
-        <StatCard label="完成步骤" value={report.completed_steps} unit="步" />
-        <StatCard label="活跃天数" value={report.active_days} unit="天" />
-      </div>
-
-      {/* 与上一份报告相比：没有基线时**不显示**一排 +0（那是误导） */}
-      <Card data-print="card">
-        <CardHeader>
-          <CardTitle className="text-base">与上一份报告相比</CardTitle>
-          <CardDescription>
-            {hasBaseline && savedAt ? `对比的是 ${savedAt} 保存的那一份` : '保存一份后，这里会显示你的变化'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {hasBaseline ? (
-            <div className="flex flex-wrap gap-3">
-              {SCORE_COMPARE_ITEMS.map((item) => {
-                const change = delta[item.key] ?? 0
+          <CollapsibleContent>
+            <div className="flex flex-col gap-3">
+              {SCORE_ITEMS.map((item) => {
+                const value = report[item.key] ?? 0
+                const change = delta[item.key]
                 return (
-                  <div key={item.key} className="flex min-w-28 flex-col rounded-lg border px-3 py-2">
-                    <span className="text-xs text-muted-foreground">{item.label}</span>
-                    <span
-                      className={cn(
-                        'font-numeric text-lg',
-                        scoreDeltaTone(change),
-                      )}
-                    >
-                      {formatScoreDelta(change)}
+                  <div key={item.key} className="flex items-center gap-3">
+                    <span className="w-20 shrink-0 text-body-sm text-on-surface-variant">
+                      {item.label}
                     </span>
+                    <Progress value={value} className="h-1.5 flex-1 bg-surface-container" />
+                    <span className="w-8 shrink-0 text-right font-numeric text-body-sm text-primary">
+                      {Math.round(value)}
+                    </span>
+                    {hasBaseline && typeof change === 'number' ? (
+                      <span
+                        className={cn(
+                          'w-10 shrink-0 text-right font-numeric text-caption',
+                          scoreDeltaTone(change),
+                        )}
+                      >
+                        {formatScoreDelta(change)}
+                      </span>
+                    ) : (
+                      <span className="w-10 shrink-0" />
+                    )}
                   </div>
                 )
               })}
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              还没有可对比的基线。保存一份报告后，这里会显示你的变化。
-            </p>
-          )}
-        </CardContent>
-      </Card>
+          </CollapsibleContent>
+        </Collapsible>
+      </Panel>
 
-      {report.highlights?.length ? (
-        <Card data-print="card">
-          <CardHeader>
-            <CardTitle className="text-base">本周期亮点</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-muted-foreground">
-              {report.highlights.map((item, i) => (
-                <li key={i}>{item}</li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+      {/* ② AI 阶段建议：这一屏真正能推着人往下走的东西，提到统计面板之前 */}
+      {suggestions.length ? (
+        <Panel data-print="card" className="ai-inset gap-3 bg-surface-container-low">
+          <div className="flex items-center gap-2">
+            <Lightbulb className="size-4 text-secondary" aria-hidden />
+            <h2 className="text-headline-sm text-secondary">AI 阶段建议</h2>
+          </div>
+          <p className="text-body-md text-primary">
+            你现在的方向清晰度是 {clarity} 分；点「去做」我会把建议拆成能当天做完的小步。
+          </p>
+          <ul className="flex flex-col gap-2">
+            {suggestions.map((item, i) => {
+              const painPoint = item.pain_point
+              return (
+                <li key={i} className="flex items-start gap-3 rounded-lg bg-card px-3 py-2.5">
+                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-secondary" aria-hidden />
+                  <span className="flex-1 text-body-md text-primary">{item.text}</span>
+                  {/* pain_point 为 null 的建议没有可生成的痛点，不显示按钮，也不发空请求 */}
+                  {painPoint ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      disabled={generatingIndex !== null}
+                      onClick={() => void handleGenerateTask(i, painPoint)}
+                    >
+                      {generatingIndex === i ? '生成中…' : '去做'}
+                    </Button>
+                  ) : null}
+                </li>
+              )
+            })}
+          </ul>
+        </Panel>
       ) : null}
 
-      {suggestions.length ? (
-        <Card data-print="card" className="ai-inset">
-          <CardHeader>
-            <CardTitle className="text-base text-accent-foreground">下一步建议</CardTitle>
-            <CardDescription className="text-accent-foreground/80">
-              点「去做」我会把它拆成能当天做完的小步
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="flex flex-col gap-3 text-sm text-accent-foreground/90">
-              {suggestions.map((item, i) => {
-                const painPoint = item.pain_point
-                return (
-                  <li key={i} className="flex items-start justify-between gap-3">
-                    <span className="flex min-w-0 gap-2">
-                      <span aria-hidden>·</span>
-                      <span>{item.text}</span>
-                    </span>
-                    {/* pain_point 为 null 的建议没有可生成的痛点，不显示按钮，也不发空请求 */}
-                    {painPoint ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="shrink-0"
-                        disabled={generatingIndex !== null}
-                        onClick={() => void handleGenerateTask(i, painPoint)}
-                      >
-                        {generatingIndex === i ? '生成中…' : '去做'}
-                      </Button>
-                    ) : null}
-                  </li>
-                )
-              })}
-            </ul>
-          </CardContent>
-        </Card>
+      {/* ③ 三个统计数字：StatGroup + Stat（数字 24/700 等宽），单位与 caption 原样保留 */}
+      <Panel data-print="card" className="gap-3">
+        <h2 className="text-headline-sm text-primary">这段时间的节奏</h2>
+        <StatGroup columns={3}>
+          <Stat value={report.completed_tasks} unit="个" label="完成任务" accent />
+          <Stat
+            value={report.completed_steps}
+            unit="步"
+            label="完成步骤"
+            divided
+            className="space-y-0.5"
+          />
+          <Stat
+            value={report.active_days}
+            unit="天"
+            label="活跃天数"
+            divided
+            className="space-y-0.5"
+          />
+        </StatGroup>
+        {/* statCaption 的三句真话：0 与非 0 说法不同，抽到下面小字里，一个都没丢 */}
+        <div className="grid gap-2 sm:grid-cols-3">
+          {(
+            [
+              ['tasks', report.completed_tasks],
+              ['steps', report.completed_steps],
+              ['days', report.active_days],
+            ] as const
+          ).map(([kind, value]) => (
+            <p key={kind} className="text-caption text-on-surface-variant">
+              {statCaption(kind, value)}
+            </p>
+          ))}
+        </div>
+      </Panel>
+
+      {/* ④ 与上一份报告相比：基线对比卡（含"尚未归档任何基线报告"空态，逻辑不动） */}
+      <Panel data-print="card" className="gap-4">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-headline-sm text-primary">与上一份报告相比</h2>
+          <span className="shrink-0 pt-1 text-caption text-caption-foreground">基线对比</span>
+        </div>
+        <p className="text-body-sm text-on-surface-variant">
+          保存一份后，这里会清晰显示你的方向、行动与简历完整度带来的具体变化。
+        </p>
+        {hasBaseline ? (
+          <div className="flex flex-wrap gap-3">
+            {SCORE_COMPARE_ITEMS.map((item) => {
+              const change = delta[item.key] ?? 0
+              return (
+                <div
+                  key={item.key}
+                  className="flex min-w-28 flex-col gap-0.5 rounded-lg bg-surface-container-low px-3 py-2"
+                >
+                  <span className="text-caption text-on-surface-variant">{item.label}</span>
+                  <span className={cn('font-numeric text-headline-sm', scoreDeltaTone(change))}>
+                    {formatScoreDelta(change)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg bg-surface-container-low px-3 py-3">
+            <RotateCcw className="size-4 shrink-0 text-on-surface-variant" aria-hidden />
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-body-md text-primary">尚未归档任何基线报告</span>
+              <span className="text-caption text-on-surface-variant">
+                点击右上角「保存这一份」记录当下起点
+              </span>
+            </div>
+            {/* 参考稿这里放的是「查看历史模版」；本项目没有报告历史功能，
+                所以放**已有的**保存动作，不做假入口 */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleSave()}
+              disabled={saving}
+              className="shrink-0"
+            >
+              {saving ? '保存中…' : '保存这一份'}
+            </Button>
+          </div>
+        )}
+      </Panel>
+
+      {report.highlights?.length ? (
+        <Panel data-print="card" className="gap-3">
+          <h2 className="text-headline-sm text-primary">本周期亮点</h2>
+          <ul className="flex flex-col gap-2">
+            {report.highlights.map((item, i) => (
+              <li key={i} className="flex gap-2 text-body-md text-on-surface-variant">
+                <span aria-hidden>·</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
       ) : null}
 
       {/* 我的补充：用户唯一能写的地方（分数由行为算出，不给任何改分入口） */}
-      <Card data-print="card">
-        <CardHeader>
-          <CardTitle className="text-base">我的补充</CardTitle>
-          <CardDescription>
-            写点你自己想记的：这段时间的感受、卡住的地方、下一步打算。写好后点右上角「保存这一份」，它会跟这份报告一起存下来。
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          <Textarea
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            maxLength={500}
-            rows={4}
-            placeholder="比如：这周投了 3 家没回音，简历里项目那块我还想再改改。"
-          />
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="font-numeric text-xs text-muted-foreground">
-              {note.length}/500
+      <Panel data-print="card" className="gap-2">
+        <h2 className="text-headline-sm text-primary">我的补充</h2>
+        <p className="text-body-sm text-on-surface-variant">
+          写点你自己想记的：这段时间的感受、卡住的地方、下一步打算。写好后点右上角「保存这一份」，它会跟这份报告一起存下来。
+        </p>
+        <Textarea
+          className="mt-1"
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          maxLength={500}
+          rows={4}
+          placeholder="比如：这周投了 3 家没回音，简历里项目那块我还想再改改。"
+        />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="tabular-nums text-caption text-caption-foreground">
+            {note.length}/500
+          </span>
+          {dirty ? (
+            <span className="text-body-sm text-warning">
+              有未保存的修改，记得点右上角「保存这一份」
             </span>
-            {dirty ? (
-              <span className="text-xs text-warning">
-                有未保存的修改，记得点右上角「保存这一份」
-              </span>
-            ) : (
-              <span className="text-xs text-muted-foreground">
-                {report.saved ? '这段补充已经跟报告一起保存过了' : '还没保存过，保存后会成为下次对比的基线'}
-              </span>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          ) : (
+            <span className="text-body-sm text-on-surface-variant">
+              {report.saved ? '这段补充已经跟报告一起保存过了' : '还没保存过，保存后会成为下次对比的基线'}
+            </span>
+          )}
+        </div>
+      </Panel>
     </PageShell>
   )
 }
 
-function StatCard({ label, value, unit }: { label: string; value: number; unit: string }) {
-  return (
-    <Card data-print="card">
-      <CardHeader>
-        <CardTitle className="text-base">{label}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <span className="font-numeric text-3xl font-semibold text-foreground">{value}</span>
-        <span className="ml-2 text-sm text-muted-foreground">{unit}</span>
-      </CardContent>
-    </Card>
-  )
+/**
+ * 统计数字下面那行小字。
+ *
+ * 参考稿写死的是「待开启第一项微行动」「本周规划累计进展」「连续探索，保持步调」——
+ * 那是**零值场景**的话。数字大于 0 时再这么说就是假话，所以按数字派生。
+ */
+function statCaption(kind: 'tasks' | 'steps' | 'days', value: number): string {
+  if (kind === 'tasks') return value === 0 ? '待开启第一项微行动' : `已完成 ${value} 个，保持节奏`
+  if (kind === 'steps') return value === 0 ? '本周规划累计进展' : `本周已累计 ${value} 步`
+  return value === 0 ? '今天就能开始，做一件小事' : '连续探索，保持步调'
 }

@@ -115,14 +115,16 @@ def save_growth_report(db: Session, user: User, user_note: Optional[str] = None)
     return _compose_response(db, user)
 
 
-def build_growth_content(db: Session, user: User) -> Dict[str, Any]:
-    """实时聚合报告内容（11.10：画像变化 + 完成任务数 + 建议）。**不落库。**
+def collect_growth_counts(db: Session, user: User) -> Dict[str, int]:
+    """成长报告与首页**共用**的三个统计数字（口径唯一，避免两处各写一套后漂移）。
 
-    返回的 dict 可直接作为 ``reports.content``（保存时）或响应 ``data`` 的主体（GET 时）。
+    - ``completed_tasks``：状态为「已完成」的任务数
+    - ``completed_steps``：这些任务下已打卡的步骤数
+    - ``active_days``：有对话消息或打卡记录的不同日期数（见 ``_count_active_days``）
+
+    ⚠️ 首页（``home_service``）也调它 —— 现在两边的数字天然一致；
+    改口径时**只改这里**，不要去 home_service 里另写一份查询。
     """
-    profile = profile_service.get_or_create_profile(db, user.id)
-
-    # ---- 任务与打卡统计 ----
     tasks = db.exec(select(Task).where(Task.user_id == user.id)).all()
     completed_tasks = [t for t in tasks if t.status == "已完成"]
     task_ids = [t.id for t in tasks]
@@ -136,6 +138,23 @@ def build_growth_content(db: Session, user: User) -> Dict[str, Any]:
                 )
             ).all()
         )
+
+    return {
+        "completed_tasks": len(completed_tasks),
+        "completed_steps": completed_steps,
+        "active_days": _count_active_days(db, user.id),
+    }
+
+
+def build_growth_content(db: Session, user: User) -> Dict[str, Any]:
+    """实时聚合报告内容（11.10：画像变化 + 完成任务数 + 建议）。**不落库。**
+
+    返回的 dict 可直接作为 ``reports.content``（保存时）或响应 ``data`` 的主体（GET 时）。
+    """
+    profile = profile_service.get_or_create_profile(db, user.id)
+
+    # ---- 任务与打卡统计（与首页共用 collect_growth_counts，口径唯一）----
+    counts = collect_growth_counts(db, user)
 
     current = {
         "clarity_score": round(float(profile.clarity_score), 2),
@@ -167,10 +186,10 @@ def build_growth_content(db: Session, user: User) -> Dict[str, Any]:
 
     # ---- 亮点 ----
     highlights: List[str] = []
-    if completed_tasks:
-        highlights.append(f"完成了 {len(completed_tasks)} 个成长任务")
-    if completed_steps:
-        highlights.append(f"累计打卡 {completed_steps} 个步骤")
+    if counts["completed_tasks"]:
+        highlights.append(f"完成了 {counts['completed_tasks']} 个成长任务")
+    if counts["completed_steps"]:
+        highlights.append(f"累计打卡 {counts['completed_steps']} 个步骤")
     if profile.resume_score > 0:
         highlights.append("简历已开始成形")
     if profile.clarity_score >= 60:
@@ -193,9 +212,9 @@ def build_growth_content(db: Session, user: User) -> Dict[str, Any]:
         "stage_changed": previous_stage_slug is not None and previous_stage_slug != stage_slug,
         **current,
         "score_delta": delta,
-        "completed_tasks": len(completed_tasks),
-        "completed_steps": completed_steps,
-        "active_days": _count_active_days(db, user.id),
+        "completed_tasks": counts["completed_tasks"],
+        "completed_steps": counts["completed_steps"],
+        "active_days": counts["active_days"],
         "highlights": highlights,
         "suggestions": [s.model_dump() for s in suggestions],
     }

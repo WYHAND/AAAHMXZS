@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy import case, func, select as sa_select
@@ -19,8 +20,9 @@ from sqlmodel import Session, select
 
 from app.models.profile import ProfileTag
 from app.models.task import Task, TaskStep
-from app.models.user import User
+from app.models.user import User, utcnow
 from app.schemas.home import (
+    HomeActivityPoint,
     HomeAiFinding,
     HomeDailyQuestion,
     HomeNextAction,
@@ -30,6 +32,7 @@ from app.schemas.home import (
     HomeTag,
 )
 from app.services import daily_question_service, profile_service
+from app.services.report_service import collect_growth_counts
 from app.utils.logger import get_logger, sanitize
 from app.utils.stage import to_stage_label, to_stage_slug
 
@@ -43,6 +46,9 @@ MAX_ONGOING_TASKS = 2
 
 # 画像标签最多返回几条（首页不需要全量标签）
 MAX_HOME_TAGS = 20
+
+# 首页活动柱状图的窗口天数（近 14 天，含今天）
+ACTIVITY_WINDOW_DAYS = 14
 
 
 # ---------------------------------------------------------------------------
@@ -173,6 +179,14 @@ def _build_home_summary(db: Session, user: User) -> HomeSummaryResponse:
     # 5) 今日一问（复用 daily_question_service，题库为空时它自己会兜底）
     daily = _load_daily_question(db, user)
 
+    # 6) 三个统计数字（完成小探索 / 累计微步 / 活跃天数）——
+    #    与成长报告**共用** report_service.collect_growth_counts，口径天然一致
+    counts = collect_growth_counts(db, user)
+
+    # 7) 近 14 天「每日完成步数」时间序列（首页活动柱状图）。
+    #    独立包了 try/except：图表数据拿不到最多是空柱，不能让整个首页聚合挂掉。
+    activity = _load_activity_points(db, user.id)
+
     return HomeSummaryResponse(
         stage=stage_slug,
         stage_label=to_stage_label(stage_slug),
@@ -188,6 +202,10 @@ def _build_home_summary(db: Session, user: User) -> HomeSummaryResponse:
         daily_question=daily,
         ai_findings=findings,
         ongoing_tasks=ongoing,
+        activity=activity,
+        completed_tasks=counts["completed_tasks"],
+        completed_steps=counts["completed_steps"],
+        active_days=counts["active_days"],
         next_action=decide_next_action(tested, stage_slug, ongoing),
     )
 
@@ -216,6 +234,13 @@ def _fallback_summary(db: Session, user: User) -> HomeSummaryResponse:
     except Exception as exc:  # noqa: BLE001
         logger.warning("首页兜底也拿不到画像 user_id=%s err=%s", user.id, sanitize(exc))
 
+    # 统计数字单独兜一层：拿不到就给 0（首页允许数字不准，但不能因此 500）
+    counts = {"completed_tasks": 0, "completed_steps": 0, "active_days": 0}
+    try:
+        counts = collect_growth_counts(db, user)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("首页兜底拿不到统计数字 user_id=%s err=%s", user.id, sanitize(exc))
+
     return HomeSummaryResponse(
         stage=stage_slug,
         stage_label=to_stage_label(stage_slug),
@@ -224,6 +249,11 @@ def _fallback_summary(db: Session, user: User) -> HomeSummaryResponse:
         daily_question=None,
         ai_findings=[],
         ongoing_tasks=[],
+        # 兜底时活动序列给空列表（前端自己会画横轴，空数组不报错）
+        activity=[],
+        completed_tasks=counts["completed_tasks"],
+        completed_steps=counts["completed_steps"],
+        active_days=counts["active_days"],
         next_action=decide_next_action(tested, stage_slug, []),
     )
 
@@ -258,6 +288,8 @@ def _build_findings(tag_entities: Sequence[ProfileTag]) -> List[HomeAiFinding]:
             label=tag.label,
             reason=_finding_reason(tag),
             target_route=route_for_pain(tag.label),
+            # 证据强度直接用痛点标签的权重（实体已在手，无需额外查询）
+            weight=float(tag.weight or 0.0),
         )
         for tag in pains[:MAX_AI_FINDINGS]
     ]
@@ -293,6 +325,65 @@ def _latest_evidence(tag: ProfileTag) -> str:
         if latest:
             evidence = latest
     return evidence
+
+
+def _load_activity_points(db: Session, user_id) -> List[HomeActivityPoint]:
+    """近 14 天「每日完成步数」时间序列（含今天，日期升序，缺数据的天补 0）。
+
+    为什么这样写：
+
+    - **一条 GROUP BY 算完**：首页硬约束不允许 N+1（见文件头），
+      绝不能按天循环查 14 次；这里 `task_steps JOIN tasks` 锁定当前用户 +
+      已完成，按完成日期分组计数。
+    - **按天/时区口径照抄 ``report_service._count_active_days``**：
+      那里也是直接对 naive UTC 时间戳取 ``.date()``、**不做任何时区换算**，
+      所以这里同样按 ``completed_at`` 的 UTC 日期分桶 —— 首页的活跃口径
+      与成长报告不许漂移（活跃天数是两处共用的概念）。
+    - **补 0 在 Python 侧做**：查询只返回「有打卡的日期」，未出现的日期
+      在这里用 ``start..today`` 补齐；这样前端拿到的是定长 14 根柱子。
+    - 用 ``func.date()`` 而不是 ``cast(..., Date)``：SQLite 上前者的语义就是
+      「取日期字符串」，后者的 DATE 会退化成 NUMERIC 亲和性
+      （``CAST('2026-10-11 ...' AS DATE)`` -> ``2026``），会算错天。
+
+    整个函数自己兜异常：图表数据拿不到就返回空列表，绝不让首页聚合因此抛错。
+    """
+    try:
+        today = utcnow().date()
+        start = today - timedelta(days=ACTIVITY_WINDOW_DAYS - 1)
+
+        # 一条查询：task_steps JOIN tasks，按 completed_at 的日期分组 count。
+        # 不在这里用 SQL 比较日期做窗口过滤：``func.date(...)`` 在 PostgreSQL
+        # 返回 date 类型，和绑定参数的字符串比较会报 operator 不存在；
+        # 而单用户的历史打卡行数很小，分组后在 Python 里截窗口更稳、也跨方言。
+        rows = db.execute(
+            sa_select(
+                func.date(TaskStep.completed_at).label("day"),
+                func.count(TaskStep.id),
+            )
+            .select_from(TaskStep)
+            .join(Task, TaskStep.task_id == Task.id)
+            .where(
+                Task.user_id == user_id,
+                TaskStep.completed.is_(True),
+                TaskStep.completed_at.is_not(None),
+            )
+            .group_by(func.date(TaskStep.completed_at))
+        ).all()
+
+        # 键统一成 'YYYY-MM-DD' 字符串（SQLite 本来就是字符串，PostgreSQL 的
+        # date 对象 str() 后也是这个格式），保证与下面补 0 的键对得上。
+        counts: Dict[str, int] = {str(day): int(cnt or 0) for day, cnt in rows}
+
+        return [
+            HomeActivityPoint(
+                date=(start + timedelta(days=offset)).isoformat(),
+                steps=counts.get((start + timedelta(days=offset)).isoformat(), 0),
+            )
+            for offset in range(ACTIVITY_WINDOW_DAYS)
+        ]
+    except Exception as exc:  # noqa: BLE001 - 首页不允许因图表数据失败而 500
+        logger.warning("首页取活动序列失败，降级为空数组 user_id=%s err=%s", user_id, sanitize(exc))
+        return []
 
 
 def _load_ongoing_tasks(db: Session, user_id) -> List[HomeOngoingTask]:

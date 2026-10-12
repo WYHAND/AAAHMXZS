@@ -5,8 +5,8 @@ import { Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
+import { Panel } from '@/components/Panel'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/hooks/useAuth'
@@ -25,7 +25,15 @@ const loginSchema = z.object({
 
 type LoginForm = z.infer<typeof loginSchema>
 
-/** 登录页（设计说明书 2.1、3.1 P0）；对接 POST /auth/login */
+/**
+ * 登录页（设计说明书 2.1、3.1 P0）；对接 POST /auth/login
+ *
+ * 版式（2026-10 收口，与首页同一套规格）：
+ * 这个页面在 `BlankLayout` 的 448px 窄栏里居中，所以"像不像一个产品"全靠**卡片外面**
+ * 那段身份头：产品标识 + 真 `<h1>`（26/700）+ 一句人话。原来只有一个 CardTitle，
+ * 整页没有任何"这是什么产品"的信息，第一印象很空。
+ * 卡片下方那行小字只写**已经落地的能力**（宁缺勿编）。
+ */
 export default function LoginPage() {
   const { login, loading } = useAuth()
   const navigate = useNavigate()
@@ -50,15 +58,17 @@ export default function LoginPage() {
   })
 
   return (
-    <Card className="shadow-pop">
-      <CardHeader className="gap-2">
-        <span className="flex size-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-          <Sparkles className="size-4" />
+    <div className="flex flex-col gap-6">
+      {/* 身份头：卡片之外，先回答"这是个什么产品" */}
+      <header className="flex flex-col gap-3">
+        <span className="flex size-9 items-center justify-center rounded-lg bg-secondary-fixed text-on-secondary-fixed">
+          <Sparkles className="size-4" aria-hidden />
         </span>
-        <CardTitle className="text-xl">登录 AI 就业助手</CardTitle>
-        <CardDescription>先做一次职业测评，我就能开始陪你走</CardDescription>
-      </CardHeader>
-      <CardContent>
+        <h1 className="text-headline-xl font-bold text-primary">登录 AI 就业助手</h1>
+        <p className="text-body-md text-on-surface-variant">先做一次职业测评，我就能开始陪你走。</p>
+      </header>
+
+      <Panel>
         <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
           <div className="flex flex-col gap-2">
             <Label htmlFor="username">用户名</Label>
@@ -70,7 +80,7 @@ export default function LoginPage() {
               {...register('username')}
             />
             {errors.username ? (
-              <p className="text-xs text-destructive">{errors.username.message}</p>
+              <p className="text-body-sm text-destructive">{errors.username.message}</p>
             ) : null}
           </div>
 
@@ -85,23 +95,40 @@ export default function LoginPage() {
               {...register('password')}
             />
             {errors.password ? (
-              <p className="text-xs text-destructive">{errors.password.message}</p>
+              <p className="text-body-sm text-destructive">{errors.password.message}</p>
             ) : null}
           </div>
 
-          {/* 整屏唯一实心主按钮 */}
-          <Button type="submit" variant="warm" size="lg" disabled={isSubmitting || loading}>
+          {/*
+            整屏唯一实心主按钮。
+            `rounded-xl text-[15px] font-semibold` 不是随手加的：`size="lg"` 自带的圆角是
+            `rounded-md`（实算 6px，见 index.css 的 --radius-md），而设计规范与两处已定稿的
+            参考页（HomePage.tsx:220 主行动卡 CTA、TestResultPage.tsx:42 的 PRIMARY_CTA）
+            都是「lg + rounded-xl（12px）+ 15px/600」。这里照参考页写，才和整站主 CTA 一致。
+          */}
+          <Button
+            type="submit"
+            variant="warm"
+            size="lg"
+            className="w-full rounded-xl text-[15px] font-semibold"
+            disabled={isSubmitting || loading}
+          >
             {isSubmitting || loading ? '登录中…' : '登录'}
           </Button>
 
-          <p className="text-center text-sm text-muted-foreground">
+          <p className="text-center text-body-md text-on-surface-variant">
             还没有账号？
             <Link to="/register" className="ml-1 text-primary hover:underline">
               注册一个
             </Link>
           </p>
         </form>
-      </CardContent>
-    </Card>
+      </Panel>
+
+      {/* 三条极轻的可信信息：只说产品真做得到的事 */}
+      <p className="text-center text-body-sm text-on-surface-variant">
+        AI 会从对话里了解你 · 任务拆成当天能做完的小步 · 简历只改你写过的内容
+      </p>
+    </div>
   )
 }

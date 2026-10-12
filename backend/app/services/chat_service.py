@@ -1450,6 +1450,7 @@ async def send_message(db: Session, user: User, conversation_id: UUID, payload: 
             user_message=MessageResponse.model_validate(existing_user),
             assistant_message=MessageResponse.model_validate(existing_reply),
             extracted_tags=[],
+            conclusion_ready=has_conclusion(db, conversation.id),
         )
     if existing_user is not None:
         # 上一轮还在生成中：不重复调 AI，也不重复插消息。
@@ -1483,6 +1484,7 @@ async def send_message(db: Session, user: User, conversation_id: UUID, payload: 
         user_message=MessageResponse.model_validate(user_message),
         assistant_message=MessageResponse.model_validate(assistant_message),
         extracted_tags=extracted_tags,
+        conclusion_ready=has_conclusion(db, conversation.id),
     )
 
 

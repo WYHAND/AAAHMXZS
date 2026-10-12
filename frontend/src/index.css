@@ -5,77 +5,12 @@
 
 /* ==========================================================================
    设计说明书 6.3 主题变量
-   底色：浅米黄（纸感） 主色：低饱和克制蓝（只用于「可点的东西」）
-   纪律：蓝是动作色、暖色负责氛围；禁止 Tailwind 默认色板类
+   ⚠️ 2026-10 收口：这里原来还有一份「浅米黄 + 克制蓝」的旧配色 :root 块，
+   它已经被文件末尾的「Serene Career Companion」:root 整体取代。
+   那份**必须删掉**而不是留着：Tailwind 生成 text-/bg- 工具类时按先出现的那份
+   解析 var()，两份值不一致就会写出"旧配色"的工具类 —— 实测因此让首页的琥珀色
+   （text-secondary、进度条）整片变灰。**改颜色只改末尾那一处。**
    ========================================================================== */
-:root {
-  --radius: 0.75rem;
-
-  /* 基础色 —— 浅米黄底 + 克制蓝主色 */
-  --background: hsl(43 44% 96%);
-  --foreground: hsl(30 12% 14%);
-
-  --card: hsl(40 60% 99%);
-  --card-foreground: hsl(30 12% 14%);
-
-  --popover: hsl(40 60% 99%);
-  --popover-foreground: hsl(30 12% 14%);
-
-  --primary: hsl(213 30% 44%);
-  --primary-foreground: hsl(43 44% 97%);
-
-  --secondary: hsl(42 28% 92%);
-  --secondary-foreground: hsl(33 8% 40%);
-
-  --muted: hsl(42 28% 92%);
-  --muted-foreground: hsl(33 8% 40%);
-
-  /* 赭黄浅底，仅用于 AI 主动类卡片 */
-  --accent: hsl(38 45% 88%);
-  --accent-foreground: hsl(32 45% 32%);
-
-  --destructive: hsl(8 52% 45%);
-  --destructive-foreground: hsl(43 44% 97%);
-
-  --border: hsl(40 18% 86%);
-  --input: hsl(40 18% 86%);
-  --ring: hsl(213 30% 44%);
-
-  --primary-hover: hsl(213 32% 37%);
-  --primary-soft: hsl(210 35% 94%);
-
-  /* 业务扩展变量：阶段 / AI / 语义 */
-  --stage-explore: hsl(38 50% 47%);
-  --stage-prepare: hsl(213 30% 44%);
-  --stage-sprint: hsl(8 52% 45%);
-  --ai-accent: hsl(38 50% 47%);
-  --success: hsl(95 22% 38%);
-  --warning: hsl(35 55% 45%);
-  --info: hsl(213 25% 50%);
-
-  /* 奖章配色（「我的奖章」专用语义 token）
-     纪律：这里就是金色的**唯一出处**，组件里只允许引用 var(--medal-*)，
-     不出现任何 Tailwind 默认色板类（amber/yellow/orange…）。
-     亮色取「做旧黄铜」，暗色取「提亮黄金」，靠层叠与高光出金属感。 */
-  --medal-gold: hsl(40 62% 52%);
-  --medal-gold-deep: hsl(32 58% 34%);
-  --medal-gold-soft: hsl(44 58% 82%);
-  --medal-ring: hsl(38 30% 72%);
-  /* 未获得（铸模）态：中性灰，不能糊成一团 —— 仍要看得清是枚奖章 */
-  --medal-mute: hsl(36 12% 62%);
-  --medal-mute-deep: hsl(30 12% 38%);
-  --medal-mute-soft: hsl(40 18% 86%);
-  /* 高光/受光条（白色微暖）：两套主题都成立的一个"提亮"色 */
-  --medal-sheen: hsl(44 60% 97%);
-  /* 奖章底影：不用彩色阴影 */
-  --medal-shadow: 0 2px 6px rgba(28, 25, 23, 0.16);
-
-  /* 暖褐低透明阴影（不用彩色阴影 / 发光） */
-  --shadow-card: 0 1px 2px rgba(28, 25, 23, 0.05);
-  --shadow-pop: 0 8px 24px rgba(28, 25, 23, 0.1);
-
-  color-scheme: light;
-}
 
 /* 暗色模式（M3 可选，按 6.2 注释预置） */
 .dark {
@@ -246,5 +181,385 @@
   .ai-bubble-text pre {
     overflow-x: auto;
     white-space: pre;
+  }
+}
+
+/* ==========================================================================
+   2026-10 新设计系统：Serene Career Companion（高保真还原用户给的 Stitch 稿）
+   --------------------------------------------------------------------------
+   真源：用户提供的 stitch_ai_desktop_app_refinement.zip（code.html + DESIGN.md + screen.png）
+   做法：这一节写在文件末尾，**覆盖**上面的旧 token；旧 token 保留原名不动，
+        这样历史页面的 class 不用改就会跟着换皮，减少一次性大改的风险。
+   与旧主题的关系：
+     - 蓝色行动色 → 深墨蓝/近黑（primary #091426），"行动"变成深色实心块；
+     - 暖金 → 琥珀棕（secondary #9b4500）+ 浅桃（secondary-fixed #ffdbca）；
+     - 卡片底色 #ffffff、画布 #fbf9f6、侧栏 #f5f3f0（DESIGN.md Level 0/1）；
+     - 圆角按稿子收小：rounded-lg=8px、rounded-xl=12px；
+     - 阴影改为"极轻的环境扩散"，不再用明显的投影。
+   ========================================================================== */
+
+/* 字体：本地 woff2（桌面端离线可用，不依赖 CDN）。
+   中文没有字形，靠后面的系统字体栈（PingFang SC / 微软雅黑 / HarmonyOS Sans）。 */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/fonts/PlusJakartaSans-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/fonts/PlusJakartaSans-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/fonts/PlusJakartaSans-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/fonts/PlusJakartaSans-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ---- 画布与表面（DESIGN.md：Level 0 画布 / Level 1 卡片）---- */
+  --background: #fbf9f6;
+  --foreground: #1b1c1a;
+  --card: #ffffff;
+  --card-foreground: #1b1c1a;
+  --popover: #ffffff;
+  --popover-foreground: #1b1c1a;
+
+  /* ---- 行动 / 强调 ---- */
+  --primary: #091426;
+  --primary-foreground: #ffffff;
+  --primary-hover: #1e293b;
+  --primary-soft: #eceef1;
+  /*
+   * ⚠️ 2026-10 收口（踩过的坑，别再改回来）：
+   * `--secondary` 是**琥珀强调色** #9b4500，`text-secondary` / `bg-secondary` 都按它解析。
+   * Tailwind 的工具类只认 @theme 里声明的值 —— 在文件末尾的 :root 里覆盖成浅灰是**无效**的
+   * （实测 text-secondary 仍会取到 @theme 的值），所以这里必须保持琥珀。
+   * 语义分工（页面里照这个用）：
+   *   text-secondary          → 琥珀文字（AI 文案、强调数字、进度条填充）
+   *   bg-surface-container*   → 中性浅底（气泡、悬停、内嵌块）
+   *   bg-secondary-fixed      → 浅桃小面积强调底 + text-on-secondary-fixed
+   *   bg-primary-soft         → 选中/悬停的浅墨底
+   * 历史上的 `bg-secondary text-secondary-foreground`（想要"浅灰底深灰字"）一律改写成
+   * `bg-surface-container text-on-surface`。
+   */
+  --secondary: #9b4500;
+  --secondary-foreground: #ffffff;
+  --muted: #f5f3f0;
+  --muted-foreground: #64748b;
+  --accent: #ffdbca;
+  --accent-foreground: #331200;
+
+  /* ---- 状态 ---- */
+  --destructive: #ba1a1a;
+  --destructive-foreground: #ffffff;
+  /* 更轻的描边：卡片以"极轻环境扩散"分层，不再靠 1px 灰线（宽度仍是 1px，避免全局位移） */
+  --border: rgba(226, 232, 240, 0.45);
+  --input: rgba(226, 232, 240, 0.8);
+  --ring: #2c3e50;
+
+  /* ---- 新稿新增的语义色（供 bg-surface-container-* / text-caption-foreground 等使用）---- */
+  /* 页面画布：与 --background 分开，控件/弹窗仍可用 --background */
+  --canvas: #fbf9f6;
+  --surface: #fbf9f6;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f5f3f0;
+  --surface-container: #efeeeb;
+  --surface-container-high: #eae8e5;
+  --surface-container-highest: #e4e2df;
+  --on-surface: #1b1c1a;
+  --on-surface-variant: #45474c;
+  /*
+   * caption 文字色：原来是 #94a3b8，在白底/浅底上对比度只有 2.44–2.56 —— 达不到
+   * WCAG 小字 4.5:1，实测里"已完成"标签、底部弱化按钮这类文字已经在"看不清"的边缘。
+   * 收到 #6b7280（白底 4.83:1、画布 4.5:1、浅底 4.5:1），仍然明显比正文浅，
+   * 但读得清。**承载信息的文字优先用 text-on-surface-variant，caption 只作装饰**。
+   */
+  --caption-foreground: #6b7280;
+  --outline: #75777d;
+  --outline-variant: #c5c6cd;
+  --primary-container: #1e293b;
+  --secondary-fixed: #ffdbca;
+  --on-secondary-fixed: #331200;
+  --accent-amber: #b45309;
+  /* 琥珀"文字色"的**别名校验**：等价于 text-secondary（#9b4500）。
+     只有 text-secondary 会生成工具类，--accent-ink 是给需要 var() 的地方（SVG/内联样式）用的。 */
+  --accent-ink: #9b4500;
+
+  /*
+   * ---- 状态色（2026-10-11 用户要求：给首页两个面板加"克制的状态色"）----
+   * 为什么另起一套而不复用 `--success` / `--info`：那两个 token 已经被
+   * `text-success`（评分档 score.ts）、`text-warning`（连续天数）、
+   * `bg-success`（面试准备选中态）在用，语义是"绿=好/完成"。首页要的绿是
+   * **"累积到手的东西"**，跟"好"不是一回事，改 --success 会顺手改掉那三处。
+   * 所以这组只服务首页「AI 发现 / 成长节律」两个面板，别的地方要用再单独议。
+   *
+   * 用量纪律（沿用全站"一屏最多一处琥珀"）：
+   *   signal    淡蓝 #4a6fa5 / 深 #33507a（文字级） → 数据/证据/进行中的量
+   *   settled   克制绿 #3f6b45（白卡 6.0:1 / 浅底 5.7:1）→ 已经累积到手的东西
+   *   attention 克制红 #b04a3a（白卡 6.0:1）        → 停滞/需要注意，一屏最多一处
+   *   amber     沿用 --secondary / --accent-ink      → 仍然只给"今天/当前这一步"
+   * 三条状态色一律只落在**图形与小圆点**上，正文文字保持主墨/副墨，不出现彩色正文。
+   *
+   * ⚠️ 实拍踩过的两条（2026-10-11）：
+   *   1. 绿字落在绿底上（chip）会"发虚"——浅底 + 同色相文字在 12px 上读不清；
+   *      状态色**要么是底、要么是字**，不要同时是两者。
+   *   2. 拿浅绿当图表底会把同色系的蓝柱子糊进去——图表底一律中性
+   *      （bg-surface-container-low），别用 --signal-soft / --settled-soft。
+   *      --settled-soft 目前只用于"只有这一件在做"那种「正向许可」提示块。
+   */
+  --signal: #4a6fa5;
+  --signal-ink: #33507a;
+  --settled: #3f6b45;
+  --attention: #b04a3a;
+  /* 内嵌浅底：极低饱和的冷调 / 绿调（只给"提示块"用，不给图表用） */
+  --signal-soft: #f2f5fa;
+  --settled-soft: #f1f6f2;
+
+  /*
+   * ---- 奖章配色（「我的奖章」专用语义 token）----
+   * ⚠️ 这一组必须留在这里：组件里用的是 `fill-medal-gold-deep` 这类**工具类**，
+   * 而工具类只认 :root / @theme 里声明的值。2026-10 收口时把旧调色板整块删掉，
+   * 顺手把 medal 没搬过来 → `fill-medal-gold-deep` 解析成 rgb(0,0,0)，
+   * 个人中心的奖章架整排变成黑疙瘩（实测截图 audit/round1/check-badge-shelf.png）。
+   * 纪律：金色**只**从这里取，组件里不出现 amber/yellow/orange 这类默认色板类。
+   */
+  --medal-gold: #c9922f;
+  --medal-gold-deep: #8a5a1c;
+  --medal-gold-soft: #f0dcb4;
+  --medal-ring: #c4a882;
+  --medal-mute: #a7a29a;
+  --medal-mute-deep: #5c564e;
+  --medal-mute-soft: #dcd8d2;
+  --medal-sheen: #fdf6e8;
+  --medal-shadow: 0 2px 6px rgba(28, 25, 23, 0.16);
+
+  /* 阶段 / AI：统一成稿子里的琥珀棕（旧的 ai-accent 是偏黄的赭黄） */
+  --ai-accent: #b45309;
+  --stage-explore: #b45309;
+
+  /* ---- 阴影：极轻的环境扩散（DESIGN.md Elevation）---- */
+  --shadow-card: 0 1px 3px 0 rgba(15, 23, 42, 0.03), 0 1px 2px -1px rgba(15, 23, 42, 0.02);
+  --shadow-pop: 0 8px 24px -4px rgba(15, 23, 42, 0.06), 0 4px 8px -2px rgba(15, 23, 42, 0.03);
+
+  /* ---- 圆角：整体在稿子基础上前移 +10px（2026-10 用户要求）----
+     稿子原值：lg=8px / xl=12px。现在 lg=18px / xl=22px，其余各档同增 10px。
+     ⚠️ 这里（文件末尾的 :root）是工具类**实际生效**的值；
+     上面的 @theme inline 用 calc(var(--radius)) 派生，两边结果要一致。
+     rounded-full（chip/头像/圆点）不受影响，它不读这些档位。 */
+  --radius: 1.125rem;
+  --radius-sm: 0.875rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.125rem;
+  --radius-xl: 1.375rem;
+  --radius-2xl: 1.625rem;
+  --radius-3xl: 2.125rem;
+}
+
+/* Tailwind v4：把新 token 映射成工具类，并补上稿子的字号阶（text-headline-xl 等） */
+@theme {
+  --font-sans:
+    'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei',
+    'Segoe UI', Roboto, sans-serif;
+
+  --color-surface: #fbf9f6;
+  --color-canvas: #fbf9f6;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f5f3f0;
+  --color-surface-container: #efeeeb;
+  --color-surface-container-high: #eae8e5;
+  --color-surface-container-highest: #e4e2df;
+  --color-on-surface: #1b1c1a;
+  --color-on-surface-variant: #45474c;
+  /*
+   * ⚠️ 必须用 var() 引用上面 :root 的定义，**不要**再写一遍字面色值：
+   * 这一块里的字面值会被 Tailwind 内联进工具类，改 :root 时工具类不会跟着变
+   * （实测 --caption-foreground 改成 #6b7280 后 text-caption-foreground 仍是 #94a3b8）。
+   */
+  --color-caption-foreground: var(--caption-foreground);
+  --color-outline: #75777d;
+  --color-outline-variant: #c5c6cd;
+  --color-primary-container: #1e293b;
+  --color-secondary-fixed: #ffdbca;
+  --color-on-secondary-fixed: #331200;
+  --color-on-primary: #ffffff;
+  --color-on-secondary: #ffffff;
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-accent-amber: #b45309;
+  --color-accent-ink: #9b4500;
+  /*
+   * 状态色（首页两个面板）—— 必须写成 var() 引用上面 :root 的定义，
+   * 写死字面值会被 Tailwind 内联进工具类（见上面 --caption-foreground 的坑），
+   * 以后调色改 :root 一处就够。
+   */
+  --color-signal: var(--signal);
+  --color-signal-ink: var(--signal-ink);
+  --color-settled: var(--settled);
+  --color-attention: var(--attention);
+  --color-signal-soft: var(--signal-soft);
+  --color-settled-soft: var(--settled-soft);
+
+  /* 间距阶（稿子用 px-space-md / px-margin 这类写法） */
+  --spacing-margin: 2rem;
+  /*
+   * 外壳几何（两个数字，改这里就是改全站的"一屏"计算）：
+   *   --spacing-shell        = 44px 窗口头 + 32px 页面呼吸 = 76px（AppLayout 的 main 用之）
+   *   --spacing-shell-total  = 76px + 32px 底部留白     = 108px（一屏布局的容器高度扣这个）
+   *
+   * 裸路由页面（/test/*）拿不到 AppLayout 的 main，所以要自己补同样的几何：
+   *   className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-margin pt-shell
+   *              h-[calc(100svh-var(--spacing-shell-total))] min-h-0"
+   * 千万不要再手写 `-44px` / `-7.5rem` / `mt-shell` 这类凑数：
+   * `mt-shell` 与外层 div 之间**不会**发生 margin 合并，它会把整页往下推 76px，
+   * 导致本来"一屏"的页面出现 64px 滚动（实测 /test/question 的按钮被推到 y=782，
+   * 容器底边都跑到按钮上面去了）。
+   */
+  --spacing-shell: 76px;
+  --spacing-shell-total: 108px;
+  /*
+   * 移动端固定底部 Tab 栏高度（AppLayout 里是 h-16）。
+   * 页面里凡是要"一屏铺满 + 底部有输入框/主按钮"的（如 /chat），移动端必须再扣掉它，
+   * 否则内容会被 Tab 栏压住（实测 390×844 下输入框底边比 Tab 栏顶边低 3px）。
+   * 用法：`max-md:h-[calc(100svh-var(--spacing-shell)-var(--spacing-tabbar))]`
+   */
+  --spacing-tabbar: 64px;
+  --spacing-gutter: 1.25rem;
+  --spacing-space-xs: 0.375rem;
+  --spacing-space-sm: 0.5rem;
+  --spacing-space-md: 1rem;
+  --spacing-space-lg: 1.5rem;
+  --spacing-space-xl: 2rem;
+
+  /* 字号阶（DESIGN.md 的 typography，全部带上行高/字重/字距） */
+  --text-headline-xl: 26px;
+  --text-headline-xl--line-height: 34px;
+  --text-headline-xl--font-weight: 700;
+  --text-headline-xl--letter-spacing: -0.015em;
+  /* 首页专用展示字号（其它页面不用）：问候大标题 44px / 主角卡标题 32px */
+  --text-display-xl: 44px;
+  --text-display-xl--line-height: 52px;
+  --text-display-xl--font-weight: 700;
+  --text-display-xl--letter-spacing: -0.03em;
+  --text-display: 32px;
+  --text-display--line-height: 40px;
+  --text-display--font-weight: 700;
+  --text-display--letter-spacing: -0.02em;
+  --text-headline-lg: 24px;
+  --text-headline-lg--line-height: 32px;
+  --text-headline-lg--font-weight: 600;
+  --text-headline-lg--letter-spacing: -0.01em;
+  --text-headline-md: 18px;
+  --text-headline-md--line-height: 26px;
+  --text-headline-md--font-weight: 600;
+  --text-headline-md--letter-spacing: -0.005em;
+  --text-headline-sm: 16px;
+  --text-headline-sm--line-height: 24px;
+  --text-headline-sm--font-weight: 600;
+  --text-body-lg: 15px;
+  --text-body-lg--line-height: 24px;
+  --text-body-md: 14px;
+  --text-body-md--line-height: 22px;
+  --text-body-sm: 13px;
+  --text-body-sm--line-height: 20px;
+  --text-label-md: 13px;
+  --text-label-md--line-height: 18px;
+  --text-label-md--font-weight: 500;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-caption--letter-spacing: 0.01em;
+}
+
+/* 全局字体换成 Plus Jakarta Sans（中文自动落到后面的系统字体） */
+@layer base {
+  body {
+    font-family: var(--font-sans);
+  }
+
+  /* 稿子里的窗口拖拽区（Electron 的 -webkit-app-region 只在桌面端生效） */
+  .app-drag {
+    -webkit-app-region: drag;
+  }
+  .app-no-drag {
+    -webkit-app-region: no-drag;
+  }
+  /* 稿子的滚动条是隐藏的（桌面端观感更干净） */
+  ::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   聊天气泡「出现即弹一下」（用户提供的 SVG 动画）
+   --------------------------------------------------------------------------
+   关键帧、时长(2s)、缓动(cubic-bezier)、transform-origin 全部照搬用户给的代码：
+     0%     scale .8 → 20.39% scale 1 → 100% 保持 1
+   两点等价改写：
+   1. 用户代码用 `translate(32.5px,14.5px) scale(..) translate(-32.5px,-14.5px)`，
+      32.5/14.5 正是 65×29 的半宽/半高 → 这里写成 `50%`，使**任意尺寸**的气泡
+      都绕自身中心缩放（65×29 时与用户代码逐像素一致）。
+   2. 原代码是 `infinite`；按用户选择改为**每颗气泡只播一次**（1）。
+   动效发生在最开始 0.408s，之后的保持段结束时又回到 scale 1 —— 与静止态无缝衔接。
+   ========================================================================== */
+@keyframes bubble-pop {
+  0% {
+    animation-timing-function: cubic-bezier(0.078, 0.836, 0.293, 0.922);
+    transform: translate(50%, 50%) scale(0.8) translate(-50%, -50%);
+  }
+  20.39% {
+    transform: translate(50%, 50%) scale(1) translate(-50%, -50%);
+  }
+  100% {
+    transform: translate(50%, 50%) scale(1) translate(-50%, -50%);
+  }
+}
+
+@keyframes typing-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+@layer components {
+  .bubble-pop {
+    transform-origin: 0 0;
+    animation: bubble-pop 2s linear 1;
+  }
+  /* 减少动态效果：不做缩放（气泡直接以终态出现） */
+  @media (prefers-reduced-motion: reduce) {
+    .bubble-pop {
+      animation: none;
+    }
+  }
+
+  /* AI 等待占位的三个点：循环起伏（错开 150ms 由调用方用 animation-delay 给出） */
+  .typing-dot {
+    animation: typing-dot 1.2s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .typing-dot {
+      animation: none;
+      opacity: 0.6;
+    }
   }
 }

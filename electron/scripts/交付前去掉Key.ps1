@@ -1,14 +1,19 @@
-﻿# 交付前一键去掉 API Key
+﻿# 去掉「免安装文件夹」里的 API Key（配合压缩成 zip 发给别人）
 #
-# 用途：打包产物里带着 backend/.env（含你的 DEEPSEEK_API_KEY）。要交给评委 / 上传 / 发给别人之前，
-#       跑一次这个脚本，把 Key 从**已打包好的产物**里清掉（不动仓库里的 backend/.env）。
+# 用途：`backend\.env` 会随包带进去（含你的 DEEPSEEK_API_KEY）。要把**免安装文件夹**打包发给别人时，
+#       先跑这个脚本清掉它（不动仓库里的 backend\.env）。
+#
+# ⚠️ 只对免安装文件夹（win-unpacked）有效：
+#    安装包（AI就业助手-安装版-x.y.z.exe）是**打包那一刻**把后端文件嵌进去的，
+#    事后改 win-unpacked 里的 .env **不会**改变已生成的安装包。
+#    要发**不含 Key 的安装包** → 用 electron\scripts\打可交付包.ps1（它清了 Key 再重打）。
 #
 # 用法（仓库根目录）：
 #     powershell -ExecutionPolicy Bypass -File electron\scripts\交付前去掉Key.ps1
 #     powershell -ExecutionPolicy Bypass -File electron\scripts\交付前去掉Key.ps1 -Package "electron\release\win-unpacked"
 #
 # 清掉之后 AI 功能会走 7.6 兜底话术（不崩、但对话/润色/复盘质量下降）——
-# 想让评委看到完整 AI 效果，就别清；想安全交付，就先清。
+# 想让评委看到完整 AI 效果，就得放一个 Key（建议用限额 Key，别用你自己的主 Key）。
 
 param(
     [string]$Package = "electron\release\win-unpacked"

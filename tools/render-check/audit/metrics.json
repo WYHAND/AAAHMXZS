@@ -1,0 +1,2354 @@
+{
+  "baseUrl": "http://localhost:5199",
+  "startedAt": "2026-10-09T15:26:16.455Z",
+  "routes": [
+    {
+      "name": "home",
+      "path": "/",
+      "url": "/",
+      "errors": [],
+      "scrollHeight": 917,
+      "viewportHeight": 900,
+      "mainTop": 0,
+      "h1Size": "26px",
+      "h1Weight": "700",
+      "h1Text": "今天，做一件小事就够了",
+      "h1Top": 76,
+      "firstCardTop": 160,
+      "cardCount": 5,
+      "cardRadius": [
+        {
+          "value": "12px",
+          "count": 5
+        }
+      ],
+      "cardShadow": [
+        {
+          "value": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rg",
+          "count": 5
+        }
+      ],
+      "cardPadX": [
+        {
+          "value": "20px",
+          "count": 3
+        },
+        {
+          "value": "24px",
+          "count": 1
+        },
+        {
+          "value": "16px",
+          "count": 1
+        }
+      ],
+      "cardPadY": [
+        {
+          "value": "20px",
+          "count": 3
+        },
+        {
+          "value": "24px",
+          "count": 1
+        },
+        {
+          "value": "16px",
+          "count": 1
+        }
+      ],
+      "cardTops": [
+        160,
+        439,
+        613,
+        439,
+        579
+      ],
+      "fontSizes": [
+        {
+          "value": "12px",
+          "count": 23
+        },
+        {
+          "value": "14px",
+          "count": 9
+        },
+        {
+          "value": "13px",
+          "count": 6
+        },
+        {
+          "value": "16px",
+          "count": 2
+        },
+        {
+          "value": "26px",
+          "count": 1
+        },
+        {
+          "value": "24px",
+          "count": 1
+        },
+        {
+          "value": "18px",
+          "count": 1
+        }
+      ],
+      "weights": [
+        {
+          "value": "400",
+          "count": 22
+        },
+        {
+          "value": "600",
+          "count": 12
+        },
+        {
+          "value": "500",
+          "count": 5
+        },
+        {
+          "value": "700",
+          "count": 4
+        }
+      ],
+      "topColors": [
+        {
+          "value": "rgb(69, 71, 76)",
+          "count": 20
+        },
+        {
+          "value": "rgb(9, 20, 38)",
+          "count": 13
+        },
+        {
+          "value": "rgb(155, 69, 0)",
+          "count": 5
+        },
+        {
+          "value": "rgb(27, 28, 26)",
+          "count": 2
+        },
+        {
+          "value": "oklab(0.494669 0.0869414 0.100154 / 0.7)",
+          "count": 1
+        },
+        {
+          "value": "rgb(51, 18, 0)",
+          "count": 1
+        }
+      ],
+      "families": [
+        {
+          "value": "Plus Jakarta Sans",
+          "count": 43
+        }
+      ],
+      "solidButtons": [
+        {
+          "bg": "rgb(9, 20, 38)",
+          "color": "rgb(255, 255, 255)",
+          "radius": "12px",
+          "h": 44,
+          "px": "12px",
+          "fs": "14px",
+          "fw": "600",
+          "text": "继续任务"
+        }
+      ]
+    },
+    {
+      "name": "chat",
+      "path": "/chat",
+      "url": "/chat",
+      "errors": [],
+      "scrollHeight": 932,
+      "viewportHeight": 900,
+      "mainTop": 0,
+      "h1Size": "26px",
+      "h1Weight": "700",
+      "h1Text": "AI 对话",
+      "h1Top": 76,
+      "firstCardTop": 154,
+      "cardCount": 2,
+      "cardRadius": [
+        {
+          "value": "12px",
+          "count": 2
+        }
+      ],
+      "cardShadow": [
+        {
+          "value": "none",
+          "count": 1
+        },
+        {
+          "value": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rg",
+          "count": 1
+        }
+      ],
+      "cardPadX": [
+        {
+          "value": "8px",
+          "count": 1
+        },
+        {
+          "value": "0px",
+          "count": 1
+        }
+      ],
+      "cardPadY": [
+        {
+          "value": "8px",
+          "count": 1
+        },
+        {
+          "value": "0px",
+          "count": 1
+        }
+      ],
+      "cardTops": [
+        154,
+        154
+      ],
+      "fontSizes": [
+        {
+          "value": "14px",
+          "count": 4
+        },
+        {
+          "value": "26px",
+          "count": 1
+        },
+        {
+          "value": "16px",
+          "count": 1
+        },
+        {
+          "value": "15px",
+          "count": 1
+        },
+        {
+          "value": "13px",
+          "count": 1
+        }
+      ],
+      "weights": [
+        {
+          "value": "400",
+          "count": 4
+        },
+        {
+          "value": "500",
+          "count": 2
+        },
+        {
+          "value": "700",
+          "count": 1
+        },
+        {
+          "value": "600",
+          "count": 1
+        }
+      ],
+      "topColors": [
+        {
+          "value": "rgb(27, 28, 26)",
+          "count": 3
+        },
+        {
+          "value": "rgb(9, 20, 38)",
+          "count": 2
+        },
+        {
+          "value": "rgb(69, 71, 76)",
+          "count": 2
+        },
+        {
+          "value": "rgb(255, 255, 255)",
+          "count": 1
+        }
+      ],
+      "families": [
+        {
+          "value": "Plus Jakarta Sans",
+          "count": 8
+        }
+      ],
+      "solidButtons": [
+        {
+          "bg": "rgb(9, 20, 38)",
+          "color": "rgb(255, 255, 255)",
+          "radius": "12px",
+          "h": 44,
+          "px": "20px",
+          "fs": "15px",
+          "fw": "600",
+          "text": "发送"
+        }
+      ]
+    },
+    {
+      "name": "task-list",
+      "path": "/task",
+      "url": "/task",
+      "errors": [],
+      "scrollHeight": 900,
+      "viewportHeight": 900,
+      "mainTop": 0,
+      "h1Size": "26px",
+      "h1Weight": "700",
+      "h1Text": "成长任务",
+      "h1Top": 98,
+      "firstCardTop": 184,
+      "cardCount": 2,
+      "cardRadius": [
+        {
+          "value": "12px",
+          "count": 2
+        }
+      ],
+      "cardShadow": [
+        {
+          "value": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rg",
+          "count": 2
+        }
+      ],
+      "cardPadX": [
+        {
+          "value": "20px",
+          "count": 2
+        }
+      ],
+      "cardPadY": [
+        {
+          "value": "20px",
+          "count": 2
+        }
+      ],
+      "cardTops": [
+        184,
+        184
+      ],
+      "fontSizes": [
+        {
+          "value": "13px",
+          "count": 13
+        },
+        {
+          "value": "12px",
+          "count": 5
+        },
+        {
+          "value": "16px",
+          "count": 3
+        },
+        {
+          "value": "14px",
+          "count": 2
+        },
+        {
+          "value": "26px",
+          "count": 1
+        },
+        {
+          "value": "15px",
+          "count": 1
+        }
+      ],
+      "weights": [
+        {
+          "value": "400",
+          "count": 15
+        },
+        {
+          "value": "500",
+          "count": 5
+        },
+        {
+          "value": "600",
+          "count": 4
+        },
+        {
+          "value": "700",
+          "count": 1
+        }
+      ],
+      "topColors": [
+        {
+          "value": "rgb(69, 71, 76)",
+          "count": 11
+        },
+        {
+          "value": "rgb(9, 20, 38)",
+          "count": 8
+        },
+        {
+          "value": "rgb(107, 114, 128)",
+          "count": 3
+        },
+        {
+          "value": "rgb(27, 28, 26)",
+          "count": 2
+        },
+        {
+          "value": "rgb(255, 255, 255)",
+          "count": 1
+        }
+      ],
+      "families": [
+        {
+          "value": "Plus Jakarta Sans",
+          "count": 24
+        },
+        {
+          "value": "ui-monospace",
+          "count": 1
+        }
+      ],
+      "solidButtons": [
+        {
+          "bg": "rgb(9, 20, 38)",
+          "color": "rgb(255, 255, 255)",
+          "radius": "12px",
+          "h": 44,
+          "px": "24px",
+          "fs": "15px",
+          "fw": "600",
+          "text": "查看步骤"
+        }
+      ]
+    },
+    {
+      "name": "task-detail",
+      "path": "/task/d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "url": "/task/d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "errors": [],
+      "scrollHeight": 900,
+      "viewportHeight": 900,
+      "mainTop": 0,
+      "h1Size": "26px",
+      "h1Weight": "700",
+      "h1Text": "做一个鸿蒙待办清单小应用",
+      "h1Top": 98,
+      "firstCardTop": 184,
+      "cardCount": 3,
+      "cardRadius": [
+        {
+          "value": "12px",
+          "count": 3
+        }
+      ],
+      "cardShadow": [
+        {
+          "value": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rg",
+          "count": 3
+        }
+      ],
+      "cardPadX": [
+        {
+          "value": "20px",
+          "count": 3
+        }
+      ],
+      "cardPadY": [
+        {
+          "value": "20px",
+          "count": 3
+        }
+      ],
+      "cardTops": [
+        184,
+        382,
+        382
+      ],
+      "fontSizes": [
+        {
+          "value": "14px",
+          "count": 20
+        },
+        {
+          "value": "13px",
+          "count": 6
+        },
+        {
+          "value": "12px",
+          "count": 3
+        },
+        {
+          "value": "16px",
+          "count": 2
+        },
+        {
+          "value": "26px",
+          "count": 1
+        },
+        {
+          "value": "24px",
+          "count": 1
+        },
+        {
+          "value": "15px",
+          "count": 1
+        }
+      ],
+      "weights": [
+        {
+          "value": "400",
+          "count": 20
+        },
+        {
+          "value": "500",
+          "count": 8
+        },
+        {
+          "value": "600",
+          "count": 5
+        },
+        {
+          "value": "700",
+          "count": 1
+        }
+      ],
+      "topColors": [
+        {
+          "value": "rgb(69, 71, 76)",
+          "count": 16
+        },
+        {
+          "value": "rgb(9, 20, 38)",
+          "count": 10
+        },
+        {
+          "value": "rgb(107, 114, 128)",
+          "count": 3
+        },
+        {
+          "value": "rgb(27, 28, 26)",
+          "count": 3
+        },
+        {
+          "value": "rgb(255, 255, 255)",
+          "count": 2
+        }
+      ],
+      "families": [
+        {
+          "value": "Plus Jakarta Sans",
+          "count": 33
+        },
+        {
+          "value": "ui-monospace",
+          "count": 1
+        }
+      ],
+      "solidButtons": [
+        {
+          "bg": "rgb(9, 20, 38)",
+          "color": "rgb(255, 255, 255)",
+          "radius": "12px",
+          "h": 44,
+          "px": "24px",
+          "fs": "15px",
+          "fw": "600",
+          "text": "打卡"
+        }
+      ]
+    },
+    {
+      "name": "daily",
+      "path": "/daily",
+      "url": "/daily",
+      "errors": [],
+      "scrollHeight": 900,
+      "viewportHeight": 900,
+      "mainTop": 0,
+      "h1Size": "26px",
+      "h1Weight": "700",
+      "h1Text": "每日一问",
+      "h1Top": 98,
+      "firstCardTop": 184,
+      "cardCount": 2,
+      "cardRadius": [
+        {
+          "value": "12px",
+          "count": 2
+        }
+      ],
+      "cardShadow": [
+        {
+          "value": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rg",
+          "count": 2
+        }
+      ],
+      "cardPadX": [
+        {
+          "value": "20px",
+          "count": 2
+        }
+      ],
+      "cardPadY": [
+        {
+          "value": "20px",
+          "count": 2
+        }
+      ],
+      "cardTops": [
+        184,
+        512
+      ],
+      "fontSizes": [
+        {
+          "value": "12px",
+          "count": 10
+        },
+        {
+          "value": "13px",
+          "count": 9
+        },
+        {
+          "value": "14px",
+          "count": 7
+        },
+        {
+          "value": "26px",
+          "count": 1
+        },
+        {
+          "value": "18px",
+          "count": 1
+        },
+        {
+          "value": "15px",
+          "count": 1
+        },
+        {
+          "value": "16px",
+          "count": 1
+        }
+      ],
+      "weights": [
+        {
+          "value": "400",
+          "count": 23
+        },
+        {
+          "value": "600",
+          "count": 3
+        },
+        {
+          "value": "500",
+          "count": 3
+        },
+        {
+          "value": "700",
+          "count": 1
+        }
+      ],
+      "topColors": [
+        {
+          "value": "rgb(69, 71, 76)",
+          "count": 11
+        },
+        {
+          "value": "rgb(27, 28, 26)",
+          "count": 11
+        },
+        {
+          "value": "rgb(9, 20, 38)",
+          "count": 4
+        },
+        {
+          "value": "rgb(107, 114, 128)",
+          "count": 2
+        },
+        {
+          "value": "oklab(0.39787 -0.000221983 -0.0087724 / 0.8)",
+          "count": 1
+        },
+        {
+          "value": "rgb(255, 255, 255)",
+          "count": 1
+        }
+      ],
+      "families": [
+        {
+          "value": "Plus Jakarta Sans",
+          "count": 30
+        }
+      ],
+      "solidButtons": [
+        {
+          "bg": "rgb(9, 20, 38)",
+          "color": "rgb(255, 255, 255)",
+          "radius": "12px",
+          "h": 44,
+          "px": "20px",
+          "fs": "15px",
+          "fw": "600",
+          "text": "记下这一句"
+        }
+      ]
+    },
+    {
+      "name": "profile",
+      "path": "/profile",
+      "url": "/profile",
+      "errors": [],
+      "scrollHeight": 1213,
+      "viewportHeight": 900,
+      "mainTop": 0,
+      "h1Size": "26px",
+      "h1Weight": "700",
+      "h1Text": "个人中心",
+      "h1Top": 98,
+      "firstCardTop": 184,
+      "cardCount": 3,
+      "cardRadius": [
+        {
+          "value": "12px",
+          "count": 3
+        }
+      ],
+      "cardShadow": [
+        {
+          "value": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rg",
+          "count": 3
+        }
+      ],
+      "cardPadX": [
+        {
+          "value": "20px",
+          "count": 3
+        }
+      ],
+      "cardPadY": [
+        {
+          "value": "20px",
+          "count": 3
+        }
+      ],
+      "cardTops": [
+        184,
+        430,
+        650
+      ],
+      "fontSizes": [
+        {
+          "value": "13px",
+          "count": 17
+        },
+        {
+          "value": "12px",
+          "count": 8
+        },
+        {
+          "value": "14px",
+          "count": 6
+        },
+        {
+          "value": "16px",
+          "count": 3
+        },
+        {
+          "value": "18px",
+          "count": 3
+        },
+        {
+          "value": "26px",
+          "count": 2
+        },
+        {
+          "value": "15px",
+          "count": 1
+        }
+      ],
+      "weights": [
+        {
+          "value": "400",
+          "count": 20
+        },
+        {
+          "value": "500",
+          "count": 14
+        },
+        {
+          "value": "600",
+          "count": 4
+        },
+        {
+          "value": "700",
+          "count": 2
+        }
+      ],
+      "topColors": [
+        {
+          "value": "rgb(69, 71, 76)",
+          "count": 15
+        },
+        {
+          "value": "rgb(9, 20, 38)",
+          "count": 14
+        },
+        {
+          "value": "rgb(107, 114, 128)",
+          "count": 5
+        },
+        {
+          "value": "rgb(27, 28, 26)",
+          "count": 3
+        },
+        {
+          "value": "rgb(255, 255, 255)",
+          "count": 1
+        },
+        {
+          "value": "rgb(155, 69, 0)",
+          "count": 1
+        }
+      ],
+      "families": [
+        {
+          "value": "Plus Jakarta Sans",
+          "count": 39
+        },
+        {
+          "value": "ui-monospace",
+          "count": 1
+        }
+      ],
+      "solidButtons": [
+        {
+          "bg": "rgb(9, 20, 38)",
+          "color": "rgb(255, 255, 255)",
+          "radius": "12px",
+          "h": 44,
+          "px": "24px",
+          "fs": "15px",
+          "fw": "600",
+          "text": "继续今天的任务"
+        }
+      ]
+    },
+    {
+      "name": "resume",
+      "path": "/resume",
+      "url": "/resume",
+      "errors": [],
+      "scrollHeight": 2112,
+      "viewportHeight": 900,
+      "mainTop": 0,
+      "h1Size": "26px",
+      "h1Weight": "700",
+      "h1Text": "我的简历",
+      "h1Top": 98,
+      "firstCardTop": 290,
+      "cardCount": 8,
+      "cardRadius": [
+        {
+          "value": "12px",
+          "count": 8
+        }
+      ],
+      "cardShadow": [
+        {
+          "value": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rg",
+          "count": 7
+        },
+        {
+          "value": "none",
+          "count": 1
+        }
+      ],
+      "cardPadX": [
+        {
+          "value": "20px",
+          "count": 7
+        },
+        {
+          "value": "24px",
+          "count": 1
+        }
+      ],
+      "cardPadY": [
+        {
+          "value": "20px",
+          "count": 8
+        }
+      ],
+      "cardTops": [
+        290,
+        438,
+        790,
+        938,
+        1164,
+        1348,
+        1574,
+        1800
+      ],
+      "fontSizes": [
+        {
+          "value": "12px",
+          "count": 23
+        },
+        {
+          "value": "14px",
+          "count": 15
+        },
+        {
+          "value": "13px",
+          "count": 10
+        },
+        {
+          "value": "16px",
+          "count": 8
+        },
+        {
+          "value": "26px",
+          "count": 1
+        },
+        {
+          "value": "24px",
+          "count": 1
+        },
+        {
+          "value": "15px",
+          "count": 1
+        }
+      ],
+      "weights": [
+        {
+          "value": "400",
+          "count": 36
+        },
+        {
+          "value": "500",
+          "count": 12
+        },
+        {
+          "value": "600",
+          "count": 10
+        },
+        {
+          "value": "700",
+          "count": 1
+        }
+      ],
+      "topColors": [
+        {
+          "value": "rgb(69, 71, 76)",
+          "count": 30
+        },
+        {
+          "value": "rgb(27, 28, 26)",
+          "count": 16
+        },
+        {
+          "value": "rgb(9, 20, 38)",
+          "count": 10
+        },
+        {
+          "value": "rgb(255, 255, 255)",
+          "count": 2
+        },
+        {
+          "value": "rgb(107, 114, 128)",
+          "count": 1
+        }
+      ],
+      "families": [
+        {
+          "value": "Plus Jakarta Sans",
+          "count": 58
+        },
+        {
+          "value": "ui-monospace",
+          "count": 1
+        }
+      ],
+      "solidButtons": [
+        {
+          "bg": "rgb(9, 20, 38)",
+          "color": "rgb(255, 255, 255)",
+          "radius": "8px",
+          "h": 32,
+          "px": "12px",
+          "fs": "14px",
+          "fw": "500",
+          "text": "开始填写"
+        },
+        {
+          "bg": "rgb(9, 20, 38)",
+          "color": "rgb(255, 255, 255)",
+          "radius": "12px",
+          "h": 44,
+          "px": "20px",
+          "fs": "15px",
+          "fw": "600",
+          "text": "让 AI 帮我改得更像简历"
+        }
+      ]
+    },
+    {
+      "name": "interview-select",
+      "path": "/interview",
+      "url": "/interview",
+      "errors": [],
+      "scrollHeight": 900,
+      "viewportHeight": 900,
+      "mainTop": 0,
+      "h1Size": "26px",
+      "h1Weight": "700",
+      "h1Text": "模拟面试",
+      "h1Top": 98,
+      "firstCardTop": 184,
+      "cardCount": 1,
+      "cardRadius": [
+        {
+          "value": "12px",
+          "count": 1
+        }
+      ],
+      "cardShadow": [
+        {
+          "value": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rg",
+          "count": 1
+        }
+      ],
+      "cardPadX": [
+        {
+          "value": "20px",
+          "count": 1
+        }
+      ],
+      "cardPadY": [
+        {
+          "value": "20px",
+          "count": 1
+        }
+      ],
+      "cardTops": [
+        184
+      ],
+      "fontSizes": [
+        {
+          "value": "13px",
+          "count": 8
+        },
+        {
+          "value": "14px",
+          "count": 7
+        },
+        {
+          "value": "16px",
+          "count": 3
+        },
+        {
+          "value": "12px",
+          "count": 2
+        },
+        {
+          "value": "26px",
+          "count": 1
+        },
+        {
+          "value": "15px",
+          "count": 1
+        }
+      ],
+      "weights": [
+        {
+          "value": "400",
+          "count": 11
+        },
+        {
+          "value": "600",
+          "count": 9
+        },
+        {
+          "value": "700",
+          "count": 1
+        },
+        {
+          "value": "500",
+          "count": 1
+        }
+      ],
+      "topColors": [
+        {
+          "value": "rgb(69, 71, 76)",
+          "count": 11
+        },
+        {
+          "value": "rgb(9, 20, 38)",
+          "count": 9
+        },
+        {
+          "value": "rgb(107, 114, 128)",
+          "count": 1
+        },
+        {
+          "value": "rgb(255, 255, 255)",
+          "count": 1
+        }
+      ],
+      "families": [
+        {
+          "value": "Plus Jakarta Sans",
+          "count": 22
+        }
+      ],
+      "solidButtons": [
+        {
+          "bg": "rgb(9, 20, 38)",
+          "color": "rgb(255, 255, 255)",
+          "radius": "12px",
+          "h": 44,
+          "px": "24px",
+          "fs": "15px",
+          "fw": "600",
+          "text": "下一步：准备设备"
+        }
+      ]
+    },
+    {
+      "name": "interview-prepare",
+      "path": "/interview/prepare",
+      "url": "/interview/prepare",
+      "errors": [],
+      "scrollHeight": 900,
+      "viewportHeight": 900,
+      "mainTop": 0,
+      "h1Size": "26px",
+      "h1Weight": "700",
+      "h1Text": "面试准备",
+      "h1Top": 98,
+      "firstCardTop": 184,
+      "cardCount": 1,
+      "cardRadius": [
+        {
+          "value": "12px",
+          "count": 1
+        }
+      ],
+      "cardShadow": [
+        {
+          "value": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rg",
+          "count": 1
+        }
+      ],
+      "cardPadX": [
+        {
+          "value": "20px",
+          "count": 1
+        }
+      ],
+      "cardPadY": [
+        {
+          "value": "20px",
+          "count": 1
+        }
+      ],
+      "cardTops": [
+        184
+      ],
+      "fontSizes": [
+        {
+          "value": "14px",
+          "count": 6
+        },
+        {
+          "value": "13px",
+          "count": 5
+        },
+        {
+          "value": "12px",
+          "count": 2
+        },
+        {
+          "value": "26px",
+          "count": 1
+        },
+        {
+          "value": "16px",
+          "count": 1
+        },
+        {
+          "value": "15px",
+          "count": 1
+        }
+      ],
+      "weights": [
+        {
+          "value": "400",
+          "count": 8
+        },
+        {
+          "value": "500",
+          "count": 5
+        },
+        {
+          "value": "600",
+          "count": 2
+        },
+        {
+          "value": "700",
+          "count": 1
+        }
+      ],
+      "topColors": [
+        {
+          "value": "rgb(69, 71, 76)",
+          "count": 7
+        },
+        {
+          "value": "rgb(9, 20, 38)",
+          "count": 5
+        },
+        {
+          "value": "rgb(27, 28, 26)",
+          "count": 2
+        },
+        {
+          "value": "rgb(107, 114, 128)",
+          "count": 1
+        },
+        {
+          "value": "rgb(255, 255, 255)",
+          "count": 1
+        }
+      ],
+      "families": [
+        {
+          "value": "Plus Jakarta Sans",
+          "count": 16
+        }
+      ],
+      "solidButtons": [
+        {
+          "bg": "rgb(9, 20, 38)",
+          "color": "rgb(255, 255, 255)",
+          "radius": "12px",
+          "h": 44,
+          "px": "24px",
+          "fs": "15px",
+          "fw": "600",
+          "text": "先勾选上面的确认项"
+        }
+      ]
+    },
+    {
+      "name": "interview-session",
+      "path": "/interview/session",
+      "url": "/interview/session",
+      "errors": [],
+      "scrollHeight": 900,
+      "viewportHeight": 900,
+      "mainTop": 0,
+      "h1Size": "20px",
+      "h1Weight": "600",
+      "h1Text": "先花一分钟介绍一下你自己，重点讲鸿蒙客户端开发相关的部分。",
+      "h1Top": 342,
+      "firstCardTop": 322,
+      "cardCount": 1,
+      "cardRadius": [
+        {
+          "value": "12px",
+          "count": 1
+        }
+      ],
+      "cardShadow": [
+        {
+          "value": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rg",
+          "count": 1
+        }
+      ],
+      "cardPadX": [
+        {
+          "value": "20px",
+          "count": 1
+        }
+      ],
+      "cardPadY": [
+        {
+          "value": "20px",
+          "count": 1
+        }
+      ],
+      "cardTops": [
+        322
+      ],
+      "fontSizes": [
+        {
+          "value": "14px",
+          "count": 2
+        },
+        {
+          "value": "13px",
+          "count": 1
+        },
+        {
+          "value": "20px",
+          "count": 1
+        },
+        {
+          "value": "12px",
+          "count": 1
+        },
+        {
+          "value": "15px",
+          "count": 1
+        }
+      ],
+      "weights": [
+        {
+          "value": "400",
+          "count": 2
+        },
+        {
+          "value": "500",
+          "count": 2
+        },
+        {
+          "value": "600",
+          "count": 2
+        }
+      ],
+      "topColors": [
+        {
+          "value": "rgb(69, 71, 76)",
+          "count": 2
+        },
+        {
+          "value": "rgb(9, 20, 38)",
+          "count": 1
+        },
+        {
+          "value": "rgb(107, 114, 128)",
+          "count": 1
+        },
+        {
+          "value": "rgb(27, 28, 26)",
+          "count": 1
+        },
+        {
+          "value": "rgb(255, 255, 255)",
+          "count": 1
+        }
+      ],
+      "families": [
+        {
+          "value": "Plus Jakarta Sans",
+          "count": 6
+        }
+      ],
+      "solidButtons": [
+        {
+          "bg": "rgb(9, 20, 38)",
+          "color": "rgb(255, 255, 255)",
+          "radius": "12px",
+          "h": 44,
+          "px": "24px",
+          "fs": "15px",
+          "fw": "600",
+          "text": "提交并继续"
+        }
+      ]
+    },
+    {
+      "name": "interview-review",
+      "path": "/interview/review/b7c1e2d3-4f5a-4b6c-8d7e-9f0a1b2c3d4e",
+      "url": "/interview/review/b7c1e2d3-4f5a-4b6c-8d7e-9f0a1b2c3d4e",
+      "errors": [],
+      "scrollHeight": 1062,
+      "viewportHeight": 900,
+      "mainTop": 0,
+      "h1Size": "26px",
+      "h1Weight": "700",
+      "h1Text": "面试复盘",
+      "h1Top": 98,
+      "firstCardTop": 184,
+      "cardCount": 4,
+      "cardRadius": [
+        {
+          "value": "12px",
+          "count": 4
+        }
+      ],
+      "cardShadow": [
+        {
+          "value": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rg",
+          "count": 4
+        }
+      ],
+      "cardPadX": [
+        {
+          "value": "20px",
+          "count": 4
+        }
+      ],
+      "cardPadY": [
+        {
+          "value": "20px",
+          "count": 4
+        }
+      ],
+      "cardTops": [
+        184,
+        516,
+        516,
+        706
+      ],
+      "fontSizes": [
+        {
+          "value": "14px",
+          "count": 8
+        },
+        {
+          "value": "12px",
+          "count": 5
+        },
+        {
+          "value": "16px",
+          "count": 5
+        },
+        {
+          "value": "26px",
+          "count": 1
+        },
+        {
+          "value": "32px",
+          "count": 1
+        },
+        {
+          "value": "13px",
+          "count": 1
+        },
+        {
+          "value": "15px",
+          "count": 1
+        }
+      ],
+      "weights": [
+        {
+          "value": "400",
+          "count": 13
+        },
+        {
+          "value": "600",
+          "count": 6
+        },
+        {
+          "value": "700",
+          "count": 2
+        },
+        {
+          "value": "500",
+          "count": 1
+        }
+      ],
+      "topColors": [
+        {
+          "value": "rgb(69, 71, 76)",
+          "count": 6
+        },
+        {
+          "value": "rgb(9, 20, 38)",
+          "count": 6
+        },
+        {
+          "value": "rgb(27, 28, 26)",
+          "count": 5
+        },
+        {
+          "value": "rgb(107, 114, 128)",
+          "count": 3
+        },
+        {
+          "value": "rgb(155, 69, 0)",
+          "count": 1
+        },
+        {
+          "value": "rgb(255, 255, 255)",
+          "count": 1
+        }
+      ],
+      "families": [
+        {
+          "value": "Plus Jakarta Sans",
+          "count": 21
+        },
+        {
+          "value": "ui-monospace",
+          "count": 1
+        }
+      ],
+      "solidButtons": [
+        {
+          "bg": "rgb(9, 20, 38)",
+          "color": "rgb(255, 255, 255)",
+          "radius": "12px",
+          "h": 44,
+          "px": "24px",
+          "fs": "15px",
+          "fw": "600",
+          "text": "再面一次"
+        }
+      ]
+    },
+    {
+      "name": "report",
+      "path": "/report",
+      "url": "/report",
+      "errors": [],
+      "scrollHeight": 1269,
+      "viewportHeight": 900,
+      "mainTop": 0,
+      "h1Size": "26px",
+      "h1Weight": "700",
+      "h1Text": "成长报告",
+      "h1Top": 98,
+      "firstCardTop": 184,
+      "cardCount": 5,
+      "cardRadius": [
+        {
+          "value": "12px",
+          "count": 5
+        }
+      ],
+      "cardShadow": [
+        {
+          "value": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rg",
+          "count": 5
+        }
+      ],
+      "cardPadX": [
+        {
+          "value": "20px",
+          "count": 5
+        }
+      ],
+      "cardPadY": [
+        {
+          "value": "20px",
+          "count": 5
+        }
+      ],
+      "cardTops": [
+        184,
+        524,
+        722,
+        919,
+        1041
+      ],
+      "fontSizes": [
+        {
+          "value": "12px",
+          "count": 18
+        },
+        {
+          "value": "14px",
+          "count": 16
+        },
+        {
+          "value": "16px",
+          "count": 6
+        },
+        {
+          "value": "13px",
+          "count": 5
+        },
+        {
+          "value": "26px",
+          "count": 1
+        },
+        {
+          "value": "32px",
+          "count": 1
+        }
+      ],
+      "weights": [
+        {
+          "value": "400",
+          "count": 31
+        },
+        {
+          "value": "600",
+          "count": 7
+        },
+        {
+          "value": "500",
+          "count": 5
+        },
+        {
+          "value": "700",
+          "count": 4
+        }
+      ],
+      "topColors": [
+        {
+          "value": "rgb(69, 71, 76)",
+          "count": 23
+        },
+        {
+          "value": "rgb(9, 20, 38)",
+          "count": 11
+        },
+        {
+          "value": "rgb(27, 28, 26)",
+          "count": 7
+        },
+        {
+          "value": "rgb(107, 114, 128)",
+          "count": 3
+        },
+        {
+          "value": "rgb(155, 69, 0)",
+          "count": 2
+        },
+        {
+          "value": "rgb(255, 255, 255)",
+          "count": 1
+        }
+      ],
+      "families": [
+        {
+          "value": "Plus Jakarta Sans",
+          "count": 42
+        },
+        {
+          "value": "ui-monospace",
+          "count": 5
+        }
+      ],
+      "solidButtons": [
+        {
+          "bg": "rgb(9, 20, 38)",
+          "color": "rgb(255, 255, 255)",
+          "radius": "8px",
+          "h": 32,
+          "px": "12px",
+          "fs": "14px",
+          "fw": "500",
+          "text": "保存这一份"
+        }
+      ]
+    },
+    {
+      "name": "test-intro",
+      "path": "/test/intro",
+      "url": "/",
+      "errors": [],
+      "scrollHeight": 917,
+      "viewportHeight": 900,
+      "mainTop": 0,
+      "h1Size": "26px",
+      "h1Weight": "700",
+      "h1Text": "今天，做一件小事就够了",
+      "h1Top": 76,
+      "firstCardTop": 160,
+      "cardCount": 5,
+      "cardRadius": [
+        {
+          "value": "12px",
+          "count": 5
+        }
+      ],
+      "cardShadow": [
+        {
+          "value": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rg",
+          "count": 5
+        }
+      ],
+      "cardPadX": [
+        {
+          "value": "20px",
+          "count": 3
+        },
+        {
+          "value": "24px",
+          "count": 1
+        },
+        {
+          "value": "16px",
+          "count": 1
+        }
+      ],
+      "cardPadY": [
+        {
+          "value": "20px",
+          "count": 3
+        },
+        {
+          "value": "24px",
+          "count": 1
+        },
+        {
+          "value": "16px",
+          "count": 1
+        }
+      ],
+      "cardTops": [
+        160,
+        439,
+        613,
+        439,
+        579
+      ],
+      "fontSizes": [
+        {
+          "value": "12px",
+          "count": 23
+        },
+        {
+          "value": "14px",
+          "count": 9
+        },
+        {
+          "value": "13px",
+          "count": 6
+        },
+        {
+          "value": "16px",
+          "count": 2
+        },
+        {
+          "value": "26px",
+          "count": 1
+        },
+        {
+          "value": "24px",
+          "count": 1
+        },
+        {
+          "value": "18px",
+          "count": 1
+        }
+      ],
+      "weights": [
+        {
+          "value": "400",
+          "count": 22
+        },
+        {
+          "value": "600",
+          "count": 12
+        },
+        {
+          "value": "500",
+          "count": 5
+        },
+        {
+          "value": "700",
+          "count": 4
+        }
+      ],
+      "topColors": [
+        {
+          "value": "rgb(69, 71, 76)",
+          "count": 20
+        },
+        {
+          "value": "rgb(9, 20, 38)",
+          "count": 13
+        },
+        {
+          "value": "rgb(155, 69, 0)",
+          "count": 5
+        },
+        {
+          "value": "rgb(27, 28, 26)",
+          "count": 2
+        },
+        {
+          "value": "oklab(0.494669 0.0869414 0.100154 / 0.7)",
+          "count": 1
+        },
+        {
+          "value": "rgb(51, 18, 0)",
+          "count": 1
+        }
+      ],
+      "families": [
+        {
+          "value": "Plus Jakarta Sans",
+          "count": 43
+        }
+      ],
+      "solidButtons": [
+        {
+          "bg": "rgb(9, 20, 38)",
+          "color": "rgb(255, 255, 255)",
+          "radius": "12px",
+          "h": 44,
+          "px": "12px",
+          "fs": "14px",
+          "fw": "600",
+          "text": "继续任务"
+        }
+      ]
+    },
+    {
+      "name": "test-question",
+      "path": "/test/question",
+      "url": "/test/question",
+      "errors": [],
+      "scrollHeight": 900,
+      "viewportHeight": 900,
+      "mainTop": 0,
+      "h1Size": "20px",
+      "h1Weight": "600",
+      "h1Text": "想到未来的工作，你现在的感觉更接近哪一种？",
+      "h1Top": 324,
+      "firstCardTop": 275,
+      "cardCount": 1,
+      "cardRadius": [
+        {
+          "value": "12px",
+          "count": 1
+        }
+      ],
+      "cardShadow": [
+        {
+          "value": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rg",
+          "count": 1
+        }
+      ],
+      "cardPadX": [
+        {
+          "value": "0px",
+          "count": 1
+        }
+      ],
+      "cardPadY": [
+        {
+          "value": "24px",
+          "count": 1
+        }
+      ],
+      "cardTops": [
+        275
+      ],
+      "fontSizes": [
+        {
+          "value": "13px",
+          "count": 5
+        },
+        {
+          "value": "14px",
+          "count": 5
+        },
+        {
+          "value": "20px",
+          "count": 1
+        },
+        {
+          "value": "12px",
+          "count": 1
+        }
+      ],
+      "weights": [
+        {
+          "value": "400",
+          "count": 6
+        },
+        {
+          "value": "500",
+          "count": 5
+        },
+        {
+          "value": "600",
+          "count": 1
+        }
+      ],
+      "topColors": [
+        {
+          "value": "rgb(27, 28, 26)",
+          "count": 5
+        },
+        {
+          "value": "rgb(69, 71, 76)",
+          "count": 3
+        },
+        {
+          "value": "rgb(107, 114, 128)",
+          "count": 3
+        },
+        {
+          "value": "rgb(9, 20, 38)",
+          "count": 1
+        }
+      ],
+      "families": [
+        {
+          "value": "Plus Jakarta Sans",
+          "count": 12
+        }
+      ],
+      "solidButtons": []
+    },
+    {
+      "name": "test-result",
+      "path": "/test/result",
+      "url": "/test/result",
+      "errors": [],
+      "scrollHeight": 900,
+      "viewportHeight": 900,
+      "mainTop": 0,
+      "h1Size": "26px",
+      "h1Weight": "700",
+      "h1Text": "你的当前阶段",
+      "h1Top": 217,
+      "firstCardTop": 303,
+      "cardCount": 1,
+      "cardRadius": [
+        {
+          "value": "12px",
+          "count": 1
+        }
+      ],
+      "cardShadow": [
+        {
+          "value": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rg",
+          "count": 1
+        }
+      ],
+      "cardPadX": [
+        {
+          "value": "20px",
+          "count": 1
+        }
+      ],
+      "cardPadY": [
+        {
+          "value": "20px",
+          "count": 1
+        }
+      ],
+      "cardTops": [
+        303
+      ],
+      "fontSizes": [
+        {
+          "value": "12px",
+          "count": 6
+        },
+        {
+          "value": "14px",
+          "count": 5
+        },
+        {
+          "value": "26px",
+          "count": 1
+        },
+        {
+          "value": "18px",
+          "count": 1
+        },
+        {
+          "value": "15px",
+          "count": 1
+        }
+      ],
+      "weights": [
+        {
+          "value": "400",
+          "count": 6
+        },
+        {
+          "value": "700",
+          "count": 4
+        },
+        {
+          "value": "500",
+          "count": 2
+        },
+        {
+          "value": "600",
+          "count": 2
+        }
+      ],
+      "topColors": [
+        {
+          "value": "rgb(69, 71, 76)",
+          "count": 5
+        },
+        {
+          "value": "rgb(9, 20, 38)",
+          "count": 4
+        },
+        {
+          "value": "rgb(27, 28, 26)",
+          "count": 2
+        },
+        {
+          "value": "rgb(107, 114, 128)",
+          "count": 1
+        },
+        {
+          "value": "rgb(155, 69, 0)",
+          "count": 1
+        },
+        {
+          "value": "rgb(255, 255, 255)",
+          "count": 1
+        }
+      ],
+      "families": [
+        {
+          "value": "Plus Jakarta Sans",
+          "count": 14
+        }
+      ],
+      "solidButtons": [
+        {
+          "bg": "rgb(9, 20, 38)",
+          "color": "rgb(255, 255, 255)",
+          "radius": "12px",
+          "h": 44,
+          "px": "24px",
+          "fs": "15px",
+          "fw": "600",
+          "text": "进入我的工作台"
+        }
+      ]
+    },
+    {
+      "name": "login",
+      "path": "/login",
+      "url": "/login",
+      "errors": [],
+      "scrollHeight": 900,
+      "viewportHeight": 900,
+      "mainTop": 0,
+      "h1Size": "26px",
+      "h1Weight": "700",
+      "h1Text": "登录 AI 就业助手",
+      "h1Top": 251,
+      "firstCardTop": 343,
+      "cardCount": 1,
+      "cardRadius": [
+        {
+          "value": "12px",
+          "count": 1
+        }
+      ],
+      "cardShadow": [
+        {
+          "value": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rg",
+          "count": 1
+        }
+      ],
+      "cardPadX": [
+        {
+          "value": "20px",
+          "count": 1
+        }
+      ],
+      "cardPadY": [
+        {
+          "value": "20px",
+          "count": 1
+        }
+      ],
+      "cardTops": [
+        343
+      ],
+      "fontSizes": [
+        {
+          "value": "14px",
+          "count": 5
+        },
+        {
+          "value": "26px",
+          "count": 1
+        },
+        {
+          "value": "15px",
+          "count": 1
+        },
+        {
+          "value": "13px",
+          "count": 1
+        }
+      ],
+      "weights": [
+        {
+          "value": "400",
+          "count": 4
+        },
+        {
+          "value": "500",
+          "count": 2
+        },
+        {
+          "value": "700",
+          "count": 1
+        },
+        {
+          "value": "600",
+          "count": 1
+        }
+      ],
+      "topColors": [
+        {
+          "value": "rgb(69, 71, 76)",
+          "count": 3
+        },
+        {
+          "value": "rgb(9, 20, 38)",
+          "count": 2
+        },
+        {
+          "value": "rgb(27, 28, 26)",
+          "count": 2
+        },
+        {
+          "value": "rgb(255, 255, 255)",
+          "count": 1
+        }
+      ],
+      "families": [
+        {
+          "value": "Plus Jakarta Sans",
+          "count": 8
+        }
+      ],
+      "solidButtons": [
+        {
+          "bg": "rgb(9, 20, 38)",
+          "color": "rgb(255, 255, 255)",
+          "radius": "12px",
+          "h": 44,
+          "px": "24px",
+          "fs": "15px",
+          "fw": "600",
+          "text": "登录"
+        }
+      ]
+    },
+    {
+      "name": "register",
+      "path": "/register",
+      "url": "/register",
+      "errors": [],
+      "scrollHeight": 900,
+      "viewportHeight": 900,
+      "mainTop": 0,
+      "h1Size": "26px",
+      "h1Weight": "700",
+      "h1Text": "创建你的账号",
+      "h1Top": 177,
+      "firstCardTop": 269,
+      "cardCount": 1,
+      "cardRadius": [
+        {
+          "value": "12px",
+          "count": 1
+        }
+      ],
+      "cardShadow": [
+        {
+          "value": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rg",
+          "count": 1
+        }
+      ],
+      "cardPadX": [
+        {
+          "value": "20px",
+          "count": 1
+        }
+      ],
+      "cardPadY": [
+        {
+          "value": "20px",
+          "count": 1
+        }
+      ],
+      "cardTops": [
+        269
+      ],
+      "fontSizes": [
+        {
+          "value": "14px",
+          "count": 7
+        },
+        {
+          "value": "26px",
+          "count": 1
+        },
+        {
+          "value": "15px",
+          "count": 1
+        },
+        {
+          "value": "13px",
+          "count": 1
+        }
+      ],
+      "weights": [
+        {
+          "value": "400",
+          "count": 4
+        },
+        {
+          "value": "500",
+          "count": 4
+        },
+        {
+          "value": "700",
+          "count": 1
+        },
+        {
+          "value": "600",
+          "count": 1
+        }
+      ],
+      "topColors": [
+        {
+          "value": "rgb(27, 28, 26)",
+          "count": 4
+        },
+        {
+          "value": "rgb(69, 71, 76)",
+          "count": 3
+        },
+        {
+          "value": "rgb(9, 20, 38)",
+          "count": 2
+        },
+        {
+          "value": "rgb(255, 255, 255)",
+          "count": 1
+        }
+      ],
+      "families": [
+        {
+          "value": "Plus Jakarta Sans",
+          "count": 10
+        }
+      ],
+      "solidButtons": [
+        {
+          "bg": "rgb(9, 20, 38)",
+          "color": "rgb(255, 255, 255)",
+          "radius": "12px",
+          "h": 44,
+          "px": "24px",
+          "fs": "15px",
+          "fw": "600",
+          "text": "注册并开始测评"
+        }
+      ]
+    },
+    {
+      "name": "404",
+      "path": "/this-route-does-not-exist",
+      "url": "/this-route-does-not-exist",
+      "errors": [],
+      "scrollHeight": 900,
+      "viewportHeight": 900,
+      "mainTop": 0,
+      "h1Size": "26px",
+      "h1Weight": "700",
+      "h1Text": "这个页面不存在",
+      "h1Top": 355,
+      "firstCardTop": 287,
+      "cardCount": 1,
+      "cardRadius": [
+        {
+          "value": "12px",
+          "count": 1
+        }
+      ],
+      "cardShadow": [
+        {
+          "value": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rg",
+          "count": 1
+        }
+      ],
+      "cardPadX": [
+        {
+          "value": "20px",
+          "count": 1
+        }
+      ],
+      "cardPadY": [
+        {
+          "value": "20px",
+          "count": 1
+        }
+      ],
+      "cardTops": [
+        287
+      ],
+      "fontSizes": [
+        {
+          "value": "14px",
+          "count": 2
+        },
+        {
+          "value": "26px",
+          "count": 1
+        },
+        {
+          "value": "15px",
+          "count": 1
+        }
+      ],
+      "weights": [
+        {
+          "value": "700",
+          "count": 1
+        },
+        {
+          "value": "400",
+          "count": 1
+        },
+        {
+          "value": "600",
+          "count": 1
+        },
+        {
+          "value": "500",
+          "count": 1
+        }
+      ],
+      "topColors": [
+        {
+          "value": "rgb(9, 20, 38)",
+          "count": 1
+        },
+        {
+          "value": "rgb(69, 71, 76)",
+          "count": 1
+        },
+        {
+          "value": "rgb(255, 255, 255)",
+          "count": 1
+        },
+        {
+          "value": "rgb(27, 28, 26)",
+          "count": 1
+        }
+      ],
+      "families": [
+        {
+          "value": "Plus Jakarta Sans",
+          "count": 4
+        }
+      ],
+      "solidButtons": [
+        {
+          "bg": "rgb(9, 20, 38)",
+          "color": "rgb(255, 255, 255)",
+          "radius": "12px",
+          "h": 44,
+          "px": "24px",
+          "fs": "15px",
+          "fw": "600",
+          "text": "回到首页"
+        }
+      ]
+    }
+  ]
+}

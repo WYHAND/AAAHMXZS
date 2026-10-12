@@ -69,6 +69,17 @@ class HomeAiFinding(BaseModel):
     label: str = Field(description="展示用标签（当前与 pain_point 同值，留字段是为了将来 AI 润色）")
     reason: str = Field(default="", description="为什么这么判断（尽量引用对话里的原话）")
     target_route: str = Field(default="/task", description="点这条建议应该去哪：/chat /task /resume /interview")
+    weight: float = Field(
+        default=0.0,
+        description="证据强度（取自痛点标签 ProfileTag.weight，0-1）；给前端做「可信度/权重」可视化",
+    )
+
+
+class HomeActivityPoint(BaseModel):
+    """首页活动柱状图上的一个点（近 14 天，每天一条，缺数据的天补 0）。"""
+
+    date: str = Field(description="本地日期 YYYY-MM-DD")
+    steps: int = Field(default=0, description="当天完成的任务步骤数（TaskStep.completed 且 completed_at 落在该日）")
 
 
 class HomeOngoingTask(BaseModel):
@@ -114,6 +125,13 @@ class HomeSummaryResponse(BaseModel):
     ongoing_tasks: List[HomeOngoingTask] = Field(
         default_factory=list, description="进行中的任务（最多 2 条）"
     )
+    activity: List[HomeActivityPoint] = Field(
+        default_factory=list,
+        description="近 14 天每日完成步数时间序列（含今天，按日期升序，缺数据的天补 0）；异常时为空数组",
+    )
+    completed_tasks: int = Field(default=0, description="已完成任务数（与成长报告同一口径）")
+    completed_steps: int = Field(default=0, description="已打卡步骤数（与成长报告同一口径）")
+    active_days: int = Field(default=0, description="活跃天数（与成长报告同一口径）")
     next_action: HomeNextAction = Field(
         default_factory=lambda: HomeNextAction(
             text="和 AI 聊聊我的方向", route="/chat", reason="先聊聊，我们再决定做什么"

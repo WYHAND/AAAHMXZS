@@ -535,7 +535,8 @@ if (!profile.tested) router.replace('/test/intro');  // ✅ 正确
         "pain_point": "缺项目经验",
         "label": "缺项目经验",
         "reason": "AI 在对话里注意到：我还没做过完整的项目",
-        "target_route": "/task"
+        "target_route": "/task",
+        "weight": 0.8
       }
     ],
     "ongoing_tasks": [
@@ -548,6 +549,11 @@ if (!profile.tested) router.replace('/test/intro');  // ✅ 正确
         "total_steps": 4,
         "current_step_title": "写出最简版本"
       }
+    ],
+    "activity": [
+      { "date": "2026-09-28", "steps": 0 },
+      { "date": "2026-09-29", "steps": 2 },
+      { "date": "2026-09-30", "steps": 1 }
     ],
     "next_action": {
       "text": "先花 5 分钟做个小测试",
@@ -572,9 +578,13 @@ if (!profile.tested) router.replace('/test/intro');  // ✅ 正确
 | `ai_findings` | array | AI 主动发现，最多 **3** 条（取 `痛点` 维度权重最高的）；没有则**空数组，不报错** |
 | `ai_findings[].reason` | string | 优先引用标签 `extra` 里的证据原文；没有证据时给中性说明，**不编造经历** |
 | `ai_findings[].target_route` | string | 点了去哪：`/chat` `/task` `/resume` `/interview`（关键字规则见下） |
+| `ai_findings[].weight` | float | 证据强度，取自该痛点标签的 `ProfileTag.weight`（0-1）；没有标签权重时为 `0.0` |
 | `ongoing_tasks` | array | 进行中任务，最多 **2** 条 |
 | `ongoing_tasks[].done_steps` / `total_steps` | int | 由**一条 `GROUP BY` 查询**批量算出（不是每条任务查一次） |
 | `ongoing_tasks[].current_step_title` | string \| null | 第一条未完成步骤的标题（**一条批量查询**取出所有未完成步骤后每任务取首条） |
+| `activity` | array | **近 14 天**每日完成步数时间序列（含今天，按 `date` **升序**，缺数据的天**补 0**，固定 14 条）；异常时为空数组 |
+| `activity[].date` | string | 日期 `YYYY-MM-DD`（口径见下） |
+| `activity[].steps` | int | 当天完成的任务步骤数（`TaskStep.completed == true` 且 `completed_at` 落在该日） |
 | `next_action` | object | **后端决定的下一步**，前端不要自己判断优先级 |
 
 **痛点 → 建议落点（`ai_findings[].target_route`）的规则**
@@ -612,7 +622,15 @@ if (!profile.tested) router.replace('/test/intro');  // ✅ 正确
 即引导用户去做测评（对任何用户都无害）。
 
 **性能**：一次请求内的查询数是固定的（画像 1 + tested 1 + 标签 1 + 任务 1 +
-步骤统计 1 + 未完成步骤 1 + 每日一问 1~2），**没有任何 N+1**。
+步骤统计 1 + 未完成步骤 1 + **活动序列 1** + 每日一问 1~2），**没有任何 N+1**。
+其中 `activity` 用 `task_steps JOIN tasks` 的**一条 `GROUP BY`** 按天聚合，
+不是按天查 14 次。
+
+**`activity` 的按天口径**：与成长报告的活跃天数（`report_service._count_active_days`）
+**完全一致** —— 直接对 `completed_at`（naive UTC 时间戳）取日期、**不做时区换算**，
+`date` 就是该时间戳的 UTC 日期。要改口径时两处必须一起改，不能各写一套。
+取不到活动数据时降级为**空数组**（`_load_activity_points` 自带 `try/except`），
+不会让首页聚合失败。
 
 ### 4.9 `POST /api/v1/events` 行为埋点上报
 

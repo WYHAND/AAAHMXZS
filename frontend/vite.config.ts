@@ -5,14 +5,23 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   /*
-   * ⚠️ `base: './'` 是**桌面端（Electron）打包的硬要求**：
-   * Electron 用 `loadFile()` 以 `file://` 加载 index.html，绝对路径 `/assets/xx.js`
-   * 会解析成 `file:///assets/xx.js`（不存在）→ 打开就是白屏。
-   * 相对路径在 Web 部署（nginx 根路径或子路径）下同样成立，所以两边都安全。
+   * ⚠️ `base` 必须**按运行环境**取，不能一律 './'：
+   *
+   * - **Electron（`build:electron` → `--mode electron`）**：必须 `'./'`。
+   *   Electron 用 `loadFile()` 以 `file://` 加载 index.html，绝对路径 `/assets/xx.js`
+   *   会解析成 `file:///assets/xx.js`（不存在）→ 打开就是白屏；
+   *   配合 router 的 createHashRouter（file:// 下 pathname 是文件路径，BrowserRouter 匹配不上）。
+   *
+   * - **Web 构建（`npm run build`）**：必须 `'/'`。用相对路径时，nginx + SPA fallback 下
+   *   打开任何深链（/task/xxx、/chat、刷新任一页）都会用 `/task/` 去解析 `./assets/…`，
+   *   请求 `/task/assets/index-*.js` 被 fallback 成 index.html（content-type: text/html），
+   *   模块解析失败 → **整页白屏、连一个请求都不发**（2026-10 实测：
+   *   `tools/render-check/diag-build.mjs` 显示 rootChildren=0、textLen=0、console 全是 404）。
+   *   改成 '/' 后同一份代码 `regression.mjs`（RC_BASE_URL=4173）19/19 全 PASS。
    */
-  base: './',
+  base: mode === 'electron' ? './' : '/',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
@@ -55,4 +64,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

@@ -342,6 +342,9 @@ async function installApi(page, opts = {}) {
         daily_question: { id: 'dq1', content: '最近一次投递没回音，你觉得卡在哪个环节？', options: [], answered: false },
         ai_findings: [{ pain_point: '缺项目经验', label: '缺项目经验', reason: '三轮对话里都提到没有能写进简历的项目。', target_route: '/task' }],
         ongoing_tasks: [{ id: TASK_ID, title: task.title, difficulty: '中等', estimated_days: 14, done_steps: 1, total_steps: 2, current_step_title: '实现待办列表页与本地存储' }],
+        /* 2026-10 首页改版：后端 /home/summary 新增三个统计字段
+           （口径与 /report 共用 report_service.collect_growth_counts） */
+        completed_tasks: 1, completed_steps: 7, active_days: 12,
         next_action: { text: '先把这个鸿蒙小项目的删除交互补完', route: `/task/${TASK_ID}`, reason: '任务已经做到一半。' },
       })
     }
@@ -529,6 +532,21 @@ async function main() {
           emptyStateShown: s.bodyText.includes('还没有答过的题'),
         }
       }
+      /*
+       * 2026-10 首页改版：主角卡提到最前 + 三个统计数字来自新字段 + 画像雷达移出首页。
+       * 断言里的 12 是 mock 的 active_days（新增字段），字段断了这个数字就会消失。
+       */
+      if (r.name === 'home') {
+        e.homeLayout = {
+          focusCardShown: s.bodyText.includes('今日建议聚焦'),
+          /* 2026-10 高保真还原（Serene Career Companion 稿）：旁白改叫法为「AI 随行手记」，
+             统计面板改叫「成长节律」—— 断言跟着稿子走，别用旧文案。 */
+          reasonShown: s.bodyText.includes('AI 随行手记'),
+          rhythmShown: s.bodyText.includes('成长节律'),
+          newStatRendered: s.bodyText.includes('12'),
+          radarRemoved: !s.bodyText.includes('我的画像速览'),
+        }
+      }
 
       await page.screenshot({ path: path.join(SHOTS_DIR, `${String(r.n).padStart(2, '0')}-${r.name}.png`), fullPage: true })
       const reasons = []
@@ -549,6 +567,14 @@ async function main() {
         if (!e.dailyHistory.sectionShown) reasons.push('没有「以前答过的题」区块')
         if (e.dailyHistory.emptyStateShown) reasons.push('历史区仍是空态「还没有答过的题」，说明 GET /daily/history 没拿到数据')
         if (!e.dailyHistory.firstItemShown) reasons.push('历史列表没渲染出任何一条答案')
+      }
+      /* / 首页：主角卡 + 成长节律（新字段）+ 雷达已移出 */
+      if (r.name === 'home') {
+        if (!e.homeLayout.focusCardShown) reasons.push('顶部没有「今日建议聚焦」主角卡')
+        if (!e.homeLayout.reasonShown) reasons.push('建议卡里没有「AI 随行手记」旁白')
+        if (!e.homeLayout.rhythmShown) reasons.push('右列没有「成长节律」数据块')
+        if (!e.homeLayout.newStatRendered) reasons.push('成长节律的数字没上屏（/home/summary 新字段没接上？）')
+        if (!e.homeLayout.radarRemoved) reasons.push('「我的画像速览」还在首页（本次改版要求移出）')
       }
       e.verdict = reasons.length ? 'FAIL' : 'PASS'
       e.notes = reasons

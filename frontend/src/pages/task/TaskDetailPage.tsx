@@ -4,18 +4,12 @@ import { ArrowLeft, ExternalLink, ListChecks, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { EmptyState } from '@/components/EmptyState'
+import { Panel } from '@/components/Panel'
 import { StepList } from '@/components/StepList'
 import { TaskAbandonDialog } from '@/components/TaskAbandonDialog'
 import { TaskDeleteDialog } from '@/components/TaskDeleteDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -62,10 +56,10 @@ function ChoiceRow({
               type="button"
               onClick={() => onChange(option)}
               className={cn(
-                'rounded-lg border px-3 py-1.5 text-sm transition-colors',
+                'rounded-lg px-3.5 py-1.5 text-body-md transition-colors',
                 selected
-                  ? 'border-primary bg-primary-soft text-foreground'
-                  : 'border-border bg-card hover:bg-secondary',
+                  ? 'bg-primary-soft text-primary ring-1 ring-primary/30'
+                  : 'bg-surface-container-low text-on-surface hover:bg-surface-container',
               )}
             >
               {option}
@@ -80,13 +74,18 @@ function ChoiceRow({
 /**
  * 任务详情与打卡（设计说明书 3.2 ③）
  *
- * - 每一步有「行动指引 (action) + 资源链接 (resource)」
- * - 打卡弹窗：这一步花了多久 / 卡在哪 —— 后端只有一个 feedback 字段，
- *   前端把两栏拼成一段文本提交
- * - 放弃任务：AlertDialog 二次确认 + 原因选择（与列表页共用 TaskAbandonDialog）；
- *   后端 abandon 接口**不接受 body**，原因只通过 track('task_abandon') 记录为本地埋点信号
- * - 删除任务：与列表页共用 TaskDeleteDialog（硬删除 + 先数清打卡步数再说后果）——
- *   用户从列表点进来之后也必须能删，不该"进了详情反而找不到"
+ * 版式（2026-10 收口）：**首屏必须能看到「打卡」** —— 主体是 `lg:grid-cols-12` 两列，
+ * 左 7 列步骤时间线、右 5 列「当前步行动指引 + 打卡主按钮」；窄屏单列时顺序为
+ * 概览 → 当前步指引 + 打卡 → 步骤列表。
+ *
+ * - 顶部概览压成一条（难度 / 预计天数 / 已完成 x/y 步 + 琥珀进度条），不再是一张
+ *   "任务概览"卡里再套一层内嵌进度面板；
+ * - 每一步有「行动指引 (action) + 资源链接 (resource)」，step.feedback 附在该步下方
+ *   （StepList 内），所以这里不再单独开一块"上次打卡反馈"；
+ * - 打卡弹窗：这一步做到哪了 / 卡在哪 —— 后端只有一个 feedback 字段，
+ *   前端把两栏拼成一段文本提交；
+ * - 放弃 / 删除：底部合成一行 caption 级 ghost 动作，二次确认仍走
+ *   TaskAbandonDialog / TaskDeleteDialog（与列表页共用，逻辑一个字没改）。
  */
 export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -172,10 +171,17 @@ export default function TaskDetailPage() {
 
   const percent = taskProgress(task)
   const canAbandon = task.status === ONGOING_STATUS
+  const doneSteps = steps.filter((s) => s.completed).length
 
   return (
     <PageShell
       title={task.title}
+      badge={
+        <Badge variant="outline" className="rounded-full font-normal">
+          {task.status}
+        </Badge>
+      }
+      description={task.pain_point ? `关联痛点：${task.pain_point}` : undefined}
       breadcrumb="成长任务"
       actions={
         <Button variant="ghost" size="sm" asChild className="gap-1.5">
@@ -186,48 +192,121 @@ export default function TaskDetailPage() {
         </Button>
       }
     >
-      <Card data-print="card">
-        <CardHeader className="gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className="rounded-full">
-              {task.status}
-            </Badge>
-            {task.difficulty ? (
-              <Badge variant="outline" className="rounded-full">
-                难度：{task.difficulty}
-              </Badge>
-            ) : null}
-            {task.estimated_days ? (
-              <Badge variant="outline" className="rounded-full">
-                预计 {task.estimated_days} 天
-              </Badge>
-            ) : null}
+      <div className="grid items-start gap-6 lg:grid-cols-12">
+        {/* 概览：压成一条（窄屏第 1 屏位） */}
+        <Panel data-print="card" className="gap-3 lg:col-span-12">
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-body-sm text-on-surface-variant">已完成的部分</span>
+              <span className="text-body-md text-primary">
+                <span className="font-numeric text-headline-lg font-semibold">{percent}%</span>
+                <span className="ml-2 text-body-sm text-on-surface-variant">
+                  {progressHint(percent)}
+                </span>
+              </span>
+            </div>
+            <Progress
+              value={percent}
+              className="h-1.5 bg-surface-container [&>[data-slot=progress-indicator]]:bg-secondary"
+            />
           </div>
-          {task.pain_point ? (
-            <CardDescription>关联痛点：{task.pain_point}</CardDescription>
-          ) : null}
-          {task.description ? (
-            <p className="text-sm text-muted-foreground">{task.description}</p>
-          ) : null}
-          {task.value_note ? (
-            <p className="ai-inset rounded-lg bg-accent/50 px-4 py-2 text-sm text-accent-foreground">
-              {task.value_note}
-            </p>
-          ) : null}
-          <div className="flex items-center gap-3">
-            <Progress value={percent} className="h-1.5 flex-1" />
-            <span className="shrink-0 font-numeric text-xs text-muted-foreground">
-              {percent}%
+
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body-md">
+            {task.difficulty ? (
+              <span className="text-on-surface-variant">
+                难度 <span className="font-medium text-primary">{task.difficulty}</span>
+              </span>
+            ) : null}
+            {task.difficulty && task.estimated_days ? <Dot /> : null}
+            {task.estimated_days ? (
+              <span className="text-on-surface-variant">
+                预计 <span className="font-medium text-primary">{task.estimated_days}</span> 天
+              </span>
+            ) : null}
+            {task.difficulty || task.estimated_days ? <Dot /> : null}
+            <span className="text-on-surface-variant">
+              已完成 <span className="font-medium text-primary">{doneSteps}</span>/
+              {steps.length || '—'} 步
             </span>
           </div>
-        </CardHeader>
-      </Card>
 
-      <Card data-print="card">
-        <CardHeader>
-          <CardTitle className="text-base">任务步骤</CardTitle>
-        </CardHeader>
-        <CardContent>
+          {task.description ? (
+            <p className="text-body-sm text-on-surface-variant">{task.description}</p>
+          ) : null}
+        </Panel>
+
+        {/*
+         * 右侧（窄屏第 2 屏位）：当前步的行动指引 + 打卡主按钮。
+         * 桌面上 sticky 贴住内容顶部，打卡永远在首屏。
+         */}
+        {activeStep ? (
+          <div
+            data-print="card"
+            className="self-start lg:order-3 lg:col-span-5 lg:sticky lg:top-[calc(var(--spacing-shell)+1rem)]"
+          >
+            <Panel className="gap-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-body-sm text-on-surface-variant">
+                    第 {activeStep.step_order} 步 · {activeStep.completed ? '已完成' : '待完成'}
+                  </span>
+                  <span className="text-headline-sm text-primary">{activeStep.title}</span>
+                </div>
+              </div>
+
+              {/* 行动指引：卡内浅底块 */}
+              <Panel inset className="text-body-md text-on-surface-variant">
+                {activeStep.action ? (
+                  <p className="whitespace-pre-wrap leading-relaxed">{activeStep.action}</p>
+                ) : (
+                  <p>这一步没有额外说明，按标题做就行，做完打卡。</p>
+                )}
+              </Panel>
+
+              {/* 本页唯一实心主按钮：放在指引正下方，首屏就能看到 */}
+              <div className="flex flex-col gap-2">
+                <Button
+                  variant="warm"
+                  size="lg"
+                  className="w-full"
+                  onClick={() => setCheckInOpen(true)}
+                  disabled={activeStep.completed}
+                >
+                  {activeStep.completed ? '这一步已完成' : '打卡'}
+                </Button>
+                {activeStep.completed ? (
+                  <span className="text-caption text-caption-foreground">
+                    在左边点一个还没开始的步骤，就能继续打卡。
+                  </span>
+                ) : null}
+              </div>
+
+              {resourceLink ? (
+                <a
+                  href={resourceLink.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex w-fit items-center gap-1.5 rounded-full bg-surface-container px-3 py-1 text-body-sm text-primary hover:bg-surface-container-high"
+                >
+                  {resourceLink.label}
+                  <ExternalLink className="size-3.5" />
+                </a>
+              ) : null}
+            </Panel>
+          </div>
+        ) : null}
+
+        {/* 左列（窄屏第 3 屏位）：步骤时间线 */}
+        <Panel data-print="card" className="gap-4 lg:order-2 lg:col-span-7">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-headline-sm text-primary">任务步骤</span>
+            {steps.length ? (
+              <span className="text-body-sm text-on-surface-variant">
+                共 {steps.length} 步 · 已完成 {doneSteps} 步
+              </span>
+            ) : null}
+          </div>
+
           {steps.length ? (
             <StepList
               steps={steps}
@@ -235,71 +314,26 @@ export default function TaskDetailPage() {
               onSelect={(step) => setActiveStepId(step.id)}
             />
           ) : (
-            <p className="text-sm text-muted-foreground">步骤还在生成中。</p>
+            <p className="text-body-sm text-on-surface-variant">步骤还在生成中。</p>
           )}
-        </CardContent>
-      </Card>
 
-      {activeStep ? (
-        <Card data-print="card">
-          <CardHeader className="gap-1">
-            <CardTitle className="text-base">
-              第 {activeStep.step_order} 步：行动指引
-            </CardTitle>
-            <CardDescription>{activeStep.title}</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {activeStep.action ? (
-              <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                {activeStep.action}
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                这一步没有额外说明，按标题做就行，做完打卡。
-              </p>
-            )}
+          {/* 为什么值得做：AI 输出面板的唯一写法（暖色只留左侧竖条） */}
+          {task.value_note ? (
+            <p className="ai-inset rounded-lg bg-surface-container-low px-3.5 py-3 text-body-md text-on-surface">
+              <span className="font-medium text-primary">为什么值得做：</span>
+              {task.value_note}
+            </p>
+          ) : null}
+        </Panel>
+      </div>
 
-            {resourceLink ? (
-              <div className="flex flex-wrap gap-2">
-                <a
-                  href={resourceLink.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs text-primary hover:bg-primary-soft"
-                >
-                  {resourceLink.label}
-                  <ExternalLink className="size-3" />
-                </a>
-              </div>
-            ) : null}
-
-            {activeStep.feedback ? (
-              <p className="rounded-lg bg-secondary px-4 py-2 text-xs text-secondary-foreground">
-                上次打卡反馈：{activeStep.feedback}
-              </p>
-            ) : null}
-
-            <div className="flex justify-end">
-              {/* 本页唯一实心主按钮 */}
-              <Button
-                variant="warm"
-                onClick={() => setCheckInOpen(true)}
-                disabled={activeStep.completed}
-              >
-                {activeStep.completed ? '这一步已完成' : '打卡'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {/* 放弃 / 删除：两个弱化入口 + 二次确认（与列表页共用同一套确认弹窗） */}
-      <div className="flex items-center justify-center gap-2 pt-2">
+      {/* 放弃 / 删除：一行 caption 级 ghost 动作（与列表页共用同一套确认弹窗） */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
         {canAbandon ? (
           <Button
             variant="ghost"
             size="sm"
-            className="text-muted-foreground"
+            className="px-0 text-body-sm text-on-surface-variant hover:bg-transparent hover:text-primary"
             onClick={() => setAbandonOpen(true)}
           >
             放弃这个任务
@@ -308,10 +342,10 @@ export default function TaskDetailPage() {
         <Button
           variant="ghost"
           size="sm"
-          className="gap-1.5 text-muted-foreground hover:text-destructive"
+          className="gap-1 px-0 text-body-sm text-on-surface-variant hover:bg-transparent hover:text-destructive"
           onClick={() => setDeleteOpen(true)}
         >
-          <Trash2 className="size-4" />
+          <Trash2 className="size-3.5" />
           删除这个任务
         </Button>
       </div>
@@ -372,4 +406,22 @@ export default function TaskDetailPage() {
       </Dialog>
     </PageShell>
   )
+}
+
+/** 一行元信息里的分隔点 */
+function Dot() {
+  return (
+    <span className="text-caption-foreground" aria-hidden>
+      ·
+    </span>
+  )
+}
+
+/** 把进度比例翻译成人话（只说进度，不编步骤数） */
+function progressHint(percent: number): string {
+  if (percent <= 0) return '还没开始'
+  if (percent < 40) return '刚开头'
+  if (percent < 70) return '已经过半'
+  if (percent < 100) return '就差最后几步'
+  return '全部做完了'
 }

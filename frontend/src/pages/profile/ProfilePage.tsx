@@ -1,20 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Award, RotateCcw } from 'lucide-react'
+import { Award, ChevronDown, RotateCcw } from 'lucide-react'
 
 import { AIThinking } from '@/components/AIThinking'
 import { BadgeMedallion } from '@/components/BadgeMedallion'
+import { Panel } from '@/components/Panel'
 import { ProfileRadar } from '@/components/ProfileRadar'
 import { StageBadge } from '@/components/StageBadge'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
 import { PageShell } from '@/components/PageShell'
@@ -54,9 +52,29 @@ function badgeHint(badge: BadgeItem): string {
  * （BadgeMedallion 画大尺寸金属奖章）。响应形状收口在 utils/badge.ts：
  * 新契约是 BadgeOverview 对象，后端改造未落地时旧裸数组也能降级渲染。
  *
- * 2026-xx 「能力雷达」→「画像雷达」：轴从三项分数换成画像的**六个维度**
- * （实现只在 components/ProfileRadar.tsx，首页共用同一份）。那三项分数没有消失，
- * 仍留在上面「当前阶段」卡片的三根进度条里（见下面 scoreRows）。
+ * 2026-10 收口（A2 视觉改造，**一屏一个主角**）：
+ *  ① 「奖章架」：三枚大金属奖章原本占满首屏约 700px，现在默认只在 `Panel inset`
+ *     的浅底架子上摆**一行 chip**（30px 小奖章 + 名称 + 状态/还差几步），
+ *     点某一枚或「看全部」才在下面展开大章（`BadgeShelf` 的 hovered/openKey 本地 state）。
+ *     展开态把 name / description / hint / 获得日期 / 还差几步**一个不少**地给全；
+ *     chip 上的 12px 状态行是 caption，不是正文。
+ *  ② 「综合分」降级：36px → **26px**（headline-xl 档），旁边一句 STAGE_DESC（已有数据）的人话；
+ *     三根维度刻度条（SCORE_ITEMS，中文 label 全保留）收进「看分数明细」`Collapsible`，默认收起。
+ *  ③ PageShell 的 actions 里加**唯一主 CTA**「继续今天的任务」→ `/task`（真路由，
+ *     路由表见 router/index.tsx 的 TaskListPage），原来的三个入口同时降级为 `outline size="sm"`。 *  ④ 画像雷达排到奖章与分数之后（内容顺序 = 阶段/分数 → 奖章架 → 雷达）。
+ *  ⑤ 字号收口：原来的「31 处 12px」按语义拆开 —— 正文/字段值 `text-body-md`(14)、
+ *     说明 `text-body-sm`(13)、纯 caption `text-caption`(12)；14px 数字不再配 `font-numeric`
+ *     （等宽只留给 26px 的综合分）。旧类名 `text-muted-foreground` / `bg-muted/30`
+ *     一并换成新 token（`text-on-surface-variant` / `bg-surface-container-low`）。
+ *
+ * 字号档位为什么是这样（骨架是 12/13/14/15/16/18/26，**拒绝**全页挤在 12–14）：
+ * 面包屑 12 · 架子上 chip 的状态行 12 · 计数 chip 12 · 页脚 12（都是 caption）；
+ * 说明性长句 13 · 分数条 label 13；正文/字段值/CTA 14（含窄屏的奖章名）；
+ * 主 CTA 15；区块标题 16/600（当前阶段 / 我的奖章 / 画像雷达）；
+ * **奖章名 18/500**（`sm` 以上，稿子的 headline-md 尺寸档）；综合分 26（页标题 26 由 PageShell 负责）。
+ * 奖章名为什么敢比区块标题大一号：架子上每一枚是"陈列品"，名字是它的标签，字重压到 500
+ * 就不抢区块标题；窄屏两列时每格只有 124px（章 30 + 文字列实测 60px，而中文全角步进 = 1em，
+ * 四个字在 15px 就要 60px），所以窄屏退回 14px。**不截断**是对的（宁可折行也不丢名字）。
  */
 export default function ProfilePage() {
   const { stage, label } = useStage()
@@ -71,6 +89,10 @@ export default function ProfilePage() {
   const [badgesLoaded, setBadgesLoaded] = useState(false)
   const [badgesFailed, setBadgesFailed] = useState(false)
   const [hasTestProgress, setHasTestProgress] = useState(false)
+  /** 「看分数明细」：默认收起 —— 首屏要留给人话与奖章架，不是三根刻度条 */
+  const [scoreOpen, setScoreOpen] = useState(false)
+  /** 奖章架当前**点开**的那一枚（null = 全员保持 chip 小方块） */
+  const [openBadge, setOpenBadge] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     await fetchProfile()
@@ -107,6 +129,8 @@ export default function ProfilePage() {
 
   // ⚠️ 顺序完全沿用后端（门槛从低到高），这里不排序
   const badges: BadgeItem[] = overview?.items ?? []
+  const obtainedCount = overview?.obtained_count ?? badges.filter((item) => item.obtained).length
+  const totalCount = overview?.total ?? badges.length
 
   return (
     <PageShell
@@ -115,163 +139,155 @@ export default function ProfilePage() {
       breadcrumb="个人中心"
       actions={
         <>
-          {hasTestProgress ? (
-            <Button variant="outline" size="sm" asChild>
-              <Link to={toTestResume()}>继续上次答题</Link>
+          {/*
+            一屏唯一的主 CTA：一个明确的「下一步」。
+            尺寸/字重（h-11 / 圆角 12 / 15px·600）已由 `ui/button.tsx` 的 `size="lg"` 收敛，
+            页面不再手写那两个类；这里只留 `gap-2`（图标间距）与 `self-end`
+            （PageHeader 是 `sm:items-end`，动作区比标题块高时会被居中，标题下会空出约 10px）。
+          */}
+          <Button variant="warm" size="lg" asChild className="gap-2 self-end">
+            <Link to="/task">继续今天的任务</Link>
+          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {hasTestProgress ? (
+              <Button variant="outline" size="sm" asChild>
+                <Link to={toTestResume()}>继续上次答题</Link>
+              </Button>
+            ) : null}
+            <Button variant="outline" size="sm" asChild className="gap-1.5">
+              <Link to={toTestIntroRetest()}>
+                <RotateCcw className="size-3.5" />
+                重新测评
+              </Link>
             </Button>
-          ) : null}
-          <Button variant="outline" size="sm" asChild className="gap-1.5">
-            <Link to={toTestIntroRetest()}>
-              <RotateCcw className="size-3.5" />
-              重新测评
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/chat">完善画像</Link>
-          </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/chat">完善画像</Link>
+            </Button>
+          </div>
         </>
       }
     >
       {!ready || (loading && !profile) ? <AIThinking text="正在读你的画像…" lines={3} /> : null}
 
-      <Card data-print="card">
-        <CardHeader className="flex-row items-center justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <CardTitle className="text-base">当前阶段</CardTitle>
-            <CardDescription>{STAGE_DESC[stage]}</CardDescription>
+      {/* ① 当前阶段 + 综合分（分数降级成 26px，三根刻度条默认收进明细） */}
+      <Panel data-print="card" className="gap-5">
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <h2 className="text-headline-sm text-primary">当前阶段</h2>
+            {STAGE_DESC[stage] ? (
+              <p className="max-w-[52ch] text-body-md text-on-surface-variant">
+                {STAGE_DESC[stage]}
+              </p>
+            ) : null}
           </div>
           <StageBadge stage={stage} showStepper />
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {profile ? (
-            <>
-              <div className="flex items-baseline gap-2">
-                <span className="font-numeric text-4xl font-semibold text-foreground">
-                  {Math.round(profile.total_score)}
-                </span>
-                <span className="text-sm text-muted-foreground">/ 100 综合分</span>
-              </div>
+        </div>
 
-              <div className="flex flex-col gap-3">
-                {scoreRows.map((item) => (
-                  <div key={item.dimension} className="flex items-center gap-3">
-                    <span className="w-24 shrink-0 text-sm text-muted-foreground">
-                      {item.dimension}
-                    </span>
-                    <Progress value={item.score} className="h-1.5 flex-1" />
-                    <span className="w-10 shrink-0 text-right font-numeric text-sm text-foreground">
-                      {Math.round(item.score)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              {!tested ? (
-                <p className="text-xs text-warning">
-                  还没有做过基础测评，做完之后画像会更准。
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  方向清晰度来自基础测评；继续打卡和聊天，上面的画像雷达会跟着变，想重测随时可以。
-                </p>
-              )}
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">画像还没读到，稍后刷新试试。</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* 奖章区：三槽位并排（窄屏纵向堆叠）。未获得也是「铸模」态，不留整块空白 */}
-      <Card data-print="card">
-        <CardHeader className="flex-row items-center justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Award className="size-4 text-ai-accent" />
-              我的奖章
-            </CardTitle>
-            <CardDescription>做任务、答题、完善画像，一枚一枚点亮它们。</CardDescription>
-          </div>
-          {badges.length ? (
-            <Badge variant="outline" className="shrink-0 gap-1 rounded-full font-numeric">
-              {overview?.obtained_count ?? badges.filter((badge) => badge.obtained).length}
-              <span className="text-muted-foreground">/ {overview?.total ?? badges.length}</span>
-            </Badge>
-          ) : null}
-        </CardHeader>
-        <CardContent>
-          {badges.length ? (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {badges.map((badge) => (
-                <article
-                  key={badge.key}
-                  className={cn(
-                    'flex flex-col items-center gap-3 rounded-xl border border-border bg-card px-4 py-5 text-center',
-                    badge.obtained ? 'border-medal-ring/50' : 'bg-muted/30',
-                  )}
-                >
-                  <BadgeMedallion badge={badge} />
-                  <div className="flex flex-col gap-1">
-                    <p
-                      className={cn(
-                        'text-sm font-medium',
-                        badge.obtained ? 'text-foreground' : 'text-muted-foreground',
-                      )}
-                    >
-                      {badge.name}
-                    </p>
-                    {badge.description ? (
-                      <p className="text-xs text-muted-foreground">{badge.description}</p>
-                    ) : null}
-                  </div>
-                  <p className="text-xs text-balance text-muted-foreground">{badgeHint(badge)}</p>
-                  <div className="mt-auto flex items-center gap-2 pt-1">
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        'size-1.5 shrink-0 rounded-full',
-                        badge.obtained ? 'bg-medal-gold' : 'bg-muted-foreground/50',
-                      )}
-                    />
-                    {badge.obtained ? (
-                      <span className="font-numeric text-xs text-muted-foreground">
-                        获得于 {formatDate(badge.obtained_at)}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        还差 {remainingSteps(badge.progress)} 个步骤
-                      </span>
-                    )}
-                  </div>
-                </article>
-              ))}
+        {profile ? (
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <span className="font-numeric text-headline-xl font-bold tabular-nums text-primary">
+                {Math.round(profile.total_score)}
+              </span>
+              <span className="text-body-md text-on-surface-variant">/ 100 综合分</span>
             </div>
-          ) : badgesFailed ? (
-            <p className="text-sm text-muted-foreground">奖章没读到，稍后刷新试试。</p>
-          ) : badgesLoaded ? (
-            // 极端兜底：后端返回了空列表（正常情况下恒为三枚槽位）
-            <p className="text-sm text-muted-foreground">奖章还在铸造，过一会儿再来看看。</p>
-          ) : (
-            <p className="text-sm text-muted-foreground">正在读你的奖章…</p>
-          )}
-        </CardContent>
-      </Card>
 
-      <Card data-print="card">
-        <CardHeader>
-          <CardTitle className="text-base">画像雷达</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ProfileRadar
-            tags={tags}
-            empty={
-              <p className="text-sm text-muted-foreground">
-                还没有雷达数据。和我聊两轮，或者完成一个任务，这里就会长出来。
-              </p>
-            }
+            <Collapsible open={scoreOpen} onOpenChange={setScoreOpen}>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-3 gap-0 text-on-surface-variant"
+                >
+                  {scoreOpen ? '收起分数明细' : '看分数明细'}
+                  <ChevronDown
+                    className={cn('size-4 transition-transform', scoreOpen && 'rotate-180')}
+                    aria-hidden
+                  />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="flex flex-col gap-3 pb-1 pt-3">
+                  {scoreRows.map((item) => (
+                    <div key={item.dimension} className="flex items-center gap-3">
+                      <span className="w-24 shrink-0 text-body-sm text-on-surface-variant">
+                        {item.dimension}
+                      </span>
+                      <Progress
+                        value={item.score}
+                        aria-label={`${item.dimension} ${Math.round(item.score)} 分`}
+                        className="h-1.5 flex-1 bg-surface-container"
+                      />
+                      <span className="w-10 shrink-0 text-right text-body-md tabular-nums text-primary">
+                        {Math.round(item.score)}
+                      </span>
+                    </div>
+                  ))}
+                  <p className="text-body-sm text-caption-foreground">
+                    三个维度都是你自己给自己的分，随打卡、答题和聊天一点点长。
+                  </p>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            <p className="text-body-sm text-secondary">
+              {tested
+                ? '方向清晰度来自基础测评；继续打卡和聊天，上面的画像雷达会跟着变，想重测随时可以。'
+                : '还没有做过基础测评，做完之后画像会更准。'}
+            </p>
+          </div>
+        ) : (
+          <p className="text-body-md text-on-surface-variant">画像还没读到，稍后刷新试试。</p>
+        )}
+      </Panel>
+
+      {/* ② 奖章架：默认一行小方块，点开才摊开大章（不再是三枚大章占满首屏） */}
+      <Panel data-print="card" className="gap-4">
+        <div className="flex flex-col gap-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <h2 className="flex items-center gap-2 text-headline-sm text-primary">
+              <Award className="size-4 text-secondary" aria-hidden />
+              我的奖章
+            </h2>
+            {badges.length ? (
+              <span className="rounded-full bg-secondary-fixed px-2.5 py-0.5 text-caption font-medium tabular-nums text-on-secondary-fixed">
+                已获得 {obtainedCount} / {totalCount}
+              </span>
+            ) : null}
+          </div>
+          <p className="text-body-sm text-on-surface-variant">
+            做任务、答题、完善画像，一枚一枚点亮它们。
+          </p>
+        </div>
+
+        {badges.length ? (
+          <BadgeShelf
+            badges={badges}
+            openKey={openBadge}
+            onOpenKeyChange={setOpenBadge}
           />
-        </CardContent>
-      </Card>
+        ) : badgesFailed ? (
+          <p className="text-body-md text-on-surface-variant">奖章没读到，稍后刷新试试。</p>
+        ) : badgesLoaded ? (
+          // 极端兜底：后端返回了空列表（正常情况下恒为三枚槽位）
+          <p className="text-body-md text-on-surface-variant">奖章还在铸造，过一会儿再来看看。</p>
+        ) : (
+          <p className="text-body-md text-on-surface-variant">正在读你的奖章…</p>
+        )}
+      </Panel>
+
+      {/* ③ 画像雷达（保留原实现，排到奖章与分数之后） */}
+      <Panel data-print="card" className="gap-4">
+        <h2 className="text-headline-sm text-primary">画像雷达</h2>
+        <ProfileRadar
+          tags={tags}
+          empty={
+            <p className="text-body-md text-on-surface-variant">
+              还没有雷达数据。和我聊两轮，或者完成一个任务，这里就会长出来。
+            </p>
+          }
+        />
+      </Panel>
 
       {/*
         产品决定：画像标签**整块不给用户看**（原来的「我的标签」卡片连认可/否定按钮一并删除）。
@@ -296,9 +312,126 @@ export default function ProfilePage() {
 
       <Separator />
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-caption text-caption-foreground">
         画像最近更新：{formatDateTime(profile?.updated_at)} · 阶段：{label}
       </p>
     </PageShell>
+  )
+}
+
+/* ------------------------------ 奖章架 ------------------------------ */
+
+/**
+ * 奖章架 —— 三枚奖章默认只占**一行小方块**（chip：30px 小奖章 + 名称 + 状态/还差几步），
+ * 摆在 `Panel inset` 的浅底"架子"上；点某一枚才在下面摊开大章（默认 112px）。
+ *
+ * 与旧版的差别：旧版三枚 112px 大章并排，首屏约 700px 全被奖章吃掉；
+ * 现在默认态约 100px，首屏能同时看到阶段、一句人话、主 CTA 与奖章架。
+ *
+ * 信息一个都没丢 ——
+ *   chip 上：名称 / 状态（已获得、还差 N 个步骤）；
+ *   展开态：name / description / hint / obtained_at（`formatDate`）/ progress（`current / target`）。
+ * 展开逻辑用本地 state（不是 `Collapsible`）：同一时刻只摊开一枚，点第二枚自动换过去，
+ * `aria-expanded` + `aria-controls` 交给读屏，`title` 让被截断的 hint 悬停可读全文。
+ */
+function BadgeShelf({
+  badges,
+  openKey,
+  onOpenKeyChange,
+}: {
+  badges: BadgeItem[]
+  /** 当前点开的奖章 key（null = 全部保持 chip） */
+  openKey: string | null
+  onOpenKeyChange: (key: string | null) => void
+}) {
+  const openBadge = badges.find((badge) => badge.key === openKey) ?? null
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Panel as="ul" inset className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+        {badges.map((badge) => {
+          const isOpen = badge.key === openKey
+          return (
+            <li key={badge.key}>
+              <button
+                type="button"
+                aria-expanded={isOpen}
+                aria-controls="badge-detail"
+                onClick={() => onOpenKeyChange(isOpen ? null : badge.key)}
+                className={cn(
+                  // 用**显式网格** `auto | 1fr` 排「章 + 文字」，不用 flex-grow：
+                  // flex 版实测文字列会被压到 60px（只够 caption 的宽度），
+                  // 名称被挤成两行；网格给出确定的列宽，窄屏也一行放得下。
+                  'grid h-full w-full grid-cols-[auto_1fr] items-center gap-x-2.5 gap-y-0.5 rounded-lg px-3 py-2.5 text-left transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40',
+                  isOpen
+                    ? 'bg-primary-soft ring-1 ring-primary/30'
+                    : 'bg-card hover:bg-surface-container',
+                )}
+              >
+                <BadgeMedallion badge={badge} size={30} className="row-span-2" />
+                {/*
+                  名称：`sm` 以上 18px、窄屏回到正文 14px。
+                  18px 是稿子的 headline-md **尺寸档**，但**不**用 `text-headline-md` 的 600 字重 ——
+                  奖章名比区块标题(16/600)大一号是"陈列品"的层级（架子上每一件都有自己的名字），
+                  字重压回 500 就不抢区块标题。窄屏两列时每格只有 124px（章 30 + 文字列实测 60），
+                  15px 的四个字也会折行，所以窄屏退回正文 14px（一行放得下，不截断、不折行）。
+                */}
+                <span className="text-[15px] font-medium leading-6 text-primary sm:text-[18px]">
+                  {badge.name}
+                </span>
+                <span
+                  className="truncate text-caption text-caption-foreground"
+                  title={badgeHint(badge)}
+                >
+                  {badge.obtained ? '已获得' : `还差 ${remainingSteps(badge.progress)} 个步骤`}
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </Panel>
+
+      {openBadge ? (
+        <div
+          id="badge-detail"
+          className="flex flex-col items-center gap-3.5 rounded-lg bg-surface-container-low px-5 py-5 text-center"
+        >
+          <BadgeMedallion badge={openBadge} />
+          <div className="flex flex-col gap-1.5">
+            {/* 展开态是这一枚的「主角」，名称用 headline-md(18/600) 一档 —— chip 里放不下这一档 */}
+            <p className="text-headline-md text-primary">{openBadge.name}</p>
+            {openBadge.description ? (
+              <p className="text-body-md text-on-surface-variant">{openBadge.description}</p>
+            ) : null}
+          </div>
+          <p className="max-w-[46ch] text-body-sm text-balance text-on-surface-variant">
+            {badgeHint(openBadge)}
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-body-sm">
+            <span
+              className={cn(
+                'flex items-center gap-2',
+                openBadge.obtained ? 'text-primary' : 'text-secondary',
+              )}
+            >
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'size-1.5 shrink-0 rounded-full',
+                  openBadge.obtained ? 'bg-medal-gold' : 'bg-caption-foreground',
+                )}
+              />
+              {openBadge.obtained
+                ? `获得于 ${formatDate(openBadge.obtained_at)}`
+                : `还差 ${remainingSteps(openBadge.progress)} 个步骤`}
+            </span>
+            <span className="text-caption text-caption-foreground">
+              进度 {openBadge.progress.current} / {openBadge.progress.target}
+            </span>
+          </div>
+        </div>
+      ) : null}
+    </div>
   )
 }
