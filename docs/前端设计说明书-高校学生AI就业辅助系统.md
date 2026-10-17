@@ -113,8 +113,7 @@ React 19 + TypeScript 6 + Vite 8 + Zustand + **shadcn/ui（Radix + Tailwind CSS 
 │ ▸ 每日一问    │
 │ ▸ 简历        │
 │ ▸ 模拟面试    │
-│               │
-│ ─────────────  │
+│ 我的          │
 │ ▸ 个人中心    │
 │ ▸ 成长报告    │
 └──────────────┘

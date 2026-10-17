@@ -36,6 +36,7 @@ const profile = {
   stage: 'prepare',
   updated_at: '2026-09-18T09:24:31+08:00',
   tested: true,
+  summary: '你是个喜欢自己动手折腾的人：会写代码，也一直在琢磨技术怎么变成产品。',
   tags: [],
   user,
 }

@@ -24,13 +24,60 @@ from __future__ import annotations
 
 import argparse
 import sys
-from typing import Optional, Sequence
+from typing import Dict, Optional, Sequence, Tuple
 
 from app.db.seed_data import BADGES, DAILY_QUESTIONS, TEST_QUESTIONS
 from app.db.session import create_all, describe_database, drop_all
 from app.utils.logger import configure_logging, get_logger
 
 logger = get_logger(__name__)
+
+# 「后加的列」清单。``SQLModel.metadata.create_all`` 只建**缺失的表**，不会给已有表
+# ALTER —— 所以老库（含打包后 exe 自带的库）在加列后会直接死在 ``no such column``。
+# 加列时在这里登记一行即可（见 ensure_columns 的说明）。
+ADDED_COLUMNS: Dict[str, Sequence[Tuple[str, str]]] = {
+    # 勘误 9.24.5：「我的画像」卡片顶部那句人物速写
+    "profiles": (
+        ("ai_summary", "TEXT"),
+        ("ai_summary_key", "TEXT"),
+    ),
+}
+
+
+def ensure_columns() -> None:
+    """幂等补齐「后加的列」（手册 5.5 迁移的最小实现）。
+
+    为什么不只写一个一次性迁移脚本：**没人会记得在每条路径上跑它**。
+    放在 ``init_db`` 里，开发库与打包产物就都能自愈 ——
+    ``backend/run_server.py``（PyInstaller 入口）调的正是
+    ``init_db(create_tables=True)``，所以交付出去的 exe 打开一次就自动补上。
+
+    安全：只做 ``ADD COLUMN``（可空、无默认值），不动任何已有列与数据；
+    列已存在就跳过；表还不存在时也跳过（``create_all`` 会连列一起建出来）。
+    """
+    from sqlalchemy import inspect, text
+
+    from app.db.session import engine
+
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    added: list = []
+
+    for table, columns in ADDED_COLUMNS.items():
+        if table not in tables:
+            continue
+        present = {column["name"] for column in inspector.get_columns(table)}
+        for name, ddl_type in columns:
+            if name in present:
+                continue
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl_type}"))
+            added.append(f"{table}.{name}")
+
+    if added:
+        logger.info("ensure_columns：已补列 %s（手册 5.5）", ", ".join(added))
+    else:
+        logger.info("ensure_columns：无缺失列")
 
 
 def init_db(create_tables: bool = False, drop_first: bool = False) -> None:
@@ -47,6 +94,8 @@ def init_db(create_tables: bool = False, drop_first: bool = False) -> None:
     if create_tables:
         logger.info("目标数据库：%s", describe_database())
         create_all()
+        # create_all 之后：补齐「后加的列」（老库/打包产物自愈，见 ensure_columns）
+        ensure_columns()
         logger.info("提示：生产 PostgreSQL 请改用 `alembic upgrade head`（手册 5.5）")
         return
 

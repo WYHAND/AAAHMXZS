@@ -251,7 +251,7 @@ export default function TestQuestionPage() {
                 {current.options.map((option, i) => {
                   const selected = answers[current.id] === option.key
                   return (
-                    <Reveal as="li" key={option.key} fade delay={120 + staggerDelay(i)} className="flex">
+                    <Reveal as="li" key={option.key} fade delay={220 + staggerDelay(i)} className="flex">
                       <button
                         type="button"
                         aria-pressed={selected}

@@ -53,11 +53,13 @@ const tags = [
 
 const profileTested = {
   id: 'p1', user_id: user.id, clarity_score: 68, action_score: 54, resume_score: 41,
-  total_score: 54, stage: 'prepare', updated_at: NOW, tested: true, tags, user,
+  total_score: 54, stage: 'prepare', updated_at: NOW, tested: true,
+  summary: '你是个喜欢自己动手折腾的人：会写代码，也一直在琢磨技术怎么变成产品。', tags, user,
 }
 const profileUntested = {
   id: 'p2', user_id: user.id, clarity_score: 0, action_score: 0, resume_score: 0,
-  total_score: 0, stage: 'explore', updated_at: NOW, tested: false, tags: [], user,
+  total_score: 0, stage: 'explore', updated_at: NOW, tested: false,
+  summary: '还在认识你 —— 多聊两句，这里会慢慢具体起来。', tags: [], user,
 }
 
 const task = {
@@ -932,6 +934,26 @@ async function main() {
       /* 旧空态文案（「还没有奖章。…」）必须已经不存在于产物里 */
       n4.staleEmptyTextGone = !body.includes('还没有奖章')
       n4.overviewCounter = (body.match(new RegExp(`${BADGE_OVERVIEW.obtained_count}\\s*/\\s*${BADGE_OVERVIEW.total}`)) ?? [null])[0]
+      /*
+       * 进页面就默认选中第一枚（门槛最低的那枚）：左列详情区必须已经有内容，
+       * 不存在「点右边的勋章，这里会展开它的来历」那种空引导态。
+       */
+      const first = BADGE_ITEMS[0]
+      n4.defaultDetailVisible = body.includes(first.description)
+      n4.defaultDetailHint = body.includes(first.hint)
+      n4.defaultDetailProgress = body.includes(`进度 ${first.progress.current} / ${first.progress.target}`)
+      n4.defaultDetailSelected = body.includes(first.name)
+      n4.oldEmptyPromptGone = !body.includes('点右边的勋章')
+      /*
+       * 奖章小剧场（右侧那格动态插画）：选中哪一枚就画哪一幕，
+       * 且必须真的占住那格高度（塌成 0 就等于又空回去了）。
+       */
+      n4.scene = await page.evaluate(() => {
+        const svg = document.querySelector('svg.bs-scene')
+        if (!svg) return null
+        const b = svg.getBoundingClientRect()
+        return { key: svg.dataset.key, state: svg.dataset.state, w: Math.round(b.width), h: Math.round(b.height) }
+      })
       n4.loadingText = body.includes('正在读你的奖章') ? '正在读你的奖章…' : null
       n4.bodySample = body.slice(0, 700)
       n4.pageErrors = store.pageErrors
@@ -941,6 +963,20 @@ async function main() {
       if (mode === 'data') {
         if (n4.badgeNames.length !== BADGE_ITEMS.length) problems.push(`有数据态只渲染了 ${n4.badgeNames.length}/${BADGE_ITEMS.length} 枚奖章`)
         if (!n4.overviewCounter) problems.push(`没有渲染进度计数 ${BADGE_OVERVIEW.obtained_count}/${BADGE_OVERVIEW.total}`)
+        /* 进页面必须已选中第一枚，详情齐全；旧空引导句必须消失（否则又回到「一进来左列是空的」） */
+        if (!n4.defaultDetailVisible) problems.push('进页面没有默认展开第一枚奖章的描述')
+        if (!n4.defaultDetailHint) problems.push('默认展开的奖章详情缺 hint 文案')
+        if (!n4.defaultDetailProgress) problems.push('默认展开的奖章详情缺进度行')
+        if (!n4.oldEmptyPromptGone) problems.push('仍然出现已删除的空引导句「点右边的勋章」')
+        /* 小剧场：默认选中第一枚 ⇒ 画的必须是第一幕，且占满那格 */
+        if (!n4.scene) problems.push('右侧没有渲染奖章小剧场（svg.bs-scene）')
+        else {
+          if (n4.scene.key !== first.key) problems.push(`小剧场画的是 ${n4.scene.key}，默认选中的是 ${first.key}`)
+          if (n4.scene.state !== 'obtained') problems.push(`小剧场状态应为 obtained，实际 ${n4.scene.state}`)
+          if (n4.scene.h < 120) problems.push(`小剧场高度只有 ${n4.scene.h}px，又塌回空白了`)
+        }
+      } else {
+        if (n4.scene) problems.push('items 为空时不该渲染奖章小剧场')
       }
       if (mode === 'empty') {
         if (!n4.emptyStateText) problems.push(`items 为空的 BadgeOverview 没有出现空态句子「${BADGE_EMPTY_TEXT}」`)

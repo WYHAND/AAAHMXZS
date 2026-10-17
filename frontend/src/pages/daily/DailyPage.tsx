@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronDown, Flame, HelpCircle, History, Send, Sparkles } from 'lucide-react'
+import { ArrowRight, ChevronDown, Flame, HelpCircle, History, Send, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { AIThinking } from '@/components/AIThinking'
@@ -118,14 +118,15 @@ function optionTexts(raw: TodayQuestion['question']['options']): string[] {
  *   （提示 chip / 输入区 / 提交）。这样 1040px 的卡不再是一整行空白。
  * - 其余内容两列 7/5 支撑（左历史、右节奏），**不做**等高卡片一路堆下去。
  * - 两个状态分清：**未答**只给输入区与提交按钮；**已答**只回显自己写下的那句
- *   加一句人话反馈，不再出现输入框与提交按钮。
+ *   加**一句**人话反馈（同义的话只说一次），不再出现输入框与提交按钮。
  * - 字号按语义阶（页头由 PageShell / PageHeader 出；题目沿用首页今日一问的
  *   headline-lg、区块标题 headline-sm、正文 body-md、说明 body-sm、装饰 caption）。
- * - 历史默认只铺最近几条，其余用 ghost 的「看全部」**就地展开**（同样的条目，只是不再折起来）。
+ * - 历史默认只铺最近几条，其余用 ghost 的「看全部」**就地展开**（同样的条目，只是不再折起来）；
+ *   卡底那一行同时收着「想接着聊聊」的真链接（不再孤悬在整页最底部居中）。
  *
  * 动效（统一动效语汇，只增不改）：
- * - 主角卡 `<Reveal lg>`（320ms）先上浮；两列支撑与历史行**错开起点**跟上
- *   （140 / 200 + staggerDelay(i) / 240ms），同一刻最多三处在动；
+ * - 主角卡 `<Reveal lg>`（640ms）先上浮；两列支撑与历史行**错开起点**跟上
+ *   （250 / 360 + staggerDelay(i) / 430ms），同一刻最多三处在动；
  *   历史行用 `<Reveal as="li">`，错峰只在开头几项上体现（staggerDelay 封顶）。
  * - 可点的 chip 加 `motion-lift` + `motion-press`，按钮加 `motion-press`。
  * - 这一页没有会变的数值条，所以不用 `grow-x`（不为动效而造一个）。
@@ -136,7 +137,7 @@ function optionTexts(raw: TodayQuestion['question']['options']): string[] {
  * - 计数器写 200（后端上限就是 200 字），不写参考稿的 300；
  * - 历史卡底部不写「AI 当时提示：…」（历史条目里没有这个字段）；
  * - 主按钮文案用「记下这一句」而不是「发给 AI 聊聊」—— 这个动作是**存进画像**，
- *   不会立刻开一段对话；想聊另有页面底部那颗真链接。
+ *   不会立刻开一段对话；想聊在那张历史卡底部有一行真链接。
  */
 export default function DailyPage() {
   const bumpVersion = useProfileStore((s) => s.bumpVersion)
@@ -281,11 +282,13 @@ export default function DailyPage() {
 
                 <p className="text-headline-lg text-primary">「{today.question.content}」</p>
 
-                <p className="text-body-sm text-on-surface-variant">
-                  {today.answered
-                    ? '说出来的话会一直留在这里，和下面那些放在一起。'
-                    : '答不上来也没关系，写半句都行；它只进你自己的画像。'}
-                </p>
+                {/* 已答态**不再补一句**：右栏已经说了"它会一直留在这里"，
+                    同义的话只说一句，左侧把位置让给题干本身（也不会留下空行） */}
+                {today.answered ? null : (
+                  <p className="text-body-sm text-on-surface-variant">
+                    答不上来也没关系，写半句都行；它只进你自己的画像。
+                  </p>
+                )}
               </div>
 
               {today.streak > 0 ? (
@@ -331,7 +334,8 @@ export default function DailyPage() {
                     </div>
                   ) : null}
 
-                  {/* 输入区：浅底块里放一张白底的 textarea（聚焦不换尺寸：只换 ring） */}
+                  {/* 输入区：浅底块里放一张白底的 textarea（聚焦不换尺寸：只换 ring）。
+                      计数跟着输入框走、贴在它右下角；主按钮单独一行，两者不再挤在一起 */}
                   <Panel inset>
                     <Textarea
                       ref={answerRef}
@@ -342,13 +346,13 @@ export default function DailyPage() {
                       placeholder="想到什么就写什么，一句话也可以。不带修饰，只是当下的真实感受…"
                       className="min-h-[88px] resize-none border-0 bg-card text-body-md shadow-none focus-visible:bg-card focus-visible:ring-1 focus-visible:ring-primary/40"
                     />
-                  </Panel>
-
-                  <div className="flex flex-wrap items-center justify-end gap-3">
                     {/* 计数器退到最淡：别用大黑字盯着用户 */}
-                    <span className="tabular-nums text-body-sm text-on-surface-variant">
+                    <span className="self-end tabular-nums text-caption text-on-surface-variant">
                       {answer.length}/{ANSWER_MAX}
                     </span>
+                  </Panel>
+
+                  <div className="flex justify-end">
                     <Button
                       variant="warm"
                       size="lg"
@@ -379,9 +383,9 @@ export default function DailyPage() {
       )}
 
       {/* ② 两列 7/5 支撑：左历史（读的地方要宽），右节奏（一眼扫过的数字）。
-          进场与主角卡错开起点（140 / 240ms），免得一屏同时四五处都在动 */}
+          进场与主角卡错开起点（250 / 430ms），免得一屏同时四五处都在动 */}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-        <Reveal fade delay={140} className="flex min-w-0 flex-col lg:col-span-7">
+        <Reveal fade delay={250} className="flex min-w-0 flex-col lg:col-span-7">
           <Panel data-print="card" className="gap-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="flex flex-wrap items-center gap-2 text-headline-sm text-primary">
@@ -451,32 +455,41 @@ export default function DailyPage() {
                 </ul>
 
                 {/* 展开与收起都落在同一页：展开后条目一条不少，只是不再折起来。
-                    做成列表的自然延伸（左对齐 + 顶部细线），全页只留底部那一处居中弱化动作 */}
-                {hiddenCount > 0 || historyOpen ? (
-                  <div className="flex border-t border-outline-variant/40 pt-3">
-                    {hiddenCount > 0 ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="motion-press -ml-3 gap-1.5 text-on-surface-variant"
-                        onClick={() => setHistoryOpen(true)}
-                      >
-                        看全部 {items.length} 条
-                        <ChevronDown className="size-3.5" aria-hidden />
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="motion-press -ml-3 gap-1.5 text-on-surface-variant"
-                        onClick={() => setHistoryOpen(false)}
-                      >
-                        收起
-                        <ChevronDown className="size-3.5 rotate-180" aria-hidden />
-                      </Button>
-                    )}
-                  </div>
-                ) : null}
+                    卡底只留这一行：左边是展开/收起（有折起来的才出现），右边是去聊天的
+                    真链接 —— 它原来孤悬在整页最底部居中，现在收进这张卡里当卡内一行 */}
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-outline-variant/40 pt-3">
+                  {hiddenCount > 0 ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="motion-press -ml-3 gap-1.5 text-on-surface-variant"
+                      onClick={() => setHistoryOpen(true)}
+                    >
+                      看全部 {items.length} 条
+                      <ChevronDown className="size-3.5" aria-hidden />
+                    </Button>
+                  ) : historyOpen ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="motion-press -ml-3 gap-1.5 text-on-surface-variant"
+                      onClick={() => setHistoryOpen(false)}
+                    >
+                      收起
+                      <ChevronDown className="size-3.5 rotate-180" aria-hidden />
+                    </Button>
+                  ) : null}
+                  <Link
+                    to="/chat"
+                    className="group ml-auto inline-flex items-center gap-1.5 text-body-sm text-on-surface-variant transition-colors hover:text-primary"
+                  >
+                    想接着聊聊？和 AI 说一句
+                    <ArrowRight
+                      className="size-3.5 transition-transform group-hover:translate-x-0.5"
+                      aria-hidden
+                    />
+                  </Link>
+                </div>
 
                 {truncated ? (
                   <p className="text-body-sm text-on-surface-variant">
@@ -488,7 +501,7 @@ export default function DailyPage() {
           </Panel>
         </Reveal>
 
-        <Reveal delay={240} className="flex min-w-0 flex-col gap-6 lg:col-span-5">
+        <Reveal delay={430} className="flex min-w-0 flex-col gap-6 lg:col-span-5">
           <Panel data-print="card" className="gap-5">
             <div className="flex items-center justify-between gap-3">
               <span className="text-headline-sm text-primary">你的记录节奏</span>
@@ -536,16 +549,19 @@ export default function DailyPage() {
                 用「标签 + 条数」的紧凑云，而不是一根根柱：
                 这一列的高度要跟左边（历史列表）大致齐平，柱状行会把右列顶得比左列还高。
                 分布形状交给数字读就够了 —— 条数最多的排前面。
+                数字单独装一颗白底小药丸（并拉开 gap）：不然"行动 1"会读成"行动1"。
               */}
               <div className="flex flex-wrap gap-2">
                 {dimensionRows.map((row, index) => (
                   <span
                     key={row.label}
-                    className="rise-in inline-flex items-center gap-1.5 rounded-full bg-surface-container px-3 py-1 text-body-sm text-on-surface"
+                    className="rise-in inline-flex items-center gap-2 rounded-full bg-surface-container py-1 pr-1 pl-3 text-body-sm text-on-surface"
                     style={{ animationDelay: `${staggerDelay(index)}ms` }}
                   >
                     {row.label}
-                    <span className="tabular-nums text-on-surface-variant">{row.count}</span>
+                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-card px-1.5 text-caption tabular-nums text-on-surface-variant">
+                      {row.count}
+                    </span>
                   </span>
                 ))}
               </div>
@@ -554,17 +570,6 @@ export default function DailyPage() {
         </Reveal>
       </div>
 
-      {/* 页面底部一行弱化动作：真链接，不是假入口 */}
-      <div className="flex justify-center">
-        <Button
-          asChild
-          variant="ghost"
-          size="sm"
-          className="motion-press gap-1.5 text-on-surface-variant"
-        >
-          <Link to="/chat">想接着聊聊？和 AI 说一句</Link>
-        </Button>
-      </div>
     </PageShell>
   )
 }
@@ -583,7 +588,7 @@ function HistoryRow({ item, index }: { item: DailyHistoryItem; index: number }) 
   return (
     <Reveal
       as="li"
-      delay={200 + staggerDelay(index)}
+      delay={360 + staggerDelay(index)}
       className="flex flex-col gap-2 border-t border-outline-variant/40 pt-4 first:border-t-0 first:pt-0"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">

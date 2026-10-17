@@ -53,6 +53,18 @@ class ProfileExtractResult(BaseModel):
     summary: str = Field(default="", description="一句话归纳用户当前状态")
 
 
+# ---------- 9.24 「我的画像」顶部那句人物速写 ----------
+
+class ProfileSummaryResult(BaseModel):
+    """``profile_summary`` Prompt 的结构化输出（勘误 9.24）。
+
+    ⚠️ 只有 ``text`` 一个字段：这句话是**描述**，不是分数也不是建议 ——
+    多给字段就等于鼓励模型给评价（9.24.4：卡片不评价、不提待提升）。
+    """
+
+    text: str = Field(default="", max_length=120, description="一句话人物速写，≤45 字")
+
+
 # ---------- 11.8 简历润色（POST /resume/polish） ----------
 #
 # ⚠️ 这一组 schema 与"从一份简历 PDF 里解析出什么"的那套（basics/title/role/period/…）
@@ -289,12 +301,23 @@ def empty_conclusion() -> ConclusionCardResult:
     return ConclusionCardResult()
 
 
+def empty_profile_summary() -> ProfileSummaryResult:
+    """摘要的兜底（7.6）：**空文本**。
+
+    刻意不给默认文案：调用方（``profile_service.refresh_ai_summary``）拿到空串时会
+    回落到**模板句**（从可见标签拼出来，确定性、绝不杜撰），而不是让模型之外的
+    第二处又编一句人话。
+    """
+    return ProfileSummaryResult()
+
+
 __all__ = [
     "ALLOWED_DIMENSIONS",
     "JOB_KEYWORDS",
     "CORE_DIMENSIONS",
     "ProfileTagItem",
     "ProfileExtractResult",
+    "ProfileSummaryResult",
     "ResumeStar",
     "ResumeBasicInfo",
     "ResumeTargetInfo",
@@ -312,6 +335,7 @@ __all__ = [
     "OpeningResult",
     "ConclusionCardResult",
     "empty_profile_extract",
+    "empty_profile_summary",
     "empty_resume_polish",
     "empty_interview_review",
     "empty_task_generate",

@@ -26,7 +26,7 @@ TModel = TypeVar("TModel", bound=BaseModel)
 
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 
-# ---------- Prompt 清单（7.4 表格的 9 项） + 2 项骨架补充（见 README「待确认」） ----------
+# ---------- Prompt 清单：手册 7.4 的表格项 + 骨架补充项（后者见 README「待确认」） ----------
 # ⚠️ 7.4 里的 ``resume_parse`` / ``resume_optimize`` 两项已随老 ATS 链路移除（2026-11，
 #    见 README §4.10）；现行简历链路只用 ``resume_polish``。
 PROMPT_FILES: Dict[str, str] = {
@@ -39,6 +39,8 @@ PROMPT_FILES: Dict[str, str] = {
     "interview_review": "interview_review.txt",
     "task_generate": "task_generate.txt",
     "daily_question": "daily_question.txt",
+    # 9.24：「我的画像」顶部那句人物速写（按可见标签生成，落库缓存）
+    "profile_summary": "profile_summary.txt",
     # 手册 7.4 未列出、但 11.4 / 11.11 需要，骨架补充
     "chat_conclusion": "chat_conclusion.txt",
     "test_free_text": "profile_extract.txt",  # 11.2 文字补充复用画像抽取模板

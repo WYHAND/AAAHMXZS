@@ -107,6 +107,7 @@ const profile = {
   stage: 'prepare',
   updated_at: NOW,
   tested: true,
+  summary: '你是个喜欢自己动手折腾的人：会写代码，也一直在琢磨技术怎么变成产品。',
   tags,
   user,
 }
@@ -582,6 +583,7 @@ async function installApiMock(page, opts = {}) {
         stage: 'explore',
         updated_at: NOW,
         tested: false,
+        summary: '还在认识你 —— 多聊两句，这里会慢慢具体起来。',
         tags: [],
         user,
       })

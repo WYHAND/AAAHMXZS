@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, ExternalLink, ListChecks, Trash2 } from 'lucide-react'
+import { ArrowLeft, ExternalLink, ListChecks, Tag, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { AIThinking } from '@/components/AIThinking'
@@ -79,12 +79,12 @@ function ChoiceRow({
  * - 页头走 PageShell，**任务名只在页头出现一次**（页面标题）；主角卡不再重复整句任务名，
  *   改成一句进度人话（"刚好开头 / 已经过半 / 就差最后一步"）——标题已经说过"做什么"，
  *   卡上该回答的是"走到哪了、下一步干嘛"。
- * - 主角卡承担这一页唯一的进度条与唯一的实心 CTA：进度人话 + 关联痛点（浅底 inset）
- *   + 已完成步数/进度条 + 当前步指引 + 主按钮「完成这一步」；
+ * - 主角卡承担这一页唯一的进度条（＋「已完成 n/m 步」这一处读数）：进度人话
+ *   + 关联痛点 chip（与列表页同一写法）+ 当前步指引 + 主按钮「完成这一步」；
  * - 步骤列表**放在主角卡下方**（左 7 列），右侧 5 列只放「为什么值得做」，
  *   没有这句价值说明时步骤列表自己铺满，不留一个空列；
- * - 放弃 / 删除退到页面底部一行 ghost 动作，二次确认仍走
- *   TaskAbandonDialog / TaskDeleteDialog（与列表页共用，逻辑一个字没改）。
+ * - 放弃 / 删除退到页面最下方一行，用 destructive 文字色、与主内容拉开距离；
+ *   二次确认仍走 TaskAbandonDialog / TaskDeleteDialog（与列表页共用，逻辑一个字没改）。
  *
  * 动效（统一语汇，只增不改）：主角卡 / 两列 / 页脚分三段上浮进场；
  * 进度条 grow-x 从左长出来；主 CTA、资源链、页脚动作加 motion-press。不写 keyframes。
@@ -245,14 +245,13 @@ export default function TaskDetailPage() {
             {heroLine(doneSteps, total)}
           </p>
 
-          {/* 关联痛点：AI 输出面板的唯一写法（暖色只留左侧竖条） */}
+          {/* 关联痛点：与列表页同一写法的小 chip（浅桃 + 图标 + rounded-full），
+              不再铺成整条浅底横条 —— 一条横条会读成"这一块的内容" */}
           {task.pain_point ? (
-            <Panel inset className="ai-inset">
-              <span className="text-body-md text-on-surface">
-                <span className="text-on-surface-variant">关联痛点：</span>
-                {task.pain_point}
-              </span>
-            </Panel>
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-secondary-fixed px-3 py-1 text-body-sm text-on-secondary-fixed">
+              <Tag className="size-3.5" aria-hidden />
+              关联痛点：{task.pain_point}
+            </span>
           ) : null}
 
           {/* 唯一的进度条：grow-x 从左长出来（值更新时组件自己的 transition 接管）；
@@ -319,11 +318,12 @@ export default function TaskDetailPage() {
                 >
                   {activeStep.completed ? '这一步已完成' : '完成这一步'}
                 </Button>
-                <span className="text-caption text-caption-foreground">
-                  {activeStep.completed
-                    ? '在下面点一个还没开始的步骤，就能继续。'
-                    : '点两下就好，不用写小作文。'}
-                </span>
+                {/* 只在"这一步已完成"时才需要一句指路；原来那句"点两下就好，不用写小作文。"已删 */}
+                {activeStep.completed ? (
+                  <span className="text-caption text-caption-foreground">
+                    在下面点一个还没开始的步骤，就能继续。
+                  </span>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -331,19 +331,16 @@ export default function TaskDetailPage() {
       </Reveal>
 
       {/* 步骤列表（左 7）与「为什么值得做」（右 5）；没有价值说明时步骤铺满，不留空列 */}
-      <Reveal delay={160}>
+      <Reveal delay={290}>
         <div className={cn('grid items-start gap-6', task.value_note ? 'lg:grid-cols-12' : undefined)}>
           <Panel data-print="card" className={cn('gap-4', task.value_note ? 'lg:col-span-7' : undefined)}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-headline-sm text-primary">任务步骤</span>
-              {total ? (
-                <span className="text-body-sm text-on-surface-variant">
-                  共 {total} 步 · 已完成 {doneSteps} 步
-                </span>
-              ) : null}
             </div>
 
             {total ? (
+              /* 完成态样式统一由 StepList 提供（2026-10-18 已去掉那里的删除线，
+                 改成"勾 + 降一档颜色"），页面不再就地覆盖。 */
               <StepList
                 steps={steps}
                 activeStepId={activeStepId}
@@ -363,14 +360,15 @@ export default function TaskDetailPage() {
         </div>
       </Reveal>
 
-      {/* 放弃 / 删除：一行弱化动作（与列表页共用同一套确认弹窗） */}
-      <Reveal delay={360}>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+      {/* 放弃 / 删除：破坏性动作统一用 destructive 文字色，并退到页面最下方、与主内容拉开距离
+          （mt-6 叠在 PageShell 的 24px 节奏之上 = 48px），二次确认仍与列表页共用同一套弹窗 */}
+      <Reveal delay={650} className="mt-6">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
           {canAbandon ? (
             <Button
               variant="ghost"
               size="sm"
-              className="motion-press px-0 text-body-sm text-on-surface-variant hover:bg-transparent hover:text-primary"
+              className="motion-press px-0 text-body-sm text-destructive hover:bg-transparent hover:text-destructive/75"
               onClick={() => setAbandonOpen(true)}
             >
               放弃这个任务
@@ -379,7 +377,7 @@ export default function TaskDetailPage() {
           <Button
             variant="ghost"
             size="sm"
-            className="motion-press gap-1 px-0 text-body-sm text-on-surface-variant hover:bg-transparent hover:text-destructive"
+            className="motion-press gap-1 px-0 text-body-sm text-destructive hover:bg-transparent hover:text-destructive/75"
             onClick={() => setDeleteOpen(true)}
           >
             <Trash2 className="size-3.5" />

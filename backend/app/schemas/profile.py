@@ -70,6 +70,14 @@ class ProfileResponse(BaseModel):
         description="阶段中文展示名（探索期/准备期/冲刺期），由 stage 自动派生，不用自己传",
     )
     updated_at: datetime
+    summary: str = Field(
+        default="",
+        description=(
+            "「我的画像」卡片顶部那句『你是个什么样的人』（勘误 9.24）。"
+            "由 AI 按**可见标签**生成并落库缓存（见 profiles.ai_summary）；"
+            "AI 不可用时回落模板句，**永不为空**。它描述的是画像，不是分数、不是进度。"
+        ),
+    )
     tested: bool = Field(
         default=False,
         description=(

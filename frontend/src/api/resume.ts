@@ -29,15 +29,22 @@ export const resumeApi = {
   /**
    * 润色：只改写用户写过的内容。
    *
-   * ⚠️ 这里刻意**不走 post<T>()**：润色必须把信封里的 `message` 原样带出来
-   * （它是一句人话，例如「已润色；还有 3 项你没填，先空着（教育背景的时间…）」），
-   * 而 post<T>() 只解出 data，message 会被丢掉。失败路径完全一致：
-   * 非 0 code 由同一个响应拦截器 reject。
+   * ⚠️ 必须带 `envelope: true`：拦截器默认成功时**只返回 `data`**，
+   * 而润色必须把信封里的 `message` 原样带出来（它是一句人话，例如
+   * 「已润色；还有 3 项你没填，先空着（教育背景的时间…）」）。
+   *
+   * 这一条**曾经漏了** —— 拦截器把信封解掉了，调用方却按信封读 `envelope.data`，
+   * 拿到的是 `undefined`，`applyResult` 读它的 `parsed_data` 直接抛 TypeError，
+   * 被当成"润色失败"吞掉：界面永远显示「多半是网络或 AI 服务临时不稳」，
+   * 内容其实早就润好并入库了。改这里的开关前请先确认拦截器那一段。
+   *
+   * 失败路径两条完全一致：非 0 code（含 3001）由同一个拦截器 reject 成 ApiError。
    */
   polish: async (payload: ResumePolishPayload): Promise<ApiEnvelope<ResumeResponse>> =>
     (await client.post('/resume/polish', payload, {
       // 润色要调 AI，给足超时
       timeout: 120000,
+      envelope: true,
     })) as unknown as ApiEnvelope<ResumeResponse>,
 
   /**

@@ -124,6 +124,7 @@ export const useProfileStore = create<ProfileState>((set) => ({
         total_score: next.total_score ?? 0,
         stage: next.stage,
         updated_at: next.updated_at ?? new Date().toISOString(),
+        summary: next.summary ?? '',
         tested: true,
         tags,
         user: next.user ?? null,

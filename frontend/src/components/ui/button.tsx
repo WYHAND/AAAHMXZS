@@ -36,13 +36,12 @@ const buttonVariants = cva(
         xs: "h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
         sm: "h-8 gap-1.5 rounded-lg px-3 has-[>svg]:px-2.5",
         /*
-         * lg = 全站**唯一主 CTA** 规格（2026-10 收口）：44px 高 / 圆角 12px（与卡片同构）/
-         * 15px·600。圆角刻意用 rounded-xl 而不是 rounded-md(6px)：首页那个定稿的大按钮
-         * 就是 rounded-xl + text-[15px] font-semibold，页面里以前要各自补这两个类
-         * （HomePage、TestResultPage 都补过），补漏了就会出现"同一屏两种圆角"。
-         * 现在收敛到组件里：页面写 `variant="warm" size="lg"` 即可，不用再手写尺寸类。
+         * lg = 全站**唯一主 CTA** 规格（2026-10-18 收口）：44px 高 / 圆角 14px / 15px·600。
+         * 圆角刻意写死 14px，**不要**再用 rounded-xl：--radius-xl 现在是 22px，
+         * 44px 高配 22px 圆角 = 正圆端，按钮会变成药丸，与卡片轮廓混在一起（实测过）。
+         * 卡片=22、控件=14、卡内块=12，三档是分开的，别互相借用。
          */
-        lg: "h-11 rounded-xl px-6 text-[15px] font-semibold has-[>svg]:px-5",
+        lg: "h-11 rounded-[14px] px-6 text-[15px] font-semibold has-[>svg]:px-5",
         icon: "size-9",
         "icon-xs": "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3",
         "icon-sm": "size-8",

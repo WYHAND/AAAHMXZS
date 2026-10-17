@@ -272,6 +272,16 @@
   /* ---- 状态 ---- */
   --destructive: #ba1a1a;
   --destructive-foreground: #ffffff;
+  /*
+   * 2026-10-18 补：success / warning / info 三个 token **只在 .dark 里出现过**，
+   * light 的 :root 被换掉之后它们就没了 —— 于是 `.text-success` 解析成空值、
+   * 静默继承墨色，报告页/个人中心/测评结果的"分差涨跌"配色一直没生效（实测）。
+   * 这里补齐；success 直接取 --settled 的绿（"好"与"累积到手"在视觉上是一家人），
+   * warning 取奖章的深金，info 取 --signal 的蓝，三个都只做**文字/小图形**，不做底色。
+   */
+  --success: #3f6b45;
+  --warning: #8a5a1c;
+  --info: #4a6fa5;
   /* 更轻的描边：卡片以"极轻环境扩散"分层，不再靠 1px 灰线（宽度仍是 1px，避免全局位移） */
   --border: rgba(226, 232, 240, 0.45);
   --input: rgba(226, 232, 240, 0.8);
@@ -283,6 +293,12 @@
   --surface: #fbf9f6;
   --surface-container-lowest: #ffffff;
   --surface-container-low: #f5f3f0;
+  /*
+   * 卡内浅底块专用（2026-10-18）：比 --surface-container-low 再压深一档。
+   * 原来卡内块与侧栏共用 #f5f3f0，卡(#fff)与块之间只有 1.11:1 的差，块几乎读不出来；
+   * 单独给它一档，让"卡里的区域"是一块真的区域，而不是一张更小的卡。
+   */
+  --surface-inset: #f3f0ec;
   --surface-container: #efeeeb;
   --surface-container-high: #eae8e5;
   --surface-container-highest: #e4e2df;
@@ -357,19 +373,28 @@
   --ai-accent: #45474c;
   --stage-explore: #45474c;
 
-  /* ---- 阴影：极轻的环境扩散（DESIGN.md Elevation）---- */
-  --shadow-card: 0 1px 3px 0 rgba(15, 23, 42, 0.03), 0 1px 2px -1px rgba(15, 23, 42, 0.02);
+  /* ---- 阴影：极轻的环境扩散（DESIGN.md Elevation）----
+     2026-10-18：原来 0.03/0.02 的强度在白卡压 #fbf9f6 画布上几乎算不出来
+     （实测卡片与背景只有 4–9 级色差），整页因此"平"。这里只提一档，仍然看不见"投影"，
+     目标是让白卡**边缘**有一线落下感；再重就变成拟物。 */
+  --shadow-card: 0 1px 3px 0 rgba(28, 25, 23, 0.07), 0 1px 2px -1px rgba(28, 25, 23, 0.05);
   --shadow-pop: 0 8px 24px -4px rgba(15, 23, 42, 0.06), 0 4px 8px -2px rgba(15, 23, 42, 0.03);
 
-  /* ---- 圆角：整体在稿子基础上前移 +10px（2026-10 用户要求）----
-     稿子原值：lg=8px / xl=12px。现在 lg=18px / xl=22px，其余各档同增 10px。
+  /* ---- 圆角：三档就够，档位太密等于没有档位（2026-10-18 收口）----
+     2026-10 那轮把全站圆角整体前移 +10px，结果是 14/16/18/22/26/34 六档相邻只差 2–4px，
+     视觉上读不出从属关系；而且 44px 高的主按钮配 22px 圆角**必然**变成药丸
+     （圆角 = 半高），卡片和按钮就用了同一种轮廓，层级反而更糊。
+     现在只留三档 + 全圆：
+       · 外容器（卡片 / 焦点卡）：xl = 22px
+       · 控件（按钮 / 输入框）：md = 14px
+       · 卡内浅底块：lg = 12px（必须**明显小于**外卡，否则"卡里还有一张卡"）
+       · chip / 头像 / 圆点：rounded-full
      ⚠️ 这里（文件末尾的 :root）是工具类**实际生效**的值；
-     上面的 @theme inline 用 calc(var(--radius)) 派生，两边结果要一致。
-     rounded-full（chip/头像/圆点）不受影响，它不读这些档位。 */
+     上面的 @theme inline 用 calc(var(--radius)) 派生，两边结果要一致。 */
   --radius: 1.125rem;
-  --radius-sm: 0.875rem;
-  --radius-md: 1rem;
-  --radius-lg: 1.125rem;
+  --radius-sm: 0.75rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 0.75rem;
   --radius-xl: 1.375rem;
   --radius-2xl: 1.625rem;
   --radius-3xl: 2.125rem;
@@ -385,6 +410,7 @@
   --color-canvas: #fbf9f6;
   --color-surface-container-lowest: #ffffff;
   --color-surface-container-low: #f5f3f0;
+  --color-surface-inset: var(--surface-inset);
   --color-surface-container: #efeeeb;
   --color-surface-container-high: #eae8e5;
   --color-surface-container-highest: #e4e2df;
@@ -575,30 +601,40 @@
    --------------------------------------------------------------------------
    纪律（写动效前先读一遍，越界就不高级了）：
    1. 只做两类动效 —— **进场（一次）** 与 **交互反馈**。不做装饰性循环动画。
-   2. 节拍一支笔：进场 220ms（大块 320ms）、反馈 140–160ms，
-      缓动统一 cubic-bezier(0.22, 1, 0.36, 1)（先快后缓，收得稳）。
-   3. 位移一律很小（≤10px），**不做弹跳 / 回弹 / 旋转**。
+   2. 节拍一支笔：进场 480ms（大块 640ms）、反馈 200ms，
+      缓动统一 cubic-bezier(0.05, 0.7, 0.1, 1)（先快后缓，收得稳）。
+   3. 位移一律很小（10px，大块 14px），**不做弹跳 / 回弹 / 旋转**。
    4. 动效不得改变布局占位（动画前后盒子尺寸一致），避免加载时的抖动。
    5. prefers-reduced-motion: reduce → 全部关闭。
    6. 列表错峰只错开头几项（见 components/Motion.tsx 的 staggerDelay），
       否则最后一项要等一秒才出现。
    ========================================================================== */
 /*
-   动效节拍取值（外部规范，改这里就是改全站动效）：
+   ⚠️ 2026-10-17 用户验收：**其它页面的进场节拍整体对齐首页**。
+   缘由：首页（motion/react，500–700ms，且各块 0.3–0.6s 依次起手）用户看得很清楚，
+   而这里原来的 200/300ms + 32ms 错峰是"一闪而过"，用户反馈"看不清到底播没播动画"。
+   做法：**只改本处 token + Motion.tsx 的 staggerDelay 步长**（32 → 48ms），
+   各页写死的基准 delay 同步 ×1.8 铺开（见各页注释里的新毫秒数）。
+   首页（pages/home）与 /chat 不吃这一套，保持原样。
+
+   动效节拍取值（外部规范 + 首页实测校准，改这里就是改全站动效）：
    - 缓动：Material 3 的 emphasized decelerate = cubic-bezier(0.05, 0.7, 0.1, 1)。
      M3 明确「进入屏幕的转场用 decelerate」；NN/g 也说进场用 ease-out（起手快、收尾稳，
      眼睛能预判它停在哪），线性运动看着不自然。
-   - 时长：M3 short4 = 200ms、medium2 = 300ms。NN/g 的实测口径：简单反馈约 100ms，
-     大面积变化 200–300ms，超过 400ms 就开始觉得拖；**进场要比退场略慢**。
-   - 位移：6px（大块 10px）。位移越大越容易"晕"，也让错峰看起来更慢。
+   - 时长：M3 short4 = 200ms、medium2 = 300ms，NN/g 的经验上限是 400ms —— 那套口径
+     服务的是"高效工具型 UI"（越快越好）。这里的产品取向是**让动效被看见**，
+     所以进场按首页基准（≈550ms）定到 480 / 640ms。
+   - 位移：10px（大块 14px）。首页是 12px，这里取"克制版基准 + 大块略大"。
+     位移越大越容易"晕"，也让错峰看起来更慢。
+   - 反馈（按下 / 悬浮）：140ms → 200ms。仍明显快于进场，但比原来从容。
 */
 :root {
   --motion-ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
   --motion-ease-feedback: cubic-bezier(0.4, 0, 0.2, 1);
-  --motion-dur-sm: 140ms;
-  --motion-dur-md: 200ms;
-  --motion-dur-lg: 300ms;
-  --motion-rise: 6px;
+  --motion-dur-sm: 200ms;
+  --motion-dur-md: 480ms;
+  --motion-dur-lg: 640ms;
+  --motion-rise: 10px;
 }
 
 @keyframes rise-in {
@@ -637,7 +673,7 @@
     animation: rise-in var(--motion-dur-md) var(--motion-ease-enter) both;
   }
   .rise-in-lg {
-    --motion-rise: 10px;
+    --motion-rise: 14px;
     animation: rise-in var(--motion-dur-lg) var(--motion-ease-enter) both;
   }
   /* 只淡入（不适合位移的场景：整页容器、覆盖层、内容替换） */
@@ -686,7 +722,8 @@
   */
   .grow-x {
     transform-origin: left center;
-    animation: grow-x 520ms var(--motion-ease-enter) both;
+    /* 与进场同批放慢：520 → 680ms，和首页的步骤连线（0.9s）一个量级 */
+    animation: grow-x 680ms var(--motion-ease-enter) both;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -700,6 +737,376 @@
     .motion-press:active,
     .motion-press-color:active {
       transform: none;
+    }
+  }
+}
+
+/* ==========================================================================
+   2026-10-17 奖章动态插画（「我的奖章」右侧那格的三幕小动画）
+   --------------------------------------------------------------------------
+   ⚠️ 这是**全站唯一一处装饰性循环动效**，是对上面「动效语汇」第 1 条的显式破例，
+   写在这里备案（免得下一个人以为是漏网之鱼，也免得有人照着它到处铺循环动画）。
+
+   为什么这一处可以破例：
+   - 那块地方实测 660×202，原本**什么都没有**（不是"内容缺失"，是"没东西可放"）；
+     奖章架三张卡只占上半截，空着就是一块白底补丁；
+   - 用户 2026-10-17 明确要求"把这块空的地方做成动态图画，比如起步行动家就是
+     一个小人在缓缓起步"——它是**陈列品的展台**，静态图会读成占位符。
+
+   ---- 时间表只有一张，两处消费 ----
+   组件**一律不写时间**，只给每个元素一个序号 `--bs-i`；CSS 用
+   `--bs-loop`（一圈多久）+ `--bs-lead`（第 0 件在第几成起手）+ `--bs-lag`（相邻两件隔多久）
+   算出延迟。下面这张表就是**各 keyframes 里的百分比**，改节拍时两张一起看：
+     · 第一幕 起步：地面每 10% 走一格；脚印起手 5%、每枚 +8.75%（= 0.7s，最远的一枚先出现）
+     · 第二幕 台阶：起手 0%、每级 +16.4%（= 1.15s）⇒ 落定 9 / 25.4 / 41.9 / 58.3 / 74.7%，
+       进度线的生长就对齐这条：8% → 74%
+     · 第三幕 罗盘：指针 0→84% 摆幅越收越小，最后**指向右边那个形状**；
+       六个点起手 11.4%（= 0.8s）、每个 +7.14%（= 0.5s）⇒ 落定 21.4 / 28.6 / 35.7 /
+       42.9 / 50 / 57.1%，形状的生长对齐这条：21% → 57%
+     · 三幕都在 88% 起退场（写在各自的 keyframes 里），100% 回到"什么都没亮"
+   ⚠️ 这几个数是**用户验收过的节奏**（2026-10-17 第一版）。想改快慢要连着
+   "进度线/形状的对齐百分比"一起改，否则线的头会跑到点前面去。
+
+   纪律（照旧，只是"循环"这一条本处豁免）：
+   1. 只动 transform / opacity / stroke-dashoffset —— 不触发布局，也不碰颜色；
+   2. 颜色只从 --medal-* 取，线宽只有一个 `--bs-stroke`；
+   3. **播不播**不归组件管：未获得（铸模）/ prefers-reduced-motion / 打印
+      三种情况一律 `animation: none`，停在**完成态**（默认样式画的就是完成态），
+      三条规则收在文件末尾同一处；组件里不会出现"要不要动"的判断。
+   ========================================================================== */
+@keyframes bs-walk-track {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -160;
+  }
+}
+@keyframes bs-walk-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+/* 前摆 ↔ 后摆：一个完整往复 = 两步。同一条给四条肢体用，靠 delay 错半拍 */
+@keyframes bs-walk-swing {
+  0%,
+  100% {
+    transform: rotate(-26deg);
+  }
+  50% {
+    transform: rotate(26deg);
+  }
+}
+@keyframes bs-walk-print {
+  0% {
+    opacity: 0;
+  }
+  6% {
+    opacity: 0.5;
+  }
+  78% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes bs-step-lit {
+  0%,
+  4% {
+    opacity: 0;
+  }
+  9%,
+  88% {
+    opacity: 1;
+  }
+  96%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes bs-step-rail {
+  0% {
+    stroke-dashoffset: 100;
+    opacity: 0;
+  }
+  /*
+    生长窗口 8% → 74%：五个顶点均分这段，正好落在 8 / 24.5 / 41 / 57.5 / 74，
+    和打卡点落定（9 / 25.4 / 41.9 / 58.3 / 74.7）基本重合 —— 线跟着点走。
+    ⚠️ 改台阶的间隔（--bs-lag）就要一起改这里，否则线的头会跑到点前面。
+  */
+  8% {
+    stroke-dashoffset: 100;
+    opacity: 1;
+  }
+  74%,
+  88% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  94%,
+  100% {
+    stroke-dashoffset: 100;
+    opacity: 0;
+  }
+}
+/* 打卡点从上方落下就位（位移 12px，无回弹） */
+@keyframes bs-dot-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  8%,
+  88% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  96%,
+  100% {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+/*
+  罗盘指针：摆幅越收越小，最后**停在 90°（正东）**——罗盘右边正好是那个六边形，
+  指过去才有"方向找到了"的因果；停在中立位（0°/正北）就只是两个不相干的零件。
+  首尾同值 ⇒ 循环无缝；`90deg` 同时也是关掉动画时的静止姿势（见 .bs-needle）。
+*/
+@keyframes bs-needle {
+  0% {
+    transform: rotate(90deg);
+  }
+  12% {
+    transform: rotate(44deg);
+  }
+  24% {
+    transform: rotate(140deg);
+  }
+  36% {
+    transform: rotate(60deg);
+  }
+  48% {
+    transform: rotate(124deg);
+  }
+  60% {
+    transform: rotate(72deg);
+  }
+  72% {
+    transform: rotate(112deg);
+  }
+  84% {
+    transform: rotate(84deg);
+  }
+  100% {
+    transform: rotate(90deg);
+  }
+}
+@keyframes bs-signal-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  10%,
+  82% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  94%,
+  100% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+/* 六个点落定在 21.4 / 28.6 / 35.7 / 42.9 / 50 / 57.1%（见文件头时间表），形状跟着长 */
+@keyframes bs-shape-draw {
+  0%,
+  10% {
+    stroke-dashoffset: 100;
+    opacity: 0;
+  }
+  21% {
+    stroke-dashoffset: 100;
+    opacity: 1;
+  }
+  57%,
+  86% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  94%,
+  100% {
+    stroke-dashoffset: 100;
+    opacity: 0;
+  }
+}
+
+@layer components {
+  .bs-scene {
+    /* 每幕一套色：默认取"已获得"的金；未获得换成铸模灰（和奖章本身的铸模态一致） */
+    --bs-ink: var(--medal-gold-deep);
+    --bs-accent: var(--medal-gold);
+    --bs-soft: var(--medal-mute-soft);
+    /* 线宽只有一个旋钮（小人比几何线略粗，见 .bs-figure-line） */
+    --bs-stroke: 2;
+    /*
+      时间表（见文件头）：`--bs-loop` 一圈多久、`--bs-lead` 第 0 件在第几成起手、
+      `--bs-lag` 相邻两件隔多久。**延迟一律由这三个算出来**，组件只给序号 --bs-i，
+      所以改 loop 不会让"点和线"错位。
+      ⚠️ 括号里是换算回秒的值，就是用户验收过的那套节奏 —— 别顺手"优化"成更整的数。
+    */
+    --bs-loop: 7s;
+    --bs-lead: 0.1143; /* 0.8s */
+    --bs-lag: 0.0714; /* 0.5s */
+  }
+  .bs-scene[data-key='first_task'] {
+    --bs-loop: 8s;
+    --bs-lead: 0.05; /* 0.4s */
+    --bs-lag: 0.0875; /* 0.7s */
+  }
+  .bs-scene[data-key='five_steps'] {
+    --bs-lead: 0;
+    --bs-lag: 0.1643; /* 1.15s */
+  }
+  .bs-scene[data-state='locked'] {
+    --bs-ink: var(--medal-mute-deep);
+    --bs-accent: var(--medal-mute);
+    --bs-soft: var(--medal-mute-soft);
+  }
+
+  /* ---- 线的两种底子（颜色由下面的 .bs-ink / .bs-track / .bs-lit 决定）---- */
+  .bs-line {
+    fill: none;
+    stroke-width: var(--bs-stroke);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .bs-figure-line {
+    stroke-width: 3.4;
+    stroke-linecap: round;
+  }
+
+  .bs-ink {
+    stroke: var(--bs-ink);
+  }
+  .bs-track {
+    stroke: var(--bs-soft);
+  }
+  .bs-lit {
+    stroke: var(--bs-accent);
+  }
+  .bs-lit-fill {
+    fill: var(--bs-accent);
+  }
+  .bs-ghost-fill {
+    fill: var(--bs-soft);
+  }
+
+  /* ---- 错峰：两句话说完，组件只给 --bs-i ---- */
+  /*
+    ⚠️ 层叠纪律（这里踩过一次，2026-10-17）：这两条**必须**带 `.bs-scene ` 前缀。
+    各幕的动画类（`.bs-step-lit` 等）用的是 `animation:` 简写，那句简写会把
+    `animation-delay` 重置成 0s；如果这里也用单类选择器，两者同优先级，就变成
+    "后定义的赢"（文件名顺序：简写在后）⇒ 延迟全部归零、五格一起亮、
+    看着像"动画被加速"。加上前缀是 (0,2,0)，稳压简写，与源码顺序无关。
+    同一个坑在下面的动效语汇里也记过一条（.motion-* 的 transition-property）。
+  */
+  .bs-scene .bs-delay-in {
+    animation-delay: calc(var(--bs-loop) * (var(--bs-lead) + var(--bs-i) * var(--bs-lag)));
+  }
+  /* 倒着来（脚印：越靠后留下的越晚出现） */
+  .bs-scene .bs-delay-reverse {
+    animation-delay: calc(var(--bs-loop) * (var(--bs-lead) + (4 - var(--bs-i)) * var(--bs-lag)));
+  }
+
+  /* ---- 第一幕：起步行动家（小人原地走 + 地面左滚 ⇒ 看起来在前进）---- */
+  .bs-walk-track {
+    stroke-dasharray: 10 10;
+    animation: bs-walk-track var(--bs-loop) linear infinite both;
+  }
+  /* 起伏和迈步都由 loop 除出来：8s 一圈 ⇒ 0.8s 一颠、1.6s 两步 */
+  .bs-walk-figure {
+    animation: bs-walk-bob calc(var(--bs-loop) / 10) ease-in-out infinite both;
+  }
+  /*
+    腿/臂：`-a` / `-b` 是**静态姿势**（一前一后迈开），`bs-walk-step` 才是摆动。
+    分开写是为了"不动的时候也得像个人"——reduced-motion 和打印会把动画关掉，
+    如果四肢默认都叠在 0°，剩下的一根棍子加个脑袋，看着像棒棒糖。
+  */
+  .bs-walk-limb {
+    transform-box: fill-box;
+    transform-origin: 50% 0;
+  }
+  .bs-walk-limb-a {
+    transform: rotate(-19deg);
+  }
+  .bs-walk-limb-b {
+    transform: rotate(19deg);
+  }
+  .bs-walk-step {
+    animation: bs-walk-swing calc(var(--bs-loop) / 5) ease-in-out infinite both;
+  }
+  /* 四条肢体错半拍：腿 A / 臂 B 同一相位，另两条反相 */
+  .bs-walk-step-late {
+    animation-delay: calc(var(--bs-loop) / -10);
+  }
+  .bs-walk-print {
+    fill: var(--bs-accent);
+    opacity: 0.5;
+    animation: bs-walk-print var(--bs-loop) linear infinite both;
+  }
+
+  /* ---- 第二幕：坚持打卡者（五格逐格点亮 + 一条进度线连起来）---- */
+  .bs-step-lit {
+    animation: bs-step-lit var(--bs-loop) linear infinite both;
+  }
+  .bs-step-rail {
+    stroke-dasharray: 100;
+    animation: bs-step-rail var(--bs-loop) linear infinite both;
+  }
+  .bs-step-dot {
+    animation: bs-dot-in var(--bs-loop) ease-out infinite both;
+  }
+
+  /* ---- 第三幕：方向初现（罗盘找方向 + 六点连成画像形状）---- */
+  .bs-needle {
+    transform-box: view-box;
+    transform-origin: 176px 101px;
+    /* 静止态 = 动画的落点（正东，对着右边的六边形）：关掉动画时不该是另一个姿势 */
+    transform: rotate(90deg);
+    animation: bs-needle var(--bs-loop) ease-in-out infinite both;
+  }
+  .bs-signal {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: bs-signal-in var(--bs-loop) ease-out infinite both;
+  }
+  .bs-shape {
+    stroke-dasharray: 100;
+    animation: bs-shape-draw var(--bs-loop) linear infinite both;
+  }
+
+  /* ==========================================================================
+     「播不播」只有三种理由，全部收在这一处（组件里没有任何 if）：
+       · 未获得（铸模态）：静态画出"已经攒到哪一格"，一个动画都不挂
+       · prefers-reduced-motion: reduce
+       · 打印（另见 styles/print.css）
+     关掉动画后元素停在**默认样式**，而默认样式画的就是完成态 —— 所以
+     "关掉"不会露出半截线、也不会留白。
+     ========================================================================== */
+  .bs-scene[data-state='locked'] .bs-anim {
+    animation: none;
+  }
+  /* 还没起步的小人，地上不该有脚印（静态铸模图不画这一段"走过的痕迹"） */
+  .bs-scene[data-state='locked'] .bs-walk-print {
+    display: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bs-scene .bs-anim {
+      animation: none;
     }
   }
 }

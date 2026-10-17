@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ERROR_TEXT } from '@/constants/errorCode'
 import { useAuth } from '@/hooks/useAuth'
+import { cn } from '@/lib/utils'
 
 /**
  * 注册页（设计说明书 2.1、3.1 P0）；对接 POST /auth/register
@@ -22,19 +23,24 @@ import { useAuth } from '@/hooks/useAuth'
  *
  * 版式与登录页同一套骨架（居中一张 Panel：产品名 + 一句人话 + 表单），
  * 让 /login → /register 的跳转不像是换了个产品。
+ *
+ * 文案分工（2026-10）：placeholder = 怎么写（示例），helper 行 = 规则/说明，
+ * 错误行 = 具体哪里没对。三者不复用同一句话。
  */
 const registerSchema = z
   .object({
     username: z
       .string()
+      .min(1, { error: '还没填用户名' })
       .min(3, { error: '用户名至少 3 个字符' })
       .max(50, { error: '用户名最长 50 字符' }),
     school: z.string().max(100, { error: '学校名最长 100 字符' }),
     password: z
       .string()
+      .min(1, { error: '还没填密码' })
       .min(6, { error: '密码至少 6 位' })
       .max(64, { error: '密码最长 64 字符' }),
-    confirm: z.string(),
+    confirm: z.string().min(1, { error: '再输一次密码' }),
   })
   .refine((values) => values.password === values.confirm, {
     error: '两次输入的密码不一致',
@@ -43,9 +49,13 @@ const registerSchema = z
 
 type RegisterForm = z.infer<typeof registerSchema>
 
-/** 字段样式与登录页同一份：高 36px、浅底、聚焦只换 ring 不改尺寸 */
+/** 字段样式与登录页同一份：44px 高、白底、1px 描边、14px 圆角 */
 const FIELD_INPUT =
-  'h-9 border-0 bg-surface-container-low px-3 text-body-md shadow-none focus-visible:bg-surface-container-lowest focus-visible:ring-1 focus-visible:ring-primary/40'
+  'h-11 rounded-[14px] border border-border bg-card px-3 text-body-md shadow-none placeholder:text-caption-foreground focus-visible:border-primary/30 focus-visible:ring-2 focus-visible:ring-primary/15'
+
+/** 出错态：描边转 destructive、聚焦 ring 同步转红；错误消失即移除 */
+const FIELD_INPUT_ERROR =
+  'border-destructive aria-invalid:ring-destructive/15 focus-visible:border-destructive focus-visible:ring-destructive/15'
 
 export default function RegisterPage() {
   const { register: signUp, loading, error } = useAuth()
@@ -105,14 +115,17 @@ export default function RegisterPage() {
             id="username"
             type="text"
             autoComplete="username"
-            placeholder="登录用，3 个字符以上"
-            className={FIELD_INPUT}
+            placeholder="例如：xiaoman"
+            className={cn(FIELD_INPUT, errors.username && FIELD_INPUT_ERROR)}
             aria-invalid={Boolean(errors.username)}
             {...register('username')}
           />
+          {/* 规则不再塞进 placeholder：占位符只给示例，规则固定在字段下方 */}
           {errors.username ? (
-            <p className="text-body-sm text-destructive">{errors.username.message}</p>
-          ) : null}
+            <p className="text-caption text-destructive">{errors.username.message}</p>
+          ) : (
+            <p className="text-caption text-caption-foreground">登录用，3 个字符以上</p>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">
@@ -122,14 +135,16 @@ export default function RegisterPage() {
           <Input
             id="school"
             type="text"
-            placeholder="填了方便后面给针对性建议"
-            className={FIELD_INPUT}
+            placeholder="例如：华南理工大学"
+            className={cn(FIELD_INPUT, errors.school && FIELD_INPUT_ERROR)}
             aria-invalid={Boolean(errors.school)}
             {...register('school')}
           />
           {errors.school ? (
-            <p className="text-body-sm text-destructive">{errors.school.message}</p>
-          ) : null}
+            <p className="text-caption text-destructive">{errors.school.message}</p>
+          ) : (
+            <p className="text-caption text-caption-foreground">填了方便后面给针对性建议</p>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">
@@ -140,14 +155,16 @@ export default function RegisterPage() {
             id="password"
             type="password"
             autoComplete="new-password"
-            placeholder="至少 6 位"
-            className={FIELD_INPUT}
+            placeholder="例如：Hello2026"
+            className={cn(FIELD_INPUT, errors.password && FIELD_INPUT_ERROR)}
             aria-invalid={Boolean(errors.password)}
             {...register('password')}
           />
           {errors.password ? (
-            <p className="text-body-sm text-destructive">{errors.password.message}</p>
-          ) : null}
+            <p className="text-caption text-destructive">{errors.password.message}</p>
+          ) : (
+            <p className="text-caption text-caption-foreground">至少 6 位</p>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">
@@ -159,13 +176,15 @@ export default function RegisterPage() {
             type="password"
             autoComplete="new-password"
             placeholder="再输一次"
-            className={FIELD_INPUT}
+            className={cn(FIELD_INPUT, errors.confirm && FIELD_INPUT_ERROR)}
             aria-invalid={Boolean(errors.confirm)}
             {...register('confirm')}
           />
           {errors.confirm ? (
-            <p className="text-body-sm text-destructive">{errors.confirm.message}</p>
-          ) : null}
+            <p className="text-caption text-destructive">{errors.confirm.message}</p>
+          ) : (
+            <p className="text-caption text-caption-foreground">和上面一致就行</p>
+          )}
         </div>
 
         {/* 提交失败的可见原因（不是"出错了"） */}

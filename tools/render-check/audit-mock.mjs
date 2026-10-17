@@ -31,13 +31,53 @@ const tags = [
   { id: 't3', user_id: user.id, dimension: '兴趣', label: '对鸿蒙应用开发感兴趣', weight: 0.64, source: 'chat', extra: null, updated_at: NOW },
 ]
 
+/**
+ * 「我的画像」卡片的 fixture（勘误 9.24）。
+ *
+ * 刻意比上面那份 `tags` 更全，并且**故意留着痛点/焦虑/认知三类**：
+ * 它们正好用来证明"展示层过滤"真的生效（卡片里不该出现它们）。
+ * `extra.seen_days` 是"反复出现过"的排序信号（跨天去重，见 profile_service._merge_extra）——
+ * 没有它，页面会退化成按权重排，看到的就是一个不真实的顺序。
+ *
+ * ⚠️ 单独一份、不改上面共用的 `tags`：那份同时喂首页雷达与信号条，
+ * 动它会把首页的 QA 截图一起改掉。
+ */
+const profileTags = [
+  { id: 'pt1', user_id: user.id, dimension: '兴趣', label: '技术/产品', weight: 0.78, source: 'chat', extra: { seen_days: ['2026-09-02', '2026-09-11', '2026-09-18', '2026-09-25'] }, updated_at: NOW },
+  { id: 'pt2', user_id: user.id, dimension: '技能', label: 'Java', weight: 0.81, source: 'chat', extra: { seen_days: ['2026-09-03', '2026-09-12', '2026-09-24'] }, updated_at: NOW },
+  { id: 'pt3', user_id: user.id, dimension: '能力', label: '表达', weight: 0.7, source: 'task', extra: { seen_days: ['2026-09-08', '2026-09-20'] }, updated_at: NOW },
+  { id: 'pt4', user_id: user.id, dimension: '兴趣', label: '健身', weight: 0.9, source: 'chat', extra: { seen_days: ['2026-09-05', '2026-09-15'] }, updated_at: NOW },
+  { id: 'pt5', user_id: user.id, dimension: '技能', label: 'Python', weight: 0.66, source: 'chat', extra: { seen_days: ['2026-09-14'] }, updated_at: NOW },
+  { id: 'pt6', user_id: user.id, dimension: '技能', label: 'ArkTS', weight: 0.6, source: 'task', extra: { seen_days: ['2026-09-22'] }, updated_at: NOW },
+  { id: 'pt7', user_id: user.id, dimension: '能力', label: '复盘', weight: 0.58, source: 'daily', extra: { seen_days: ['2026-09-19'] }, updated_at: NOW },
+  { id: 'pt8', user_id: user.id, dimension: '能力', label: '沟通组织', weight: 0.52, source: 'test', extra: { seen_days: ['2026-09-10'] }, updated_at: NOW },
+  { id: 'pt13', user_id: user.id, dimension: '兴趣', label: '看短句', weight: 0.48, source: 'chat', extra: { seen_days: ['2026-09-04', '2026-09-13'] }, updated_at: NOW },
+  { id: 'pt14', user_id: user.id, dimension: '兴趣', label: '产品', weight: 0.5, source: 'test', extra: { seen_days: ['2026-09-07'] }, updated_at: NOW },
+  { id: 'pt15', user_id: user.id, dimension: '技能', label: '写作', weight: 0.54, source: 'chat', extra: { seen_days: ['2026-09-09', '2026-09-21'] }, updated_at: NOW },
+  { id: 'pt16', user_id: user.id, dimension: '能力', label: '行动力', weight: 0.64, source: 'task', extra: { seen_days: ['2026-09-06', '2026-09-16'] }, updated_at: NOW },
+  { id: 'pt17', user_id: user.id, dimension: '技能', label: 'C++', weight: 0.56, source: 'chat', extra: { seen_days: ['2026-09-02', '2026-09-12'] }, updated_at: NOW },
+  { id: 'pt18', user_id: user.id, dimension: '能力', label: '持续反思', weight: 0.46, source: 'daily', extra: { seen_days: ['2026-09-17'] }, updated_at: NOW },
+  // 以下三类**应当整类不出现在卡片上**（痛点/焦虑/认知 = 判断类标签）
+  { id: 'pt9', user_id: user.id, dimension: '痛点', label: '缺项目经验', weight: 0.86, source: 'chat', extra: null, updated_at: NOW },
+  { id: 'pt10', user_id: user.id, dimension: '痛点', label: '拖延', weight: 0.62, source: 'chat', extra: null, updated_at: NOW },
+  { id: 'pt11', user_id: user.id, dimension: '焦虑', label: '中', weight: 0.5, source: 'test', extra: null, updated_at: NOW },
+  { id: 'pt12', user_id: user.id, dimension: '认知', label: '模糊', weight: 0.55, source: 'chat', extra: null, updated_at: NOW },
+  // 这一条是**判断类措辞落在可见维度**里的真实样本（实测库里就有）：
+  // 维度是"能力"，但它是测试表映射写进来的判断，**必须也不出现**（第二道过滤）。
+  { id: 'pt19', user_id: user.id, dimension: '能力', label: '行动力待提升', weight: 0.5, source: 'test', extra: null, updated_at: NOW },
+]
+
+const PROFILE_SUMMARY = '你是个喜欢自己动手折腾的人：会写代码，也一直在琢磨技术怎么变成产品。'
+
 const profileTested = {
   id: 'p1', user_id: user.id, clarity_score: 68, action_score: 54, resume_score: 41,
-  total_score: 54, stage: 'prepare', updated_at: NOW, tested: true, tags, user,
+  total_score: 54, stage: 'prepare', updated_at: NOW, tested: true,
+  summary: PROFILE_SUMMARY, tags: profileTags, user,
 }
 const profileUntested = {
   id: 'p2', user_id: user.id, clarity_score: 0, action_score: 0, resume_score: 0,
-  total_score: 0, stage: 'explore', updated_at: NOW, tested: false, tags: [], user,
+  total_score: 0, stage: 'explore', updated_at: NOW, tested: false,
+  summary: '还在认识你 —— 多聊两句，这里会慢慢具体起来。', tags: [], user,
 }
 
 const task = {
@@ -311,7 +351,7 @@ async function installApi(page, opts = {}) {
     if (method === 'POST' && (p === '/auth/login' || p === '/auth/register')) return J({ access_token: TEST_TOKEN, token_type: 'bearer', expires_in: 604800, user })
 
     if (method === 'GET' && p === '/profile') return J(tested ? profileTested : profileUntested)
-    if (method === 'GET' && p === '/profile/tags') return J(tags)
+    if (method === 'GET' && p === '/profile/tags') return J(profileTags)
     if (method === 'POST' && p === '/profile/feedback') return J(profileTested)
 
     if (method === 'GET' && p === '/home/summary') {

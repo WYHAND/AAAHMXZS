@@ -154,8 +154,9 @@ backend/
 │   │       ├── profile_extract.txt  resume_polish.txt
 │   │       ├── interview_question.txt  interview_followup.txt
 │   │       ├── interview_review.txt  task_generate.txt  daily_question.txt
-│   │       └── chat_conclusion.txt # ★新增（11.11 结论卡片用，7.4 未列）
-│   │           chat_opening.txt    # ★新增（新会话 AI 先开口，7.4 未列，见 §4.16）
+│   │       ├── profile_summary.txt  # ★新增（9.24「我的画像」顶部人物速写，见 §4.7）
+│   │       └── chat_conclusion.txt # ★新增（11.11 结论卡片用）
+│   │           chat_opening.txt    # ★新增（新会话 AI 先开口，见 §4.16）
 │   ├── tasks/
 │   │   ├── scheduler.py            # APScheduler 注册（12.1 / 12.2）
 │   │   ├── daily_question_job.py  reminder_job.py  badge_job.py
@@ -270,7 +271,7 @@ backend/
 - `chat_json()/chat_prompt_json()`：7.3 结构化输出，要求 `response_format=json_object`，
   解析 → Pydantic 校验 → **失败重试 1 次 → 仍失败用默认值**（7.6）。
 - `parser.extract_json()`：容忍 ```json 代码块、前后解释文字、尾随逗号。
-- Prompt 模板 9 个（7.4 全覆盖）+ 1 个补充（`chat_conclusion`），`load_prompt()` 带 LRU 缓存。
+- Prompt 模板 **11 个**（与 `parser.PROMPT_FILES` 对齐：该表注册 12 项，其中 `test_free_text` 复用 `profile_extract.txt`），`load_prompt()` 带 LRU 缓存。
 - 兜底话术与过渡语 30 条分别在 `ai/fallbacks.py` 与 `utils/text.py`（7.7）。
 
 ### 4.5 定时任务（第 12 章）
@@ -493,6 +494,19 @@ const profile = await getProfile();
 if (!profile.tested) router.replace('/test/intro');  // ✅ 正确
 // if (!profile) router.replace('/test/intro');      // ❌ 永远不会触发
 ```
+
+**`summary`：画像顶部那句人物速写（勘误 9.24）**
+
+`ProfileResponse.summary` 是「我的画像」卡片顶部那句「你是个什么样的人」，**永不为空** ——
+AI 不可用或还没生成时，回落成一句由**可见标签**拼出的模板句（`profile_service.build_summary_template`）。
+它由 `profile_summary` 这条 prompt 生成（≤45 字、只准用可见标签、不许引入标签外的事实），
+结果落库缓存在 `profiles.ai_summary`，配 `ai_summary_key`（**可见标签集的指纹**）——
+指纹没变就直接复用，只有标签集变了才重写，所以这面「镜子」是稳定的，不会每次刷新换一句话。
+
+⚠️ 生成挂在 `GET /profile` 的 FastAPI `BackgroundTasks` 上，**不在请求里 await 模型**：
+否则一次 GET 要等 3–8 秒，与「绝不 500 / 绝不空白」是同一等级的产品事故。
+因此**首次**打开（或标签刚变那次）看到的可能是模板句，**下一次打开**才是新的 AI 句 ——
+前端不必轮询，也不该把这句当成实时结果。
 
 ### 4.8 `GET /api/v1/home/summary` 首页聚合
 

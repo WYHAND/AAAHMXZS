@@ -102,19 +102,7 @@ async function main() {
       continue
     }
 
-    /* /report：顺带把「看分数明细」展开拍一张，确认三条维度 + 相比基线的 +x 都还在 */
-    if (route === '/report') {
-      const trigger = page.getByRole('button', { name: /看分数明细/ })
-      if (await trigger.count()) {
-        await trigger.first().click()
-        await sleep(600)
-        await page.screenshot({
-          path: path.join(outDir, 'a7-report-expanded.png'),
-          fullPage: true,
-        })
-        console.log('print shot -> audit/round1/a7-report-expanded.png （分数明细展开态）')
-      }
-    }
+    /* /report：三条维度 + 相比基线的 +x 现在常显，打印截图（a7-report-print.png）里就能确认 */
 
     await page.emulateMedia({ media: 'print' })
     await sleep(400)

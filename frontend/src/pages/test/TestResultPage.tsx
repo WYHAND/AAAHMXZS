@@ -242,7 +242,7 @@ export default function TestResultPage() {
       </Reveal>
 
       {/* 支撑卡：三项分数翻译成人话（一句判断 + 一根进度条） */}
-      <Reveal delay={90}>
+      <Reveal delay={160}>
         <Panel className="gap-5">
           <div className="flex flex-col gap-1">
             <h2 className="text-headline-sm text-primary">这三项分数说明了什么</h2>
@@ -261,12 +261,12 @@ export default function TestResultPage() {
                   </span>
                 </div>
                 {/* 进度条规范：容器 bg-surface-container，指示条 bg-secondary，高 6px。
-                    它是"会从左长出来"的值条，用 grow-x；延迟到支撑卡基本就位（约 310ms）
+                    它是"会从左长出来"的值条，用 grow-x；延迟到支撑卡基本就位（约 580ms）
                     之后再逐条长，避免卡片淡入和三条生长同拍挤在一起。 */}
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-container">
                   <div
                     className="grow-x h-full rounded-full bg-secondary"
-                    style={{ width: metric.value + '%', animationDelay: `${320 + index * 90}ms` }}
+                    style={{ width: metric.value + '%', animationDelay: `${580 + index * 160}ms` }}
                   />
                 </div>
                 <p className="text-body-sm text-on-surface-variant">
@@ -281,7 +281,7 @@ export default function TestResultPage() {
       </Reveal>
 
       {/* 次要动作退到页面底部一行 */}
-      <Reveal delay={160} className="flex justify-center">
+      <Reveal delay={290} className="flex justify-center">
         <Button variant="ghost" size="sm" className="motion-press" asChild>
           <Link to={toTestIntroRetest()}>重新测评</Link>
         </Button>

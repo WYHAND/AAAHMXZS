@@ -14,10 +14,14 @@
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 from sqlmodel import Session, select
 
+from app.ai import deepseek_client
+from app.ai.fallbacks import STRUCTURED_TEMPERATURE
+from app.ai.schemas import ProfileSummaryResult, empty_profile_summary
 from app.core.errors import BusinessException, ErrorCode
 from app.models.conversation import Conversation, Message
 from app.models.profile import Profile, ProfileTag
@@ -61,6 +65,158 @@ TEST_DIMENSION_TAG: Dict[str, str] = {
     "resume": "痛点",
     "interest": "兴趣",
 }
+
+# ---------------------------------------------------------------------------
+# 9.24「我的画像」：可见标签 / 稳定性信号 / 顶部那句人物速写
+# ---------------------------------------------------------------------------
+#
+# **可见维度**：卡片是一面"你是什么样的用户"的镜子，所以只展示 兴趣/能力/技能。
+# 为什么这三类之外的整类出局（而不是维护一张负面词黑名单）：附录A 已经把
+# 痛点/焦虑/认知 定义成**判断类**——缺项目/拖延/表达差/迷茫、高/中/低、
+# 清晰/模糊/偏差。类别出局是一条规则，黑名单是一份会过期的清单。
+#
+# ⚠️ 这只是**展示层**的过滤：被过滤的标签照常入库、照常进 AI 输入（task/interview
+#    的 Prompt 都要痛点）、照常计入奖章（「方向初现」= 标签数 >= 6，手册 11.12）。
+# ⚠️ 前端 frontend/src/utils/profileDisplay.ts 里有同一套维度（还带分组名），
+#    改这里要同步改那里 —— 与「prompt 三处一致」同类纪律，见勘误 9.24.5。
+VISIBLE_DIMENSIONS = ("兴趣", "能力", "技能")
+
+#: 判断类措辞：即使落在可见维度里也不上卡片。
+#  真实样本（实测真实库）：`能力/「行动力待提升」` —— 它是测试表映射写进去的
+#  （见 ``_apply_test_tags``），维度是"能力"却带着判断，**只按维度过滤会漏掉它**。
+#  ⚠️ 前端的 ``utils/profileDisplay.ts`` 有同一份，改这里要同步改那里。
+JUDGMENT_MARKERS = ("待提升", "不足", "偏弱", "困难", "拖延", "迷茫", "焦虑", "模糊", "偏差")
+
+#: ``extra.seen_days`` 最多留多少个日期（只用于展示排序，不参与计分）
+SEEN_DAYS_LIMIT = 30
+
+
+def _merge_extra(extra: Optional[Dict[str, Any]], evidence: Any) -> Dict[str, Any]:
+    """把新证据与「跨天出现记录」并进 ``extra``（JSON 列只整体赋值，手册 5.1）。
+
+    ``seen_days`` 是**展示排序**用的稳定性信号（勘误 9.24.5 第 4 条）：
+    同一天重复提到只记一次，所以它衡量的是"跨几天还在提"，
+    而不是"刚才一口气说了几遍" —— 后者会把一次长对话误判成"反复出现"。
+    """
+    merged: Dict[str, Any] = dict(extra or {})
+
+    if evidence:
+        logs = list(merged.get("evidence_log") or [])
+        logs.append(str(evidence)[:500])
+        merged["evidence_log"] = logs[-5:]
+        merged.setdefault("evidence", evidence)
+
+    days = [str(day) for day in (merged.get("seen_days") or [])]
+    today = utcnow().date().isoformat()
+    if today not in days:
+        days.append(today)
+    merged["seen_days"] = days[-SEEN_DAYS_LIMIT:]
+    return merged
+
+
+def visible_tags(tags: Iterable[ProfileTag]) -> List[ProfileTag]:
+    """卡片可见的标签：维度白名单 + 判断类措辞过滤（见上面两个常量）。"""
+    return [
+        tag
+        for tag in tags
+        if tag.dimension in VISIBLE_DIMENSIONS
+        and not any(marker in tag.label for marker in JUDGMENT_MARKERS)
+    ]
+
+
+def summary_fingerprint(tags: Iterable[ProfileTag]) -> str:
+    """可见标签集的指纹：标签集变了才重写摘要句（勘误 9.24.5 第 2 条）。
+
+    ⚠️ 不含 ``weight``/``updated_at``：那些每次对话都在动，带上就等于每轮都重写
+    （成本 + 那句"你是谁"天天变），与"镜子要稳"直接冲突。
+    """
+    material = "|".join(sorted(f"{t.dimension}:{t.label}" for t in visible_tags(tags)))
+    return hashlib.sha1(material.encode("utf-8")).hexdigest()
+
+
+def build_summary_template(tags: Iterable[ProfileTag]) -> str:
+    """AI 不可用时的兜底句：只从可见标签里拼，确定性、绝不杜撰（9.11）。
+
+    为什么宁可朴素也不让第二处"再编一句"：模型之外的兜底一旦开始自由发挥，
+    9.11 那条"没有的事情坚决不许杜撰"就在兜底路径上失守了。
+    """
+    by_dimension: Dict[str, List[str]] = {}
+    for tag in visible_tags(tags):
+        by_dimension.setdefault(tag.dimension, []).append(tag.label)
+
+    def first(dimension: str) -> Optional[str]:
+        labels = by_dimension.get(dimension) or []
+        return labels[0] if labels else None
+
+    core: List[str] = []
+    liking = first("兴趣")
+    skill = first("技能")
+    trait = first("能力")
+    if liking:
+        core.append(f"喜欢{liking}")
+    if skill:
+        core.append(f"会{skill}")
+    if not core and trait:
+        # 只聊过"做事方式"、还没聊到兴趣和技能时，别拼出一句"你是个看重表达的人"
+        core.append(f"看重{trait}")
+        trait = None
+    if not core:
+        return "还在认识你 —— 多聊两句，这里会慢慢具体起来。"
+
+    sentence = "你是个" + "、".join(core) + "的人"
+    if trait:
+        sentence += f"，也看重{trait}"
+    return sentence + "。"
+
+
+def summary_needs_refresh(db: Session, user_id) -> bool:
+    """摘要句是否需要（重新）生成 —— 端点据此决定要不要挂后台任务。"""
+    profile = get_or_create_profile(db, user_id, commit=False)
+    key = summary_fingerprint(list_tags(db, user_id))
+    return profile.ai_summary_key != key
+
+
+async def refresh_ai_summary(user_id) -> None:
+    """后台任务：标签集变了就重写那句人物速写。
+
+    两个刻意的设计（勘误 9.24.5 第 5 条）：
+
+    1. **不在请求里等模型**：一次 ``GET /profile`` 如果同步调模型就要等 3–8 秒，
+       那和"绝不 500 / 绝不空白"是同一等级的产品事故。所以走 FastAPI
+       ``BackgroundTasks``：这次先返回已缓存的那句（没有就给模板句），
+       **下一次打开**才是新的 AI 句。
+    2. **自己开 Session、只接 ``user_id``**：请求级 Session 在响应返回时就关了
+       （同类事故见勘误 6.3 / 3.3）。绝不把 ORM 对象跨线程传进来。
+    """
+    from app.db.session import SessionLocal  # 局部导入：避免模块级循环
+
+    with SessionLocal() as db:
+        profile = get_or_create_profile(db, user_id, commit=False)
+        tags = list_tags(db, user_id)
+        key = summary_fingerprint(tags)
+        if profile.ai_summary and profile.ai_summary_key == key:
+            return
+
+        text = ""
+        try:
+            result = await deepseek_client.chat_prompt_json(
+                prompt_name="profile_summary",
+                variables={"tags": serialize_tags(visible_tags(tags))},
+                schema=ProfileSummaryResult,
+                default=empty_profile_summary(),
+                temperature=STRUCTURED_TEMPERATURE,
+                max_tokens=256,
+            )
+            text = (result.text or "").strip()
+        except Exception as exc:  # AI 不可用绝不冒泡（7.6 兜底）
+            logger.warning("画像摘要生成失败，回落模板句 user=%s err=%s", user_id, sanitize(exc))
+
+        # 模板句也**连指纹一起落库**：否则没配 Key 的机器上，每次打开页面都要
+        # 重试一次模型（慢 + 刷日志），而用户看到的还是同一句模板。
+        profile.ai_summary = text or build_summary_template(tags)
+        profile.ai_summary_key = key
+        db.add(profile)
+        db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -335,6 +491,9 @@ def get_profile(db: Session, user: User) -> ProfileResponse:
     response.tested = has_finished_test(db, user.id)
     response.tags = [ProfileTagResponse.model_validate(t) for t in tags]
     response.user = UserResponse.model_validate(user)
+    # 9.24：顶部那句人物速写，**永不为空** —— 已缓存就用缓存的，否则先给模板句。
+    # 真正的 AI 句由端点的后台任务补上（refresh_ai_summary），不在请求里等模型。
+    response.summary = profile.ai_summary or build_summary_template(tags)
     return response
 
 
@@ -395,18 +554,14 @@ def apply_tags(
                 label=label[:100],
                 weight=weight,
                 source=tag_source,
-                extra={"evidence": evidence} if evidence else None,
+                extra=_merge_extra(None, evidence),
             )
             db.add(existing)
         else:
             existing.weight = clamp01(0.6 * existing.weight + 0.4 * weight)
             existing.source = tag_source
-            if evidence:
-                extra = dict(existing.extra or {})
-                extras = list(extra.get("evidence_log") or [])
-                extras.append(str(evidence)[:500])
-                extra["evidence_log"] = extras[-5:]
-                existing.extra = extra
+            # extra 一起合并：证据日志 + 「跨天出现」记录（9.24 展示排序用，见 _merge_extra）
+            existing.extra = _merge_extra(existing.extra, evidence)
             existing.updated_at = utcnow()
             db.add(existing)
         results.append(existing)

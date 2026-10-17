@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlmodel import Session
 
 from app.core.api_response import ApiResponse
@@ -18,10 +18,18 @@ router = APIRouter(prefix="/profile", tags=["Profile 画像"])
 
 @router.get("", response_model=ApiResponse[ProfileResponse], summary="获取画像")
 async def get_profile(
+    background: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ApiResponse[ProfileResponse]:
-    """画像主表 + 标签 + 基础资料（11.3 / 7.8）。"""
+    """画像主表 + 标签 + 基础资料（11.3 / 7.8）。
+
+    9.24：顺带维护「我的画像」顶部那句人物速写 —— 标签集变了就挂一个**后台任务**
+    去重写它。刻意不在请求里 await 模型：一次 GET 等 3–8 秒等于页面卡死，
+    与"绝不 500 / 绝不空白"是同一等级的产品事故（详见 refresh_ai_summary）。
+    """
+    if profile_service.summary_needs_refresh(db, current_user.id):
+        background.add_task(profile_service.refresh_ai_summary, current_user.id)
     return ApiResponse.ok(profile_service.get_profile(db, current_user))
 
 

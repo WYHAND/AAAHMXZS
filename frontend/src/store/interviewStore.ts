@@ -122,12 +122,31 @@ export const useInterviewStore = create<InterviewState>((set) => ({
         Math.max(data?.current_index ?? 1, 1),
         Math.max(questions.length, 1),
       )
-      set({
+      set((state) => ({
         questions,
         currentIndex,
         // 刷新页面时若上一轮追问还没答，继续展示它
         pendingFollowup: followupOf(questions[currentIndex - 1]),
-      })
+        /*
+         * 刷新 / 直接从地址栏进本页时，store 里是**没有场次**的（只有 start() 会写 session），
+         * 但 /interview/{id}/questions 的响应本身就带着 mode / scene / status。
+         * 用它们补一个最小场次，否则进行中的页头只剩「第 1 / 1 题」，
+         * 看不出这是哪一场、什么场景（2026-10-18 实测）。
+         */
+        session:
+          state.session && state.session.id === data.interview_id
+            ? state.session
+            : {
+                id: data.interview_id,
+                user_id: '',
+                mode: data.mode,
+                scene: data.scene,
+                status: data.status,
+                created_at: '',
+                updated_at: '',
+                report: null,
+              },
+      }))
     } catch {
       if (generation !== fetchGeneration) return
       set({ questions: [], currentIndex: 1, pendingFollowup: null })

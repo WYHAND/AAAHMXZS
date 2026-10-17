@@ -560,6 +560,7 @@ backend/
 │   │   │   ├── chat_opening.txt        # AI 开场白（11.4）
 │   │   │   ├── chat_conclusion.txt     # 结论卡片（11.11）
 │   │   │   ├── profile_extract.txt
+│   │   │   ├── profile_summary.txt     # 人物速写（9.24）
 │   │   │   ├── resume_polish.txt
 │   │   │   ├── interview_question.txt
 │   │   │   ├── interview_followup.txt
@@ -739,6 +740,8 @@ electron/                       # 桌面端（2026-10 落地；用法见 README-
 | total_score | FLOAT | 加权总分 |
 | stage | VARCHAR(20) | 阶段（库内存中文：探索期/准备期/冲刺期；**接口层统一转 slug**，见 10.4） |
 | updated_at | TIMESTAMP | 更新时间 |
+| ai_summary | TEXT | 「我的画像」卡片顶部那句人物速写（AI 生成，落库缓存；AI 不可用时是模板句） |
+| ai_summary_key | TEXT | 生成 `ai_summary` 时所用可见标签集的指纹；指纹变了才重写（见勘误 9.24.5） |
 
 #### profile_tags
 
@@ -1184,6 +1187,7 @@ tag = ProfileTag.model_validate_json(content)
 | interview_review.txt | 面试评分与复盘 |
 | task_generate.txt | 成长任务生成 |
 | daily_question.txt | 每日一问口语化 |
+| profile_summary.txt | 「我的画像」顶部那句人物速写（**只用可见标签当素材，≤45 字，不许引入标签外的事实**，见勘误 9.24） |
 
 > **改 prompt 必须让进程重启才能生效**：`load_prompt` 带 `lru_cache`，而 `--reload` 默认只监听 `.py`。启动命令已加 `--reload-include '*.txt'`（见 3.6）；用别的方式起服务时改完 prompt 请手动重启。
 

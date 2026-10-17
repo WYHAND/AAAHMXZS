@@ -2,14 +2,14 @@ import { useState } from 'react'
 import type { ComponentType } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowRight, Cpu, FolderKanban, Sparkles, Users } from 'lucide-react'
+import { ArrowRight, ClipboardList, Cpu, FolderKanban, Users } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PageShell } from '@/components/PageShell'
 import { Panel } from '@/components/Panel'
-import { Reveal, staggerDelay } from '@/components/Motion'
+import { Reveal } from '@/components/Motion'
 import { DEFAULT_INTERVIEW_MODE, INTERVIEW_MODES, INTERVIEW_SCENES } from '@/constants/interview'
 import { RESUME_TARGET_JOB_MAX } from '@/constants/form'
 import { useInterviewStore } from '@/store/interviewStore'
@@ -24,19 +24,33 @@ import { cn } from '@/lib/utils'
  * （constants/interview.ts，取值与后端 InterviewStartRequest 的枚举一致）。
  * 提交到 POST /interview/start，body { mode, scene, target_job }。
  * interviewId 由 store 落到 sessionStorage，供 /interview/session 使用。
+ * 行为一个字没动：仍是 POST /interview/start -> navigate('/interview/prepare')。
  *
- * 2026-10 收口（对齐首页「一屏一个主角」）：
- * - 页头一句人话；左 7 列是**主角卡**：按当前阶段推荐一个场景 + 唯一的实心 CTA「开始这一场」；
- * - 右 5 列是**选择区**（换成别的场景 / 想要多真实），两段都是同一套可选卡片；
- * - 选中态 = 「bg-primary-soft」+「ring-1 ring-primary/30」+「border-primary」（规范 2.1：
- *   只靠浅底表达选中不合格，必须配描边环）；
- * - 琥珀只在主角卡的「为你推荐」小 chip 上出现一次 —— 不给每张卡都点暖色；
- * - 进场与交互反馈只用 index.css 的统一动效语汇（Reveal / motion-lift / motion-press），
- *   不写新 keyframes 也不做循环动画。
+ * 2026-10-11 结构改版（用户从两个方向里定的 A「单卡配置台」）：
+ * 为什么不是继续修原来那张左卡 —— 原来左 7 / 右 5 两列，在用户日常的 **1025px**
+ * 下右列只剩 286px，要塞 3 张场景卡 + 2 张模式卡，于是右列比左列高；grid 默认拉伸
+ * 行高、左卡又是 `flex-1`，左卡被拉到右列高度，再由 `mt-auto` 把 CTA 钉到底 ——
+ * 实测卡内最大空隙 **139px**（就在"目标岗位"提示之后）。所以"减少左侧内容"永远
+ * 治不好那块空白，必须改结构。
  *
- * 行为一个字没动：仍是「POST /interview/start」（body 相同），成功后「navigate('/interview/prepare')」；
- * 模式/场景仍取自 constants/interview.ts。**推荐只改默认选中**，属于展示层，
- * 接口调用与 store 的读写方式保持不变。
+ * 现在的排布：**一屏一张卡**，卡内「左边选、右边看」：
+ * - 左：面试场景 3 行 + 模拟方式 2 行（标准单选行，整行可点）；
+ * - 右：一句简介（"你在练的这类题长什么样"）**不再复述左边选中的场景名**，
+ *   下面两条**定义式**事实（`题量：3 题` / `出题依据：简历 · 目标岗位 · 画像`）；
+ * - 底部一条操作带（浅底 + 分隔线）：一句配置摘要 + 整页唯一的实心 CTA。
+ * 实测：卡内最大空隙 139px -> 0px，主 CTA 由 754px 提到 741px（1025×900 首屏内），
+ * 卡片宽度 411px -> 721px（用满内容列，不再有 286px 的窄栏）。
+ *
+ * 选中态（场景行 / 模式行共用）：**浅底 + 左侧 3px 竖条 + 实心墨点**。
+ * 原来只有 `bg-primary-soft`（#eceef1）一间浅底 + `ring-1 ring-primary/30`，
+ * 选中与否几乎全靠那 1px 环，眯眼就分不出来；现在竖条第一眼、底色第二眼，
+ * 另加**非颜色指示器**（右侧实心墨点）兜底灰度场景。详见 OptionRow 的注释。
+ *
+ * 另订正一处**假数字**：原来模式卡写「小测试 3-5 题」，而后端
+ * MODE_QUESTION_COUNT 是 {小测试:3, 全真:6} 且会截断，界面上的"3-5"是假的。
+ * 现在题量统一取自 constants/interview.ts 的 `count`，页面不再手写数字。
+ *
+ * 进场与交互反馈只用 index.css 的统一动效语汇（Reveal / motion-press），不写新 keyframes。
  */
 
 /** 按阶段推荐哪个场景：探索期先练最好开口的 HR 面，准备期练项目面，冲刺期练技术面 */
@@ -46,11 +60,11 @@ const RECOMMENDED_SCENE: Record<Stage, string> = {
   sprint: '技术',
 }
 
-/** 推荐理由：跟着阶段说明（constants/stage.ts 的 STAGE_DESC 语义）说，不编数据 */
-const RECOMMEND_REASON: Record<Stage, string> = {
-  explore: '你还在找方向，先从最容易开口的 HR 面练，把动机和经历讲顺。',
-  prepare: '方向大体定了，项目面最能练出经得起追问的经历。',
-  sprint: '已经在投递节奏里，技术面最接近真实考察，练完能直接用。',
+/** 场景卡左侧的辅助识别图标（16px 线性图标，不是插画） */
+const SCENE_ICON: Record<string, ComponentType<{ className?: string }>> = {
+  HR: Users,
+  项目: FolderKanban,
+  技术: Cpu,
 }
 
 export default function InterviewSelectPage() {
@@ -59,7 +73,7 @@ export default function InterviewSelectPage() {
   const { stage, label: stageLabel } = useStage()
 
   const [mode, setMode] = useState<string>(DEFAULT_INTERVIEW_MODE)
-  // 默认选中按阶段推荐的场景；推荐只是默认值，点别的卡片就换掉
+  // 默认选中按阶段推荐的场景；推荐只是默认值，点别的行就换掉
   const [scene, setScene] = useState<string>(() => RECOMMENDED_SCENE[stage])
   const [targetJob, setTargetJob] = useState('')
   const [starting, setStarting] = useState(false)
@@ -79,22 +93,13 @@ export default function InterviewSelectPage() {
     }
   }
 
-  // 概要条的文字全部由当前 state 派生（真数据实时联动）
+  // 概要条与右栏的文字全部由当前 state 派生（真数据实时联动）
   const heroScene = INTERVIEW_SCENES.find((item) => item.value === scene) ?? INTERVIEW_SCENES[0]
   const isRecommended = scene === RECOMMENDED_SCENE[stage]
   const jobText = targetJob.trim() || '按你的简历出题'
-  const modeLabel = INTERVIEW_MODES.find((item) => item.value === mode)?.label ?? mode
+  const modeCount =
+    INTERVIEW_MODES.find((item) => item.value === mode)?.count ?? INTERVIEW_MODES[0].count
   const sceneLabel = heroScene.label
-  const HeroIcon = SCENE_ICON[heroScene.value]
-
-  /*
-   * 主角卡的注释：只有当你选的就是推荐场景时才讲「为什么推荐」；
-   * 自己换过场景后，那句阶段理由就不成立了 —— 换成一句承认选择的话，不说假话。
-   * （拼在 return 之前，避免反引号模板串出现在 JSX 的 {} 表达式里。）
-   */
-  const heroNote = isRecommended
-    ? RECOMMEND_REASON[stage]
-    : '已经换成' + heroScene.label + '，开始就按这个来。'
 
   return (
     <PageShell
@@ -106,131 +111,141 @@ export default function InterviewSelectPage() {
         <InterviewFlowStrip />
       </Reveal>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* 主角（左 7 列）：当前这一场长什么样 + 整页唯一的实心 CTA */}
-        <Reveal lg className="flex min-w-0 flex-col lg:col-span-7">
-          <Panel data-print="card" className="flex-1 gap-6">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              {isRecommended ? (
-                <span className="inline-flex items-center gap-2 rounded-full bg-secondary-fixed px-2.5 py-1 text-caption font-medium text-on-secondary-fixed">
-                  <span className="size-1.5 shrink-0 rounded-full bg-secondary" aria-hidden />
-                  为你推荐
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-2 rounded-full bg-surface-container px-2.5 py-1 text-caption text-on-surface-variant">
-                  你选的场景
-                </span>
-              )}
-              <span className="text-caption text-on-surface-variant">当前阶段：{stageLabel}</span>
-            </div>
-
-            <div className="flex items-start gap-4">
-              <span
-                className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary"
-                aria-hidden
-              >
-                {HeroIcon ? <HeroIcon className="size-5" /> : null}
+      <Reveal lg>
+        <Panel data-print="card" padded={false}>
+          <div className="flex flex-wrap items-center justify-between gap-2 p-5 pb-0">
+            {isRecommended ? (
+              <span className="inline-flex items-center gap-2 rounded-full bg-surface-container px-2.5 py-1 text-caption font-medium text-on-surface">
+                <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
+                按你的阶段推荐
               </span>
-              <div className="flex min-w-0 flex-col gap-1">
-                <h2 className="text-headline-sm text-primary">{heroScene.label}</h2>
-                <p className="text-body-md text-on-surface-variant">{heroScene.desc}</p>
-              </div>
-            </div>
+            ) : (
+              <span className="inline-flex items-center gap-2 rounded-full bg-surface-container px-2.5 py-1 text-caption text-on-surface-variant">
+                你选的场景
+              </span>
+            )}
+            <span className="text-caption text-caption-foreground">当前阶段：{stageLabel}</span>
+          </div>
 
-            <Panel inset>
-              <div className="flex items-start gap-2.5">
-                <Sparkles className="mt-0.5 size-4 shrink-0 text-on-surface-variant" aria-hidden />
-                <p className="text-body-sm text-on-surface-variant">{heroNote}</p>
-              </div>
-            </Panel>
-
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="target_job" className="text-body-sm text-on-surface-variant">
-                目标岗位（可留空）
-              </Label>
-              <Input
-                id="target_job"
-                value={targetJob}
-                maxLength={RESUME_TARGET_JOB_MAX}
-                onChange={(e) => setTargetJob(e.target.value)}
-                placeholder="比如：前端开发工程师"
-                className="h-11 text-body-md"
-              />
-              <p className="text-body-sm text-on-surface-variant">留空也行，我会直接按你的简历出题。</p>
-            </div>
-
-            <div className="mt-auto flex flex-col gap-4 border-t border-surface-container-low pt-5 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-body-sm text-on-surface-variant">
-                将开始：{jobText} · {modeLabel} · {sceneLabel}
-              </p>
-              <Button
-                variant="warm"
-                size="lg"
-                className="motion-press w-full shrink-0 sm:w-auto"
-                onClick={() => void start()}
-                disabled={starting}
-              >
-                {starting ? '准备中…' : '开始这一场'}
-                <ArrowRight aria-hidden />
-              </Button>
-            </div>
-          </Panel>
-        </Reveal>
-
-        {/* 选择区（右 5 列）：场景与强度用同一套可选卡片 */}
-        <div className="flex min-w-0 flex-col gap-6 lg:col-span-5">
-          <Reveal fade delay={80}>
-            <section aria-labelledby="scene-title" className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1">
+          {/* 左：选；右：看 —— 选中项的说明只在右边出现一次，选项行只留名字与图标 */}
+          <div className="grid grid-cols-1 gap-5 p-5 lg:grid-cols-[1fr_1.05fr]">
+            <div className="flex min-w-0 flex-col gap-5">
+              <section aria-labelledby="scene-title" className="flex flex-col gap-2">
                 <h2 id="scene-title" className="text-headline-sm text-primary">
-                  换成别的场景
+                  面试场景
                 </h2>
-                <p className="text-body-sm text-on-surface-variant">
-                  不同场景问的东西完全不一样，选一个你最想练的。
-                </p>
-              </div>
-              <ul className="flex flex-col gap-2.5">
-                {INTERVIEW_SCENES.map((item, index) => (
-                  <Reveal as="li" key={item.value} delay={staggerDelay(index)}>
-                    <OptionCard
-                      active={scene === item.value}
-                      title={item.label}
-                      desc={item.desc}
-                      icon={SCENE_ICON[item.value]}
-                      onClick={() => setScene(item.value)}
-                    />
-                  </Reveal>
-                ))}
-              </ul>
-            </section>
-          </Reveal>
+                <ul className="flex flex-col gap-1.5">
+                  {INTERVIEW_SCENES.map((item) => (
+                    <li key={item.value}>
+                      <OptionRow
+                        active={scene === item.value}
+                        title={item.label}
+                        icon={SCENE_ICON[item.value]}
+                        onClick={() => setScene(item.value)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
 
-          <Reveal fade delay={140}>
-            <section aria-labelledby="mode-title" className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1">
+              <section aria-labelledby="mode-title" className="flex flex-col gap-2">
                 <h2 id="mode-title" className="text-headline-sm text-primary">
-                  想要多真实
+                  模拟方式
                 </h2>
+                <ul className="flex flex-col gap-1.5">
+                  {INTERVIEW_MODES.map((item) => (
+                    <li key={item.value}>
+                      <OptionRow
+                        active={mode === item.value}
+                        title={item.label}
+                        desc={item.desc}
+                        onClick={() => setMode(item.value)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </div>
+
+            <div className="flex min-w-0 flex-col gap-5">
+              {/*
+                浅底块只装自己那点内容（不加 flex-1、不加 justify-between）。
+                它原来出过事：被当成 grid 子项拉成整行高、再用 justify-between 摊开，
+                块内就撑出 89px 的空洞 —— 和原版左卡那 139px 是同一种病。
+
+                2026-10 收口：标题不再复述左边选中的场景名（"项目面"）——
+                同一句在这一屏出现三次（选项行 / 这里 / 底部摘要），这里改成
+                「这场面试会怎么进行」，只承担"简介 + 两个事实"。
+                「题量 / 出题依据」原来是 dt 一排、dd 一排版，读起来串成
+                "题量 出题依据 / 3 题 简历·目标岗位·画像"；现在是两行定义式。
+              */}
+              <Panel inset className="gap-3">
+                <div className="flex items-start gap-3">
+                  <span
+                    className="flex size-10 shrink-0 items-center justify-center rounded-full bg-card text-primary ring-1 ring-primary/30"
+                    aria-hidden
+                  >
+                    <ClipboardList className="size-5" />
+                  </span>
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <h2 className="text-headline-sm text-primary">这场面试会怎么进行</h2>
+                    <p className="text-body-sm text-on-surface-variant">{heroScene.desc}</p>
+                  </div>
+                </div>
+
+                <dl className="flex flex-col gap-1 border-t border-border pt-3">
+                  <FactLine label="题量" value={modeCount + ' 题'} />
+                  <FactLine label="出题依据" value="简历 · 目标岗位 · 画像" />
+                </dl>
+              </Panel>
+
+              {/* 目标岗位放进右栏：它是「这一场」的设置，和上面的预览同类；
+                  也让左右两栏高度接近，整张卡不会被某一列顶高。 */}
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="target_job" className="text-body-sm text-on-surface-variant">
+                  目标岗位（可留空）
+                </Label>
+                <Input
+                  id="target_job"
+                  value={targetJob}
+                  maxLength={RESUME_TARGET_JOB_MAX}
+                  onChange={(e) => setTargetJob(e.target.value)}
+                  placeholder="比如：前端开发工程师"
+                  className="h-11 text-body-md"
+                />
                 <p className="text-body-sm text-on-surface-variant">
-                  先熟悉一下节奏，还是直接走一遍完整流程。
+                  留空也行：会按你的简历、目标岗位与画像出题。
                 </p>
               </div>
-              <ul className="grid gap-2.5 sm:grid-cols-2">
-                {INTERVIEW_MODES.map((item, index) => (
-                  <Reveal as="li" key={item.value} delay={staggerDelay(index)}>
-                    <OptionCard
-                      active={mode === item.value}
-                      title={item.label}
-                      desc={item.desc}
-                      onClick={() => setMode(item.value)}
-                    />
-                  </Reveal>
-                ))}
-              </ul>
-            </section>
-          </Reveal>
-        </div>
-      </div>
+            </div>
+          </div>
+
+          {/*
+            小屏（<lg）把这条操作带**钉在视口底部**：移动端堆叠顺序是
+            场景 -> 模拟方式 -> 预览 -> 目标岗位 -> CTA，390px 下 CTA 会落到 y≈1114，
+            而首屏只有 844 —— 用户进页面看不到「开始这一场」，
+            直接违反 T10 的验收要求"首屏看得到主角和主 CTA"。
+            sticky bottom-0 让小屏始终看得见它；lg 及以上用 static 还原成普通排版
+            （桌面本来就看得见），所以 1025/1440 的版式与定下来的方向 A 完全一致。
+            ⚠️ 因此这个 Panel **不能**加 overflow-hidden：祖先一旦成为滚动容器，sticky 就失效。
+          */}
+          <div className="sticky bottom-0 z-10 flex flex-col gap-4 border-t border-border bg-surface-container-low p-5 sm:flex-row sm:items-center sm:justify-between lg:static">
+            <p className="text-body-sm text-on-surface-variant">
+              将开始：{jobText} · {modeCount} 题 · {sceneLabel}
+            </p>
+            <Button
+              variant="warm"
+              size="lg"
+              className="motion-press w-full shrink-0 sm:w-auto"
+              onClick={() => void start()}
+              disabled={starting}
+            >
+              {starting ? '准备中…' : '开始这一场'}
+              <ArrowRight aria-hidden />
+            </Button>
+          </div>
+        </Panel>
+      </Reveal>
     </PageShell>
   )
 }
@@ -238,19 +253,20 @@ export default function InterviewSelectPage() {
 /**
  * 四步流程指示。
  *
- * 步骤名严格取自**真实路由与页面标题**（/interview → /interview/prepare →
- * /interview/session → /interview/review/:id），不新增步骤、不写进度比例，
+ * 步骤名严格取自**真实路由与页面标题**（/interview -> /interview/prepare ->
+ * /interview/session -> /interview/review/:id），不新增步骤、不写进度比例，
  * 也不出现"完成/进行中"这类我们无法从后端得知的状态 —— 只有第 1 步是**真的**当前页。
  *
- * 当前步（面试配置）：白底描边胶囊 + 6px 琥珀点 + 主墨文字；
- * 其余步：序号小圆点 + text-on-surface-variant。
- * 不使用 opacity 弱化（会顺带压低文字对比度，被 probe 判成低对比）。
+ * 当前步与选项卡共用同一套选中语言（浅墨底 + 1px 环 + 墨点），
+ * 不再叠 `border-primary`（那是"深墨粗框"的来源）。
+ * 其余步用序号小圆点 + text-on-surface-variant；不使用 opacity 弱化
+ * （会顺带压低文字对比度，被 probe 判成低对比）。
  */
 const INTERVIEW_FLOW = ['面试配置', '准备设备', '模拟面试', '复盘报告'] as const
 
 function InterviewFlowStrip() {
   return (
-    <nav aria-label="面试流程" className="flex flex-col gap-2">
+    <nav aria-label="面试流程">
       <ol className="flex flex-wrap items-center gap-x-1 gap-y-2">
         {INTERVIEW_FLOW.map((label, index) => {
           const current = index === 0
@@ -258,7 +274,7 @@ function InterviewFlowStrip() {
             <li key={label} className="flex items-center gap-1">
               {index > 0 ? (
                 /* 装饰性分隔符（aria-hidden），但**看得见**就必须达标：
-                   用 caption-foreground（#6b7280 → 4.5:1），不用只有 1.62:1 的 outline-variant。 */
+                   用 caption-foreground（#6b7280 -> 4.5:1），不用只有 1.62:1 的 outline-variant。 */
                 <span className="px-1 text-caption text-caption-foreground" aria-hidden>
                   /
                 </span>
@@ -266,15 +282,15 @@ function InterviewFlowStrip() {
               {current ? (
                 <span
                   aria-current="step"
-                  className="inline-flex items-center gap-2 rounded-full border border-primary bg-card px-3 py-1.5 text-body-sm font-medium text-primary ring-1 ring-primary/25"
+                  className="inline-flex items-center gap-2 rounded-full bg-primary-soft px-3 py-1.5 text-body-sm font-medium text-primary ring-1 ring-primary/30"
                 >
-                  <span className="size-1.5 shrink-0 rounded-full bg-secondary" aria-hidden />
+                  <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
                   {label}
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-2 px-1 py-1.5 text-body-sm text-on-surface-variant">
                   <span
-                    className="grid size-4 shrink-0 place-items-center rounded-full border border-border bg-surface-container-low text-caption leading-none text-on-surface-variant"
+                    className="grid size-4 shrink-0 place-items-center rounded-full border border-outline-variant text-caption leading-none text-on-surface-variant"
                     aria-hidden
                   >
                     {index + 1}
@@ -290,26 +306,39 @@ function InterviewFlowStrip() {
   )
 }
 
-/** 场景卡左侧的辅助识别图标（16px 线性图标，不是插画） */
-const SCENE_ICON: Record<string, ComponentType<{ className?: string }>> = {
-  HR: Users,
-  项目: FolderKanban,
-  技术: Cpu,
+/**
+ * 非颜色选中指示器：未选中是空心环，选中是环 + 实心墨点。
+ * 只靠"浅底 + 描边"表达选中，在灰度或色觉障碍下分不出来；这个点不依赖颜色。
+ */
+function SelectionDot({ active }: { active: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'grid size-[18px] shrink-0 place-items-center rounded-full border bg-card',
+        active ? 'border-primary' : 'border-outline-variant',
+      )}
+    >
+      {active ? <span className="size-[8px] rounded-full bg-primary" /> : null}
+    </span>
+  )
 }
 
 /**
- * 选项卡（强度 / 场景共用同一套视觉语言）。
+ * 单选项（场景 / 模拟方式共用一套视觉语言）。
  *
- * 选中态：「bg-primary-soft」+「ring-1 ring-primary/30」+「border-primary」
- * —— 规范 2.1 明说"单靠浅底表达选中不合格"，描边环让它在浅色背景上清晰可辨；
- * 「aria-pressed」与视觉同步，状态不只靠颜色。
- * 未选中：白底 +「border-border」，「hover:border-primary/40」轻抬边。
- *
- * 动效：整张卡可点 → 「motion-lift」（悬浮轻抬 2px）+「motion-press」（按下轻缩）。
- * 这里不用 transition-colors（工具类会盖掉 motion-lift 的 transform 过渡），
- * 边色过渡由 motion-lift 自带的 border-color 过渡负责。
+ * 选中态（2026-10 收口）：**浅底 + 左侧 3px 竖条 + 实心墨点**。
+ * 原来只有 `bg-primary-soft`（#eceef1，在暖白卡上几乎看不出）+ `ring-1 ring-primary/30`，
+ * 选中与未选中的差别全压在 1px 描边上，眯眼就看不出来；现在竖条是第一眼的信息，
+ * 底色是第二眼，墨点是不依赖颜色的第三重指示。
+ * - 竖条：`border-l-[3px] border-primary`，颜色只借 --primary，不新增颜色；
+ * - 竖条只在 **lg 及以上**出现（`lg:border-l-[3px]`）：窄屏这一版不动，仍是
+ *   "浅底 + 墨点"，不在手机上再加一道更重的边；
+ * - 未选中行**也**铺同宽透明竖条（`lg:border-transparent`），这样两类行的文字左边界
+ *   严丝合缝对齐，不会因为选中而整行文字右移 3px；视觉上未选中行没有边框；
+ * - 环（ring）撤掉：竖条已经承担了强调，再叠一圈 1px 就是当初那条"深墨粗框"。
  */
-function OptionCard({
+function OptionRow({
   active,
   title,
   desc,
@@ -318,7 +347,7 @@ function OptionCard({
 }: {
   active: boolean
   title: string
-  desc: string
+  desc?: string
   icon?: ComponentType<{ className?: string }>
   onClick: () => void
 }) {
@@ -328,18 +357,44 @@ function OptionCard({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'motion-lift motion-press flex h-full w-full flex-col gap-1 rounded-xl border bg-card p-4 text-left',
-        'outline-none focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        'motion-press flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left outline-none lg:border-l-[3px]',
+        'focus-visible:ring-[3px] focus-visible:ring-ring/50',
         active
-          ? 'border-primary bg-primary-soft ring-1 ring-primary/30'
-          : 'border-border hover:border-primary/40',
+          ? 'bg-primary-soft lg:border-primary'
+          : 'hover:bg-surface-container-low lg:border-transparent',
       )}
     >
-      <span className="flex items-center gap-2">
-        {Icon ? <Icon className="size-4 shrink-0 text-on-surface-variant" /> : null}
-        <span className="text-headline-sm text-primary">{title}</span>
+      {Icon ? (
+        <Icon
+          className={cn('size-4 shrink-0', active ? 'text-primary' : 'text-on-surface-variant')}
+        />
+      ) : null}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-body-md font-medium text-on-surface">{title}</span>
+        {desc ? <span className="text-body-sm text-on-surface-variant">{desc}</span> : null}
       </span>
-      <span className="text-body-sm text-on-surface-variant">{desc}</span>
+      <SelectionDot active={active} />
     </button>
+  )
+}
+
+/**
+ * 一行「标签：值」—— 2026-10 改成**同一行内的定义式**。
+ *
+ * 原来是 dt 一排、dd 一排（`flex-wrap` + `gap-x-6`），在窄栏里会折成
+ * 「题量　出题依据」/「3 题　简历·目标岗位·画像」两行，两个标签挤在上、
+ * 两个值对不上下面的标签，读起来像串行。
+ * 现在标签 12px 副墨、值 13px 主墨，`items-baseline` 对齐，一条事实一行。
+ *
+ * 标签为什么用 12px 而不是更小：它不是装饰，是承载信息的文字；
+ * 主墨/副墨两级已经够分层，`text-caption-foreground`（#6b7280）在卡内浅底上
+ * 只有 4.37:1，达不到 WCAG 小字 4.5:1，所以用 `text-on-surface-variant`（#45474c）。
+ */
+function FactLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline gap-1">
+      <dt className="shrink-0 text-caption text-on-surface-variant">{label}：</dt>
+      <dd className="min-w-0 text-body-sm font-medium text-on-surface">{value}</dd>
+    </div>
   )
 }

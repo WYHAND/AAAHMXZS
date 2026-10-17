@@ -1,0 +1,86 @@
+﻿
+# 雷达卡内 SVG 元素（viewBox=0 0 379 361, 根 379x361）
+idx | tag     | class                                              | stroke                   | sw    | op | fill        | 对比度(白卡) | 几何
+  0 | title   | -                                                  | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+  1 | desc    | -                                                  | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+  2 | g       | recharts-zIndex-layer_-100                         | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+  3 | g       | recharts-polar-grid                                | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+  4 | g       | recharts-polar-grid-concentric                     | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+  5 | path    | recharts-polar-grid-concentric-polygon             | rgba(226, 232, 240, 0.45) | 1px   | 1  | none        | 1.10:1       | d=M 189.5,180.5L 189.5,180.5L 189.5,180.5L 189.5,180.5L 189.5,180.5L 189.5,180.5Z
+  6 | path    | recharts-polar-grid-concentric-polygon             | rgba(226, 232, 240, 0.45) | 1px   | 1  | none        | 1.10:1       | d=M 189.5,148.91L 216.85774250555042,164.705L 216.85774250555042,196.295L 189.5,212.09L 162.14225749444958,196.295L 162.14
+  7 | path    | recharts-polar-grid-concentric-polygon             | rgba(226, 232, 240, 0.45) | 1px   | 1  | none        | 1.10:1       | d=M 189.5,117.32L 244.21548501110084,148.91L 244.21548501110084,212.09L 189.5,243.68L 134.78451498889916,212.09L 134.78451
+  8 | path    | recharts-polar-grid-concentric-polygon             | rgba(226, 232, 240, 0.45) | 1px   | 1  | none        | 1.10:1       | d=M 189.5,85.73L 271.5732275166513,133.115L 271.5732275166513,227.885L 189.5,275.27L 107.42677248334874,227.885L 107.42677
+  9 | path    | recharts-polar-grid-concentric-polygon             | rgba(226, 232, 240, 0.45) | 1px   | 1  | none        | 1.10:1       | d=M 189.5,54.14L 298.9309700222017,117.32000000000001L 298.9309700222017,243.68L 189.5,306.86L 80.06902997779832,243.68L 8
+ 10 | g       | recharts-polar-grid-angle                          | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 11 | line    | -                                                  | rgba(226, 232, 240, 0.45) | 1px   | 1  | none        | 1.10:1       | x1=189.5 y1=180.5 x2=189.5 y2=54.14
+ 12 | line    | -                                                  | rgba(226, 232, 240, 0.45) | 1px   | 1  | none        | 1.10:1       | x1=189.5 y1=180.5 x2=298.9309700222017 y2=117.32000000000001
+ 13 | line    | -                                                  | rgba(226, 232, 240, 0.45) | 1px   | 1  | none        | 1.10:1       | x1=189.5 y1=180.5 x2=298.9309700222017 y2=243.68
+ 14 | line    | -                                                  | rgba(226, 232, 240, 0.45) | 1px   | 1  | none        | 1.10:1       | x1=189.5 y1=180.5 x2=189.5 y2=306.86
+ 15 | line    | -                                                  | rgba(226, 232, 240, 0.45) | 1px   | 1  | none        | 1.10:1       | x1=189.5 y1=180.5 x2=80.06902997779832 y2=243.68
+ 16 | line    | -                                                  | rgba(226, 232, 240, 0.45) | 1px   | 1  | none        | 1.10:1       | x1=189.5 y1=180.5 x2=80.06902997779834 y2=117.32
+ 17 | g       | recharts-zIndex-layer_-50                          | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 18 | defs    | -                                                  | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 19 | clippath | -                                                  | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 20 | rect    | -                                                  | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 21 | g       | recharts-zIndex-layer_100                          | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 22 | g       | recharts-layer recharts-radar                      | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 23 | g       | recharts-layer recharts-radar-polygon              | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 24 | path    | recharts-polygon                                   | rgb(9, 20, 38)           | 1px   | 1  | rgb(9, 20,  | 18.43:1      | d=M189.5,81.6419L298.931,117.32L291.5283,239.4061L189.5,235.5038L173.4072,189.7912L171.7979,170.2797L189.5,81.6419Z
+ 25 | g       | recharts-zIndex-layer_200                          | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 26 | g       | recharts-zIndex-layer_300                          | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 27 | g       | recharts-zIndex-layer_400                          | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 28 | g       | recharts-zIndex-layer_500                          | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 29 | g       | recharts-layer recharts-polar-angle-axis angleAxis | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 30 | path    | recharts-polygon recharts-polar-angle-axis-line    | none                     | 1px   | 1  | none        | —            | d=M189.5,54.14L298.931,117.32L298.931,243.68L189.5,306.86L80.069,243.68L80.069,117.32L189.5,54.14Z
+ 31 | g       | recharts-layer recharts-polar-angle-axis-ticks     | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 32 | g       | recharts-layer recharts-polar-angle-axis-tick      | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 33 | line    | recharts-polar-angle-axis-tick-line                | none                     | 1px   | 1  | none        | —            | x1=189.5 y1=54.14 x2=189.5 y2=46.139999999999986
+ 34 | text    | recharts-text recharts-polar-angle-axis-tick-value | none                     | 1px   | 1  | rgb(69, 71, | —            | text="兴趣" x=189.5 y=46.139999999999986
+ 35 | tspan   | -                                                  | none                     | 1px   | 1  | rgb(69, 71, | —            | 
+ 36 | g       | recharts-layer recharts-polar-angle-axis-tick      | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 37 | line    | recharts-polar-angle-axis-tick-line                | none                     | 1px   | 1  | none        | —            | x1=298.9309700222017 y1=117.32000000000001 x2=305.8591732524772 y2=113.32000000000001
+ 38 | text    | recharts-text recharts-polar-angle-axis-tick-value | none                     | 1px   | 1  | rgb(69, 71, | —            | text="能力" x=305.8591732524772 y=113.32000000000001
+ 39 | tspan   | -                                                  | none                     | 1px   | 1  | rgb(69, 71, | —            | 
+ 40 | g       | recharts-layer recharts-polar-angle-axis-tick      | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 41 | line    | recharts-polar-angle-axis-tick-line                | none                     | 1px   | 1  | none        | —            | x1=298.9309700222017 y1=243.68 x2=305.8591732524772 y2=247.68
+ 42 | text    | recharts-text recharts-polar-angle-axis-tick-value | none                     | 1px   | 1  | rgb(69, 71, | —            | text="技能" x=305.8591732524772 y=247.68
+ 43 | tspan   | -                                                  | none                     | 1px   | 1  | rgb(69, 71, | —            | 
+ 44 | g       | recharts-layer recharts-polar-angle-axis-tick      | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 45 | line    | recharts-polar-angle-axis-tick-line                | none                     | 1px   | 1  | none        | —            | x1=189.5 y1=306.86 x2=189.5 y2=314.86
+ 46 | text    | recharts-text recharts-polar-angle-axis-tick-value | none                     | 1px   | 1  | rgb(69, 71, | —            | text="痛点" x=189.5 y=314.86
+ 47 | tspan   | -                                                  | none                     | 1px   | 1  | rgb(69, 71, | —            | 
+ 48 | g       | recharts-layer recharts-polar-angle-axis-tick      | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 49 | line    | recharts-polar-angle-axis-tick-line                | none                     | 1px   | 1  | none        | —            | x1=80.06902997779832 y1=243.68 x2=73.14082674752281 y2=247.68
+ 50 | text    | recharts-text recharts-polar-angle-axis-tick-value | none                     | 1px   | 1  | rgb(69, 71, | —            | text="焦虑" x=73.14082674752281 y=247.68
+ 51 | tspan   | -                                                  | none                     | 1px   | 1  | rgb(69, 71, | —            | 
+ 52 | g       | recharts-layer recharts-polar-angle-axis-tick      | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 53 | line    | recharts-polar-angle-axis-tick-line                | none                     | 1px   | 1  | none        | —            | x1=80.06902997779834 y1=117.32 x2=73.14082674752282 y2=113.31999999999998
+ 54 | text    | recharts-text recharts-polar-angle-axis-tick-value | none                     | 1px   | 1  | rgb(69, 71, | —            | text="认知" x=73.14082674752282 y=113.31999999999998
+ 55 | tspan   | -                                                  | none                     | 1px   | 1  | rgb(69, 71, | —            | 
+ 56 | g       | recharts-zIndex-layer_600                          | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 57 | g       | recharts-zIndex-layer_1000                         | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 58 | g       | recharts-zIndex-layer_1100                         | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 59 | g       | recharts-zIndex-layer_1200                         | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+ 60 | g       | recharts-zIndex-layer_2000                         | none                     | 1px   | 1  | rgb(0, 0, 0 | —            | 
+
+# 雷达几何（container / svg 高度；首页 compact 应恒为 h-56=224px）
+profile-1440 (1440px): [{"aria":"画像雷达，各方面真实数值：兴趣 2.66、能力 ","rootW":379.3,"rootH":361,"rootClass":"min-h-60 w-full flex-1","svgH":361,"cardH":621}]
+profile-1200 (1200px): [{"aria":"画像雷达，各方面真实数值：兴趣 2.66、能力 ","rootW":319.3,"rootH":345,"rootClass":"min-h-60 w-full flex-1","svgH":345,"cardH":645}]
+profile-390 (390px): [{"aria":"画像雷达，各方面真实数值：兴趣 2.66、能力 ","rootW":286,"rootH":240,"rootClass":"min-h-60 w-full flex-1","svgH":240,"cardH":564}]
+home-1440 (1440px): [{"aria":"画像雷达，各方面真实数值：兴趣 0.64、能力 ","rootW":524.7,"rootH":224,"rootClass":"h-56 w-full","svgH":224,"cardH":505}]
+
+# 底部死白（卡片底边 − 卡内最后一个内容元素底边）
+profile-1440 (1440px): {"cardPaddingBottom":"20px","cardBottom":1475.2,"contentBottom":1455.2,"whiteInsidePadding":20,"whiteBelowLastText":0,"contentClass":"flex min-h-0 flex-1 flex-col gap-3","cardHeight":621,"svgHeight":361}
+profile-1200 (1200px): {"cardPaddingBottom":"20px","cardBottom":1513,"contentBottom":1493,"whiteInsidePadding":20,"whiteBelowLastText":0,"contentClass":"flex min-h-0 flex-1 flex-col gap-3","cardHeight":645,"svgHeight":345}
+profile-390 (390px): {"cardPaddingBottom":"20px","cardBottom":2861.39,"contentBottom":2841.39,"whiteInsidePadding":20,"whiteBelowLastText":0,"contentClass":"flex min-h-0 flex-1 flex-col gap-3","cardHeight":564,"svgHeight":240}
+
+# 截图
+profile-1440: tools\render-check\audit\preview\before-profile-1440.png
+profile-1200: tools\render-check\audit\preview\before-profile-1200.png
+profile-390: tools\render-check\audit\preview\before-profile-390.png
+home-1440: tools\render-check\audit\preview\before-home-1440.png
+profile-1440 (雷达卡特写): tools\render-check\audit\preview\before-profile-1440-radar.png
+profile-1200 (雷达卡特写): tools\render-check\audit\preview\before-profile-1200-radar.png
+profile-390 (雷达卡特写): tools\render-check\audit\preview\before-profile-390-radar.png
+home-1440 (雷达卡特写): tools\render-check\audit\preview\before-home-1440-radar.png
+

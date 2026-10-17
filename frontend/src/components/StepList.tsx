@@ -65,8 +65,14 @@ export function StepList({ steps, activeStepId, onSelect, className }: StepListP
                   <span
                     className={cn(
                       'flex-1 text-body-md',
+                      /*
+                       * 已完成：只降一档颜色，**不要删除线**（2026-10-18）。
+                       * 删除线在任务清单里读作"作废/取消"，与"做完了"是两件事；
+                       * 而且这行下面还挂着这一步的打卡反馈，划一道线正好穿过它。
+                       * 完成态的语义由左侧的勾 + 右侧的「已完成」承担，够了。
+                       */
                       step.completed
-                        ? 'text-on-surface-variant line-through'
+                        ? 'text-on-surface-variant'
                         : 'font-medium text-primary',
                     )}
                   >

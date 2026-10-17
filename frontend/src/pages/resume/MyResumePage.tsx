@@ -454,6 +454,12 @@ export default function MyResumePage() {
       title="我的简历"
       description="我把简历要问的每一项都当成一个问题问出来。你写什么，我只帮你改得更像简历。"
       breadcrumb="简历"
+      /*
+       * 整页收成 820（= 简历纸自己的版心宽度）：这一页没有值得占半屏的侧栏，
+       * 原来的两列 7/5 把纸挤到只剩 597px。收窄靠这一个类名，页面内部单列排。
+       * ⚠️ twMerge 后者覆盖前者，所以这里的 max-w 会顶掉 PageShell 自带的 1040。
+       */
+      className="max-w-[820px]"
       actions={
         /*
          * 页头右侧只放**次要**动作，且只在展示态出现：打印导出让用户把成果带走，
@@ -519,7 +525,7 @@ export default function MyResumePage() {
 
         {/* 旧结构简历：内容已经尽力搬进新表单了，说清哪来的、少的是什么 */}
         {legacyData ? (
-          <Reveal fade delay={40}>
+          <Reveal fade delay={70}>
             <Panel inset className="gap-1">
               <p className="text-body-md text-on-surface">
                 这份简历是很早以前存下的旧格式，我把能认出来的内容搬到了新格式里。
@@ -533,7 +539,7 @@ export default function MyResumePage() {
 
         {/*
          * 主角卡 = 页面唯一的主角（一屏一个）：整页唯一的实心主按钮、唯一的一段"完成度"叙事。
-         * 大块进场走 rise-in-lg（320ms），数字与进度条在卡内各自就位。
+         * 大块进场走 rise-in-lg（640ms），数字与进度条在卡内各自就位。
          * 三个数字走 StatGroup；琥珀只给其中一个（填充率），其余走主墨。
          */}
         <Reveal lg>
@@ -548,39 +554,27 @@ export default function MyResumePage() {
         </Reveal>
 
         {view === 'form' ? (
-          /* 填写态：左 7 = 经历分区，右 5 = 下一步；窄屏（<lg）自动并成一列 */
-          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-            <div className="min-w-0 lg:col-span-7">
-              <FormView
-                sections={sections}
-                form={form}
-                touched={touched}
-                hasContent={hasContent}
-                polishing={polishing}
-                saving={saving}
-                savedOnce={Boolean(resume)}
-                onField={setField}
-                onMultiple={setMultipleField}
-                onAddEntry={addEntry}
-                onRemoveEntry={removeEntry}
-                onPolish={handlePolish}
-                onSave={() => void handleSave()}
-              />
-            </div>
-            <aside
-              data-print="hide"
-              className="flex flex-col gap-4 lg:col-span-5 lg:sticky lg:top-4"
-            >
-              <Reveal delay={120}>
-                <GuideCard
-                  filled={filled}
-                  total={total}
-                  missing={heroMissing}
-                  onJump={scrollToFormStart}
-                />
-              </Reveal>
-            </aside>
-          </div>
+          /*
+           * 填写态：**单列整宽**。
+           * 右列那张「下一步」卡已经整块删除 —— 它说的（已填 x/y、缺哪几段）主角卡
+           * 已经在顶上说过一遍，而它自己占掉 5/12，把表单和简历纸一路挤窄。
+           * 缺什么由主角卡那句话交代（见 completenessLine）。
+           */
+          <FormView
+            sections={sections}
+            form={form}
+            touched={touched}
+            hasContent={hasContent}
+            polishing={polishing}
+            saving={saving}
+            savedOnce={Boolean(resume)}
+            onField={setField}
+            onMultiple={setMultipleField}
+            onAddEntry={addEntry}
+            onRemoveEntry={removeEntry}
+            onPolish={handlePolish}
+            onSave={() => void handleSave()}
+          />
         ) : previewData ? (
           /*
            * 展示态 = 简历工作台：左 7 是文档纸，右 5 是「下一步」导引。
@@ -589,9 +583,9 @@ export default function MyResumePage() {
            */
           <div
             id="resume-view-top"
-            className="resume-page grid grid-cols-1 items-start gap-6 lg:grid-cols-12"
+            className="resume-page flex flex-col gap-4"
           >
-            <div className="flex min-w-0 flex-col gap-4 lg:col-span-7">
+            <div className="flex min-w-0 flex-col gap-4">
               {polishing ? (
                 /* 状态条：与页面其它提示块同一种内嵌浅底外观，只多一条 AI 竖条 */
                 <Reveal fade>
@@ -654,16 +648,26 @@ export default function MyResumePage() {
                 /* 简历纸是**打印内容**，画面上的进场一律不给它加（打印会错乱），只静止上屏 */
                 <ResumeSheet data={previewData} />
               )}
-            </div>
 
-            <aside
-              data-print="hide"
-              className="flex flex-col gap-4 lg:col-span-5 lg:sticky lg:top-4"
-            >
-              <Reveal delay={80}>
-                <GuideCard filled={filled} total={total} missing={heroMissing} onJump={goEdit} />
-              </Reveal>
-            </aside>
+              {/*
+               * 「还可以再补一补（可选）」：纸下面一条浅底块。
+               *
+               * 为什么是这里而不是侧栏：侧栏要占掉半屏宽，而这句是**可选建议**，
+               * 不该有那个分量。为什么**不带按钮**：没有项目 / 校园经历的人本来就写不出来，
+               * 给一个「去填项目经历」只会把他往墙上逼（原来那张卡就是这么干的）。
+               * 没有缺项时整块不出现 —— 不留一句空话。
+               * data-print='hide'：打印的是简历本身，这条建议不该印到纸上。
+               */}
+              {missing.length ? (
+                <Panel inset data-print="hide" className="gap-1.5">
+                  <p className="text-body-md text-on-surface">还可以再补一补（可选）</p>
+                  <p className="text-body-sm text-on-surface-variant">
+                    简历里还没写到：{missing.join(' / ')}。没有这些也没关系 —— 我按你写过的内容排，
+                    一个字都不会替你编；面试时按岗位挑你别的经历讲也一样。
+                  </p>
+                </Panel>
+              ) : null}
+            </div>
           </div>
         ) : (
           <FailureCard
@@ -823,10 +827,14 @@ function FormView({
       </div>
 
       {/*
-       * 底部吸底条：整页唯一的实心主按钮已经升到顶部主角卡（同屏只留一个），
-       * 这里只放它的**弱化副本**（ghost，滚到表单底部也够得着）+ 次要动作「保存」。
+       * 表单底部动作条。
+       *
+       * **不再吸底**：原来写的是 `sticky bottom-4`，于是一整条 82px 高的卡浮在视口最下面，
+       * 一路盖住当时滚到那儿的表单行（截图里正好压在「基本信息」的第一行上）。
+       * 它本来就是"滚到表单底部也够得着"的弱化副本（整页唯一的实心主按钮在顶部主角卡里），
+       * 所以改成普通块、跟在表单最后：任何一行都不会再被压住。
        */}
-      <div className="sticky bottom-4 z-10 flex flex-col gap-1.5 rounded-xl border border-border bg-card/95 px-3.5 py-2.5 backdrop-blur">
+      <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-card px-3.5 py-2.5">
         {/* 窄屏也不让两个按钮换行：两个都挤成一行才不至于把首屏内容挡住一半 */}
         <div className="flex flex-nowrap items-center gap-2">
           <Button
@@ -922,60 +930,15 @@ function CompletenessHero({
 /**
  * 完整度的一句话人话。三种口径各说各的，不把"都写完了"套到空简历上。
  * `missing` 是当前那一侧的缺项（填写态读表单、展示态读文档）。
+ *
+ * ⚠️ 中间那一档**不许点名某个板块**：原来写的是「补上「项目经历」，这份简历会更有说服力」，
+ * 而"没有项目经历"的人本来就写不出来 —— 那句会变成一句他没法执行的指令。
+ * 现在只说"写过的都算数、没写的想到再补"，缺哪几段由文档下面那条**可选**建议去说。
  */
 function completenessLine(percent: number, missing: string[]): string {
   if (percent <= 0) return '还是一片空白。想到多少写多少，写半句也行，我不会替你编经历。'
   if (!missing.length) return '每一段都有着落了。接下来把它改得更像简历，投出去会更稳。'
-  return `已经填了 ${percent}%。补上「${missing[0]}」，这份简历会更有说服力。`
-}
-
-/**
- * 右列「下一步」。第一句引导按真实缺什么派生（缺项目就说项目），
- * 按钮跳到填写区的起点（沿用页面里既有的滚动锚点，不新造逻辑）。
- */
-function GuideCard({
-  filled,
-  total,
-  missing,
-  onJump,
-}: {
-  filled: number
-  total: number
-  missing: string[]
-  onJump: () => void
-}) {
-  const first = missing[0]
-  const guide = first
-    ? first === '项目经历'
-      ? '项目经历是简历上最容易被追问的一段。按「情境 / 任务 / 行动 / 结果」四段写清一个你亲手做过的项目，比堆十个词更有用。'
-      : `补「${first}」是现在最省力的一步：一个问题一个问题答，写半句也行，不用一次写完。`
-    : '每一段都有着落了。接下来是把它改得更像简历 —— 回填写区点一次「让 AI 帮我改得更像简历」。'
-
-  return (
-    <Panel className="gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-headline-sm text-primary">下一步</h2>
-        <span className="shrink-0 rounded-full bg-surface-container px-2 py-0.5 text-caption text-on-surface-variant">
-          已填 {filled}/{total} 项
-        </span>
-      </div>
-      <p className="text-body-md text-on-surface-variant">{guide}</p>
-      {missing.length ? (
-        <p className="text-body-sm text-on-surface-variant">
-          还没写到的部分：{missing.join(' / ')}。空着的项目不会自己长出来，我不会替你编。
-        </p>
-      ) : (
-        <p className="text-body-sm text-on-surface-variant">
-          每一项都填过了，文档会按真实内容排出来。随时回来改，改完再润色一次就行。
-        </p>
-      )}
-      <div>
-        <Button variant="outline" size="sm" onClick={onJump} className="motion-press gap-1.5">
-          {first ? `去填「${first}」` : filled ? '回去接着改' : '开始填写'}
-        </Button>
-      </div>
-    </Panel>
-  )
+  return `已经填了 ${percent}%。写过的都算数，没写的想到再补；没有的那几段不用硬凑。`
 }
 
 /** repeatable section：一条条经历 + 「再加一条」「删掉这条」 */

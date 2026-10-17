@@ -2,12 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   CheckCircle2,
-  ChevronDown,
   Lightbulb,
   MessageSquare,
   Printer,
   RefreshCw,
-  RotateCcw,
   TrendingUp,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -20,11 +18,6 @@ import { Panel } from '@/components/Panel'
 import { StageBadge } from '@/components/StageBadge'
 import { Stat, StatGroup } from '@/components/StatGroup'
 import { Button } from '@/components/ui/button'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
 import { PageShell } from '@/components/PageShell'
@@ -35,7 +28,6 @@ import { toTaskDetail } from '@/constants/routes'
 import {
   SCORE_ITEMS,
   SCORE_LABEL,
-  SCORE_COMPARE_ITEMS,
   formatScoreDelta,
   scoreDeltaTone,
 } from '@/constants/score'
@@ -62,7 +54,9 @@ import { cn } from '@/lib/utils'
  *    避免同一个分数在屏上出现两次；
  * 3. 数字区走 StatGroup（3 列），琥珀只给一个数字，标签用 caption；
  * 4. 「下一步」与「你做得好的」按 7/5 两列；没有亮点的分区不开第二列；
- * 5. 「当前阶段」与「与上一份报告相比」再按 7/5 一行，分数明细默认收起；
+ * 5. 「当前阶段」单独整行铺开，三条维度直接显示；与上一份基线的差值**并进同一行**
+ *    （分数右侧的 `+8`），不再为同一组数字单开一张「与上一份报告相比」卡；
+ *    综合得分的差值跟着主角卡里的「整体准备度」走，因为它本来就是同一个分数；
  * 6. 弱化动作退到页面末尾一行（和 AI 聊一句）。
  *
  * 动效（components/Motion 的 CSS 语汇，不新增 keyframes）：
@@ -254,6 +248,9 @@ export default function GrowthReportPage() {
   const hasHighlights = highlights.length > 0
   const twoCol = hasNext && hasHighlights
   const anyActionable = suggestions.some((item) => Boolean(item.pain_point))
+  /** 综合得分的差值：它和主角卡的「整体准备度」是同一个分数，所以跟着那行走，不另开卡 */
+  const totalDelta =
+    hasBaseline && typeof delta.total_score === 'number' ? delta.total_score : null
 
   return (
     <PageShell
@@ -306,6 +303,18 @@ export default function GrowthReportPage() {
               <span className="text-headline-sm text-primary">
                 <AnimatedNumber value={overall} />
                 <span className="ml-1 text-caption font-normal text-on-surface-variant">/ 100</span>
+                {totalDelta !== null ? (
+                  /*
+                   * 这里刻意不用 cn('text-caption', tone)：tailwind-merge 会把 `text-caption`
+                   * 和 `text-success` 判成同一组（都是 text-*），后者赢、caption 字号被丢掉，
+                   * 差值就会跟主数字一样大。用字符串拼接让两个类都留下。
+                   */
+                  <span
+                    className={`ml-2 text-caption font-normal tabular-nums ${scoreDeltaTone(totalDelta)}`}
+                  >
+                    较上次 {formatScoreDelta(totalDelta)}
+                  </span>
+                ) : null}
               </span>
             </div>
             <div className="grow-x">
@@ -317,7 +326,8 @@ export default function GrowthReportPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t border-surface-container-low pt-4">
+          {/* 一实一虚两个按钮一行；「上次保存于」退到卡底单独一行，不和按钮抢宽度 */}
+          <div className="flex flex-col gap-2 border-t border-surface-container-low pt-4">
             <div className="flex flex-wrap items-center gap-2">
               {/* 本页唯一实心按钮：把当下这一份存成基线（不会自动保存） */}
               <Button
@@ -341,7 +351,7 @@ export default function GrowthReportPage() {
       </Reveal>
 
       {/* 数字区：StatGroup 三列，琥珀只给一个数字，标签走 caption */}
-      <Reveal delay={60}>
+      <Reveal delay={110}>
         <Panel data-print="card" className="gap-3">
           <h2 className="text-headline-sm text-primary">这段时间的节奏</h2>
           <StatGroup columns={3}>
@@ -369,7 +379,7 @@ export default function GrowthReportPage() {
       {hasNext || hasHighlights ? (
         <div className={cn('grid grid-cols-1 items-start gap-6', twoCol && 'lg:grid-cols-12')}>
           {hasNext ? (
-            <Reveal delay={120} className={cn(twoCol && 'lg:col-span-7')}>
+            <Reveal delay={220} className={cn(twoCol && 'lg:col-span-7')}>
               <Panel data-print="card" className="ai-inset gap-4">
                 <div className="flex items-center gap-2">
                   <Lightbulb className="size-[18px] text-primary" aria-hidden />
@@ -388,7 +398,7 @@ export default function GrowthReportPage() {
                       as="li"
                       key={i}
                       fade
-                      delay={120 + staggerDelay(i)}
+                      delay={220 + staggerDelay(i)}
                       className="flex items-start gap-3 rounded-lg bg-surface-container-low px-3.5 py-3"
                     >
                       <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-on-surface-variant" aria-hidden />
@@ -413,7 +423,7 @@ export default function GrowthReportPage() {
           ) : null}
 
           {hasHighlights ? (
-            <Reveal delay={180} className={cn(twoCol && 'lg:col-span-5')}>
+            <Reveal delay={320} className={cn(twoCol && 'lg:col-span-5')}>
               <Panel data-print="card" className="gap-3">
                 <h2 className="text-headline-sm text-primary">你做得好的</h2>
                 <ul className="flex flex-col gap-2">
@@ -422,7 +432,7 @@ export default function GrowthReportPage() {
                       as="li"
                       key={i}
                       fade
-                      delay={180 + staggerDelay(i)}
+                      delay={320 + staggerDelay(i)}
                       className="flex gap-2 text-body-md text-on-surface-variant"
                     >
                       <span aria-hidden>·</span>
@@ -436,113 +446,69 @@ export default function GrowthReportPage() {
         </div>
       ) : null}
 
-      {/* 当前阶段（7） + 与上一份报告相比（5） */}
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-        <Reveal delay={220} className="lg:col-span-7">
-          <Panel data-print="card" className="gap-4">
-            {/* 三条维度条与 +x 默认收起：中文 label 全部来自 constants/score.ts，一个都没少 */}
-            <Collapsible className="flex flex-col gap-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex flex-col gap-1">
-                  <h2 className="text-headline-sm text-primary">当前阶段</h2>
-                  <p className="text-body-sm text-on-surface-variant">
-                    {stageLabel} · {report.stage_changed ? '这一周期阶段发生变化了' : '阶段保持稳定'}
-                  </p>
-                </div>
-                <CollapsibleTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="motion-press group shrink-0 gap-1 text-on-surface-variant"
-                  >
-                    看分数明细
-                    <ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" />
-                  </Button>
-                </CollapsibleTrigger>
-              </div>
-              <CollapsibleContent>
-                <div className="flex flex-col gap-3">
-                  {SCORE_ITEMS.map((item, i) => {
-                    const value = report[item.key] ?? 0
-                    const change = delta[item.key]
-                    return (
-                      <div key={item.key} className="flex items-center gap-3">
-                        <span className="w-20 shrink-0 text-body-sm text-on-surface-variant">
-                          {item.label}
-                        </span>
-                        {/* 会变化的数值条：展开时从左长出来，三条错开 70ms，读成一段而不是三处同时动 */}
-                        <div className="grow-x flex-1" style={{ animationDelay: i * 70 + 'ms' }}>
-                          <Progress value={value} className="h-1.5 bg-surface-container" />
-                        </div>
-                        <span className="w-8 shrink-0 text-right tabular-nums text-body-sm text-primary">
-                          {Math.round(value)}
-                        </span>
-                        {hasBaseline && typeof change === 'number' ? (
-                          <span
-                            className={cn(
-                              'w-10 shrink-0 text-right tabular-nums text-caption',
-                              scoreDeltaTone(change),
-                            )}
-                          >
-                            {formatScoreDelta(change)}
-                          </span>
-                        ) : (
-                          <span className="w-10 shrink-0" />
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-          </Panel>
-        </Reveal>
-
-        <Reveal delay={280} className="lg:col-span-5">
-          <Panel data-print="card" className="gap-4">
-            <div className="flex items-start justify-between gap-3">
-              <h2 className="text-headline-sm text-primary">与上一份报告相比</h2>
-              <span className="shrink-0 pt-1 text-caption text-caption-foreground">基线对比</span>
+      {/* 当前阶段：整行铺开。与上一份基线的差值**并进同一行**（分数右边的 +8），
+          同一组数字不再占两张卡；没有基线时右侧留空，不加任何说明卡。 */}
+      <Reveal delay={400}>
+        <Panel data-print="card" className="gap-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-headline-sm text-primary">当前阶段</h2>
+              <p className="text-body-sm text-on-surface-variant">
+                {stageLabel} · {report.stage_changed ? '这一周期阶段发生变化了' : '阶段保持稳定'}
+              </p>
             </div>
-            <p className="text-body-sm text-on-surface-variant">
-              保存一份后，这里会清晰显示你的方向、行动与简历完整度带来的具体变化。
-            </p>
+            {/* 只留一行 caption 说明右边的 +x 是什么，不再用一整张卡解释 */}
             {hasBaseline ? (
-              <div className="flex flex-wrap gap-3">
-                {SCORE_COMPARE_ITEMS.map((item, i) => {
-                  const change = delta[item.key] ?? 0
-                  return (
-                    <Reveal
-                      key={item.key}
-                      fade
-                      delay={280 + staggerDelay(i)}
-                      className="flex min-w-28 flex-col gap-0.5 rounded-lg bg-surface-container-low px-3 py-2"
-                    >
-                      <span className="text-caption text-on-surface-variant">{item.label}</span>
-                      <span className={cn('tabular-nums text-headline-sm', scoreDeltaTone(change))}>
-                        {formatScoreDelta(change)}
+              <span className="shrink-0 text-caption text-caption-foreground">较上次保存</span>
+            ) : null}
+          </div>
+          <div className="flex flex-col gap-3">
+            {SCORE_ITEMS.map((item, i) => {
+              const value = report[item.key] ?? 0
+              const change = delta[item.key]
+              return (
+                <div key={item.key} className="flex items-center gap-3">
+                  <span className="w-20 shrink-0 text-body-sm text-on-surface-variant">
+                    {item.label}
+                  </span>
+                  {/* 会变化的数值条：进场时从左长出来，三条错开 130ms，读成一段而不是三处同时动 */}
+                  <div className="grow-x flex-1" style={{ animationDelay: i * 130 + 'ms' }}>
+                    <Progress value={value} className="h-1.5 bg-surface-container" />
+                  </div>
+                  {/*
+                   * 分数 + 差值拼成一组、按基线对齐：右对齐的是差值那一列，
+                   * 所以三行的 `68`、`54`、`41` 在同一竖线上，`+8` / `+12` 也在同一竖线上。
+                   * 没有基线时这组只留分数宽度（w-8），不让右边空出一块。
+                   */}
+                  <span
+                    className={cn(
+                      'flex shrink-0 items-baseline justify-end gap-2',
+                      hasBaseline ? 'w-[4.5rem]' : 'w-8',
+                    )}
+                  >
+                    <span className="tabular-nums text-body-sm text-primary">
+                      {Math.round(value)}
+                    </span>
+                    {hasBaseline ? (
+                      /* 字符串拼接（不用 cn）：tailwind-merge 会把 text-caption 当成颜色类丢掉 */
+                      <span
+                        className={`w-8 shrink-0 text-right tabular-nums text-caption ${
+                          typeof change === 'number' ? scoreDeltaTone(change) : ''
+                        }`}
+                      >
+                        {typeof change === 'number' ? formatScoreDelta(change) : null}
                       </span>
-                    </Reveal>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 rounded-lg bg-surface-container-low px-3 py-3">
-                <RotateCcw className="size-4 shrink-0 text-on-surface-variant" aria-hidden />
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="text-body-md text-primary">尚未归档任何基线报告</span>
-                  <span className="text-caption text-on-surface-variant">
-                    点上面的「保存这一份」记录当下起点，下次打开就能看到变化
+                    ) : null}
                   </span>
                 </div>
-              </div>
-            )}
-          </Panel>
-        </Reveal>
-      </div>
+              )
+            })}
+          </div>
+        </Panel>
+      </Reveal>
 
       {/* 我的补充：用户唯一能写的地方（分数由行为算出，不给任何改分入口） */}
-      <Reveal delay={340}>
+      <Reveal delay={610}>
         <Panel data-print="card" className="gap-3">
           <h2 className="text-headline-sm text-primary">我的补充</h2>
           <p className="text-body-sm text-on-surface-variant">
@@ -556,23 +522,25 @@ export default function GrowthReportPage() {
             rows={4}
             placeholder="比如：这周投了 3 家没回音，简历里项目那块我还想再改改。"
           />
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="tabular-nums text-caption text-caption-foreground">{note.length}/500</span>
+          {/* 只在真有未保存修改时给一行提示；「已经保存过了」这类日志式状态不再占位 */}
+          <div
+            className={cn(
+              'flex flex-wrap items-center gap-x-3 gap-y-1',
+              dirty ? 'justify-between' : 'justify-end',
+            )}
+          >
             {dirty ? (
               <span className="text-body-sm text-warning">
                 有未保存的修改，记得点上面的「保存这一份」
               </span>
-            ) : (
-              <span className="text-body-sm text-on-surface-variant">
-                {report.saved ? '这段补充已经跟报告一起保存过了' : '还没保存过，保存后会成为下次对比的基线'}
-              </span>
-            )}
+            ) : null}
+            <span className="tabular-nums text-caption text-caption-foreground">{note.length}/500</span>
           </div>
         </Panel>
       </Reveal>
 
       {/* 弱化动作退到页面底部一行 */}
-      <Reveal delay={380}>
+      <Reveal delay={680}>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="ghost" size="sm" asChild className="motion-press gap-1.5">
             <Link to="/chat">

@@ -50,6 +50,7 @@ await page.route('**/api/v1/**', async (route) => {
     return ok({
       id: 'p1', user_id: 'u1', clarity_score: 50, action_score: 0, resume_score: 0,
       total_score: 20, stage: 'explore', stage_label: '职业探索期', tested: true,
+      summary: '你是个喜欢自己动手折腾的人：会写代码，也一直在琢磨技术怎么变成产品。',
       tags: [], updated_at: '2026-09-18T00:00:00Z',
     })
   }

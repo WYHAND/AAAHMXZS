@@ -14,8 +14,12 @@ import { cn } from '@/lib/utils'
  * ⚠️ 只做两类：进场（一次）与交互反馈。不要在这里加循环动画 / 弹跳 / 旋转。
  */
 
-/** 列表错峰：第 index 项的进场延迟。只错开头几项，免得最后一项等太久 */
-export function staggerDelay(index: number, step = 32, max = 7): number {
+/**
+ * 列表错峰：第 index 项的进场延迟。只错开头几项，免得最后一项等太久。
+ * 步长 48ms（2026-10-17 由 32ms 放宽）—— 与 index.css 的进场节拍（480/640ms）配套，
+ * 保持首页那种"一块接一块铺开"的读感，而不是挤成一团。
+ */
+export function staggerDelay(index: number, step = 48, max = 7): number {
   return Math.min(index, max) * step
 }
 
@@ -32,7 +36,7 @@ export interface RevealProps {
   className?: string
 }
 
-/** 进场容器：默认上浮 8px + 淡入，一次播完，不改变布局占位 */
+/** 进场容器：默认上浮 10px（大块 14px）+ 淡入，一次播完，不改变布局占位 */
 export function Reveal({ children, as: Tag = 'div', delay = 0, lg, fade, className }: RevealProps) {
   return (
     <Tag

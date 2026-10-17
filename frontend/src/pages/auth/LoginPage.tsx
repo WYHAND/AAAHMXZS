@@ -11,27 +11,34 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ERROR_TEXT } from '@/constants/errorCode'
 import { useAuth } from '@/hooks/useAuth'
+import { cn } from '@/lib/utils'
 
 // 对齐后端 UserLoginRequest：username 1-50，password 1-64
+// 空值文案写成"还没填 X"（不是复读 placeholder），规则文案只在真有内容时出现。
 const loginSchema = z.object({
   username: z
     .string()
-    .min(1, { error: '请输入用户名' })
+    .min(1, { error: '还没填用户名' })
     .max(50, { error: '用户名最长 50 字符' }),
   password: z
     .string()
-    .min(1, { error: '请输入密码' })
+    .min(1, { error: '还没填密码' })
     .max(64, { error: '密码最长 64 字符' }),
 })
 
 type LoginForm = z.infer<typeof loginSchema>
 
 /**
- * 字段样式（与全站输入框同一套）：高 36px、浅底、聚焦只换 ring 不改尺寸。
- * 这里在页面这一层补：共享 Input 默认是「透明底 + 1px 描边」，与首页的浅底输入区不一致。
+ * 字段样式（与全站表单同一套）：44px 高、白底、1px 描边、14px 圆角。
+ * 旧版是「无边框 + 浅底 + 大圆角」，视觉上更像搜索框，已废弃。
+ * 聚焦：ring 2px primary/15 + 描边转 primary/30，只换色不改尺寸（不抖动）。
  */
 const FIELD_INPUT =
-  'h-9 border-0 bg-surface-container-low px-3 text-body-md shadow-none focus-visible:bg-surface-container-lowest focus-visible:ring-1 focus-visible:ring-primary/40'
+  'h-11 rounded-[14px] border border-border bg-card px-3 text-body-md shadow-none placeholder:text-caption-foreground focus-visible:border-primary/30 focus-visible:ring-2 focus-visible:ring-primary/15'
+
+/** 出错态：描边转 destructive、聚焦 ring 同步转红；错误消失即移除 */
+const FIELD_INPUT_ERROR =
+  'border-destructive aria-invalid:ring-destructive/15 focus-visible:border-destructive focus-visible:ring-destructive/15'
 
 /**
  * 登录页（设计说明书 2.1、3.1 P0）；对接 POST /auth/login
@@ -94,12 +101,12 @@ export default function LoginPage() {
             id="username"
             autoComplete="username"
             placeholder="请输入用户名"
-            className={FIELD_INPUT}
+            className={cn(FIELD_INPUT, errors.username && FIELD_INPUT_ERROR)}
             aria-invalid={Boolean(errors.username)}
             {...register('username')}
           />
           {errors.username ? (
-            <p className="text-body-sm text-destructive">{errors.username.message}</p>
+            <p className="text-caption text-destructive">{errors.username.message}</p>
           ) : null}
         </div>
 
@@ -112,12 +119,12 @@ export default function LoginPage() {
             type="password"
             autoComplete="current-password"
             placeholder="请输入密码"
-            className={FIELD_INPUT}
+            className={cn(FIELD_INPUT, errors.password && FIELD_INPUT_ERROR)}
             aria-invalid={Boolean(errors.password)}
             {...register('password')}
           />
           {errors.password ? (
-            <p className="text-body-sm text-destructive">{errors.password.message}</p>
+            <p className="text-caption text-destructive">{errors.password.message}</p>
           ) : null}
         </div>
 

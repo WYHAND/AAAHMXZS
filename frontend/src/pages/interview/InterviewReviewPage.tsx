@@ -37,8 +37,14 @@ import { cn } from '@/lib/utils'
  *   - 评分翻译成人话：一句判断 + 一个分数，不堆成成绩单表格；
  *   - 「下次可以改」这类 AI 输出统一成 `ai-inset + <Panel inset> + 正文色`
  *     （浅桃只留给小面积强调，正文色必须是 `text-on-surface`）；
- *   - 琥珀稀缺：每屏 `text-secondary` ≤3 处 —— 「AI 点评」逐题小标不再用琥珀
- *     （那块左侧已有 ai-inset 琥珀竖条），琥珀只留给「下次可以改」与综合得分；
+ *   - 琥珀稀缺：每屏 `text-secondary` ≤3 处 —— 逐题区的「AI 反馈」不再画 ai-inset
+ *     竖条（见下），琥珀只留给「下次可以改」与综合得分；
+ *   - 两句结论只出现一次：左卡 head 是 review.summary（AI 的原话），右卡不再复述它，
+ *     只补一句"最该补哪一项"（由 dimension_scores 算出来的最弱维度）；
+ *   - 分值口径全卡一致：右卡卡头写一次「满分 100」，卡内数字（71 / 74 / 66 …）
+ *     与逐题 Badge（68 分）都不带 /100；
+ *   - 逐题点评只有两种容器：「我的回答」浅底 inset 与「AI 反馈」浅底 inset
+ *     （点评 + 更好的答法两段，用小标题分段；虚线框与左侧不规则圆角已删）；
  *   - 复盘还没生成时用 AIThinking 说清"正在回看你刚才的回答"，不留转圈的空白。
  */
 export default function InterviewReviewPage() {
@@ -142,6 +148,14 @@ export default function InterviewReviewPage() {
   // 只有真的打过分才显示分数：兜底复盘（AI 没生成出来）里 overall_score 是 0，
   // 把 0 当成"你考了 0 分"端出去是假信息。
   const hasScores = dimensions.length > 0
+  /*
+   * 最弱的那一项维度 —— 右卡用它说"下一步补哪一项"。
+   * 为什么不用一句"整体判断"：那句判断就是左卡的总评（review.summary），
+   * 两卡各写一遍同样的结论等于什么也没多说。最弱维度是**算出来的**，带新信息。
+   */
+  const weakest = hasScores
+    ? dimensions.reduce((low, item) => (item.score < low.score ? item : low))
+    : null
 
   return (
     <PageShell
@@ -198,9 +212,15 @@ export default function InterviewReviewPage() {
               )}
             </Panel>
 
-            {/* 逐题点评：按后端 InterviewQuestionReview 逐字段渲染。
-                进场只做在「卡」这一层：整块随主角卡一起上浮，卡内每一项不再单独加动效 ——
-                子项若与父卡同拍淡入会叠成重影，长滚动页也更该安静。 */}
+            {/*
+              逐题点评：每题只有**两个**容器（以前有四种：浅底块 / 左侧不规则圆角块 /
+              虚线框 / 普通正文，读起来像四套不同的东西）：
+                ①「我的回答」= 浅底 inset（原文，只读，不带评语）；
+                ②「AI 反馈」= 一个浅底 inset，里面分段：「点评」+「更好的答法」，
+                   段落靠小标题区分，不再各占一个框、也不再画虚线。
+              进场只做在「卡」这一层：整块随主角卡一起上浮，卡内每一项不再单独加动效 ——
+              子项若与父卡同拍淡入会叠成重影，长滚动页也更该安静。
+            */}
             {questionReviews.length ? (
               <div className="flex flex-col gap-5">
                 <span className="text-headline-sm text-primary">逐题点评</span>
@@ -209,13 +229,15 @@ export default function InterviewReviewPage() {
                   const yourAnswer = item.answer_summary || item.answer || ''
                   const hasScore = typeof item.score === 'number'
                   const score = item.score ?? 0
+                  const hasFeedback = Boolean(item.comment || item.better_answer)
                   const content = (
                     <>
                       <div className="flex items-start justify-between gap-3">
                         <h3 className="text-body-md font-semibold text-primary">
                           {index + 1}. {item.question}
                         </h3>
-                        {/* 得分用 Badge 表达，不再是彩色大数字（颜色语义保留：≥80 绿 / ≥60 常规 / <60 destructive） */}
+                        {/* 得分用 Badge 表达，不再是彩色大数字（颜色语义保留：≥80 绿 / ≥60 常规 / <60 destructive）。
+                            单位跟右卡一致：不带 /100（满分的口径只在右卡卡头说一次）。 */}
                         {hasScore ? (
                           <Badge
                             variant="outline"
@@ -233,29 +255,33 @@ export default function InterviewReviewPage() {
                         ) : null}
                       </div>
 
+                      {/* ① 我的回答：原文一份，浅底 inset，不加任何评语和装饰 */}
                       {yourAnswer ? (
-                        <div className="flex flex-col gap-1">
-                          <span className="text-caption text-on-surface-variant">你的回答</span>
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-caption text-on-surface-variant">我的回答</span>
                           <Panel inset className="text-body-md text-on-surface">
                             {yourAnswer}
                           </Panel>
                         </div>
                       ) : null}
 
-                      {item.comment ? (
-                        <Panel inset className="ai-inset">
-                          <span className="text-caption text-on-surface-variant">AI 点评</span>
-                          <p className="text-body-md text-on-surface">{item.comment}</p>
+                      {/* ② AI 反馈：点评 + 更好的答法挤在同一个浅底 inset 里，用两行小标题分段 */}
+                      {hasFeedback ? (
+                        <Panel inset className="gap-3">
+                          <span className="text-label-md font-semibold text-primary">AI 反馈</span>
+                          {item.comment ? (
+                            <div className="flex flex-col gap-1">
+                              <span className="text-caption text-on-surface-variant">点评</span>
+                              <p className="text-body-md text-on-surface">{item.comment}</p>
+                            </div>
+                          ) : null}
+                          {item.better_answer ? (
+                            <div className="flex flex-col gap-1">
+                              <span className="text-caption text-on-surface-variant">更好的答法</span>
+                              <p className="text-body-md text-on-surface">{item.better_answer}</p>
+                            </div>
+                          ) : null}
                         </Panel>
-                      ) : null}
-
-                      {item.better_answer ? (
-                        <div className="flex flex-col gap-1">
-                          <span className="text-caption text-on-surface-variant">更好的答法</span>
-                          <p className="rounded-lg border border-dashed border-outline-variant/60 px-4 py-2.5 text-body-md text-on-surface-variant">
-                            {item.better_answer}
-                          </p>
-                        </div>
                       ) : null}
                     </>
                   )
@@ -273,14 +299,23 @@ export default function InterviewReviewPage() {
           </Panel>
         </Reveal>
 
-        {/* 右列（5）：评分 —— 一句判断 + 一个分数，琥珀只给综合得分 */}
-        <Reveal delay={90} className="lg:col-span-5">
+        {/* 右列（5）：评分 —— 一个总分 + 四个维度，琥珀只给综合得分。
+            这里的副句**不重复左卡的总评**（以前它写的是同一句结论的改写版，
+            等于把"整体在及格线以上"说了两遍），改成只说"下一步补哪一项"，
+            这句话是从 dimension_scores 算出来的，不是新结论。 */}
+        <Reveal delay={160} className="lg:col-span-5">
           <Panel data-print="card" className="gap-5">
             <div className="flex flex-col gap-1.5">
-              <span className="text-headline-sm text-primary">这次考得怎么样</span>
-              {hasScores ? (
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-headline-sm text-primary">这次考得怎么样</span>
+                {/* 单位只在卡头说一次：卡里的数字（71 / 74 / 66 …）一律不带 /100 */}
+                {hasScores ? (
+                  <span className="shrink-0 text-caption text-caption-foreground">满分 100</span>
+                ) : null}
+              </div>
+              {hasScores && weakest ? (
                 <p className="text-body-md text-on-surface-variant">
-                  {scoreVerdict(Math.round(review.overall_score))}
+                  最该补的是「{weakest.dimension}」，{Math.round(weakest.score)} 分。
                 </p>
               ) : null}
             </div>
@@ -289,7 +324,6 @@ export default function InterviewReviewPage() {
               <StatGroup columns={2}>
                 <Stat
                   value={<AnimatedNumber value={Math.round(review.overall_score)} />}
-                  unit="/100"
                   label="综合得分"
                   accent
                 />
@@ -311,12 +345,4 @@ export default function InterviewReviewPage() {
       </div>
     </PageShell>
   )
-}
-
-/** 综合得分翻译成一句人话（不做成成绩单表格） */
-function scoreVerdict(score: number): string {
-  if (score >= 85) return '这场打得稳，细节再收一收就接近真实面试水平了。'
-  if (score >= 70) return '整体在及格线以上，项目再讲深一点会更有说服力。'
-  if (score >= 60) return '基本能答上，只是亮点没讲出来，下次先把结论前置。'
-  return '这次答得偏紧，先把表达结构理顺，比堆内容更有效。'
 }

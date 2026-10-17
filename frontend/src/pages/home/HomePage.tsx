@@ -537,7 +537,7 @@ function DailyBand({
                 onChange={(event) => setText(event.target.value)}
                 maxLength={200}
                 placeholder="写一句真实的念头，一句话也可以…"
-                className="resize-none rounded-xl border-0 bg-surface-container-low px-4 py-3 text-body-md shadow-inner focus-visible:bg-surface-container-lowest"
+                className="resize-none rounded-xl border-0 bg-surface-container-low px-4 py-3 text-body-md focus-visible:ring-0"
               />
               <div className="flex items-center justify-between">
                 <span className="text-caption tabular-nums text-caption-foreground">{text.length}/200</span>

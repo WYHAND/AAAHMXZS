@@ -44,6 +44,15 @@ declare module 'axios' {
   export interface AxiosRequestConfig {
     /** 为 true 时不弹全局错误 toast，交调用方自己给出更具体的下一步文案 */
     silent?: boolean
+    /**
+     * 为 true 时**不解信封**：成功路径返回整封 `{code,message,data}`。
+     *
+     * 默认（false）拦截器只把 `data` 交给调用方 —— 绝大多数接口只关心 data，
+     * 但**信封里的 message 有时是业务的一部分**：简历润色那句
+     * 「已润色；还有 3 项你没填，先空着（…）」是后端算出来的人话，界面要原样显示。
+     * 只给 `POST /resume/polish` 用（见 api/resume.ts 的 polish）。
+     */
+    envelope?: boolean
   }
 }
 
@@ -126,8 +135,12 @@ client.interceptors.response.use(
     }
 
     if (payload.code === ERROR_CODE.OK) {
-      // 直接给业务数据
-      return payload.data as never
+      /*
+       * 默认只给业务数据；`envelope: true` 的请求要连 `message` 一起拿走
+       * （润色那句人话就在里面）。失败路径两条完全一样，都是 rejectWithEnvelope。
+       */
+      const wantEnvelope = (res.config as AxiosRequestConfig).envelope
+      return (wantEnvelope ? payload : payload.data) as never
     }
 
     const silent = (res.config as AxiosRequestConfig).silent

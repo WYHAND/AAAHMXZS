@@ -35,6 +35,13 @@ class Profile(SQLModel, table=True):
 
     updated_at: datetime = Field(default_factory=utcnow)
 
+    # 9.24（2026-10）「我的画像」卡片顶部那句"你是个什么样的人"。
+    # 为什么落库而不是每次现算：镜子必须**稳定**（每次刷新换一句"你是谁"，
+    # 立刻变成"这 AI 在瞎猜"），而且每次打开都调模型 = 成本 + 首屏延迟。
+    # ai_summary_key 是生成时所用标签集的指纹，指纹变了才重写（见 profile_service）。
+    ai_summary: Optional[str] = Field(default=None, max_length=300)
+    ai_summary_key: Optional[str] = Field(default=None, max_length=64)
+
 
 class ProfileTag(SQLModel, table=True):
     """画像标签。

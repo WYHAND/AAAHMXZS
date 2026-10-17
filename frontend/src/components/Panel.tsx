@@ -44,7 +44,7 @@ export function Panel({
       className={cn(
         'flex flex-col rounded-xl',
         inset
-          ? 'gap-2 rounded-lg bg-surface-container-low'
+          ? 'gap-2 rounded-lg bg-surface-inset'
           : 'bg-card shadow-card',
         padded && (inset ? 'p-3.5' : 'p-5'),
         className,

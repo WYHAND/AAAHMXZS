@@ -175,10 +175,10 @@ export default function TestIntroPage() {
       {/*
         支撑卡：把「你会经历什么」讲清楚。
         卡片本身不再整体 Reveal —— 否则卡里的行会在父级还是 opacity:0 时就把自己的
-        220ms 播完（动效被吃掉）。改成"卡片静态、内容错峰"，三条按 staggerDelay 依次升起。
+        480ms 播完（动效被吃掉）。改成"卡片静态、内容错峰"，三条按 staggerDelay 依次升起。
       */}
       <Panel className="gap-4">
-        <Reveal as="h2" delay={90} className="text-headline-sm text-primary">
+        <Reveal as="h2" delay={160} className="text-headline-sm text-primary">
           先和你说清楚
         </Reveal>
         <ul className="flex flex-col gap-3">
@@ -186,7 +186,7 @@ export default function TestIntroPage() {
             <Reveal
               as="li"
               key={text}
-              delay={140 + staggerDelay(index)}
+              delay={250 + staggerDelay(index)}
               className="flex items-start gap-3"
             >
               <Icon className="mt-0.5 size-4 shrink-0 text-on-surface-variant" aria-hidden />
@@ -197,7 +197,7 @@ export default function TestIntroPage() {
       </Panel>
 
       {retesting ? (
-        <Reveal delay={200} className="flex justify-center">
+        <Reveal delay={360} className="flex justify-center">
           <Button
             variant="ghost"
             size="sm"

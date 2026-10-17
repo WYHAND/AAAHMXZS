@@ -104,6 +104,11 @@ export interface Profile {
   /** 探索期 / 准备期 / 冲刺期（中文，后端 utils/stage.py） */
   stage: string
   updated_at: string
+  /**
+   * 「我的画像」卡片顶部那句「你是个什么样的人」（后端 AI 生成 + 落库缓存，
+   * AI 不可用时回落模板句，**永不为空**，见勘误 9.24）。
+   */
+  summary: string
   /** 是否已完成基础测试表；漏斗判据必须用它 */
   tested: boolean
   tags: ProfileTag[]

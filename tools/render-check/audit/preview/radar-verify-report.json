@@ -1,0 +1,3099 @@
+{
+  "meta": {
+    "baseUrl": "http://localhost:5199",
+    "edge": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "ranAt": "2026-10-17T15:22:58.087Z",
+    "node": "v24.20.0",
+    "gates": {
+      "gridContrast": 1.4,
+      "polyContrast": 10,
+      "labelFontPx": 13,
+      "bottomWhitespace": 20,
+      "bottomWhitespaceTol": 1,
+      "offRegionDiffRatio": 0.001,
+      "diffTolerance": 8,
+      "oxlintAllowed": 2
+    },
+    "method": {
+      "grid": "从已渲染网格组包围盒中心打射线，在最外圈半径带里逐像素取 3×3 邻域最小明度，与卡片底色（面板区域颜色众数）算 WCAG 对比度",
+      "polygon": "沿已渲染 path.recharts-radar-polygon 用 getPointAtLength+getScreenCTM 采样"
+    }
+  },
+  "checks": {
+    "pixels_1440": {
+      "gate": true,
+      "cardBg": {
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "share": 0.8705759822289862,
+        "top3": [
+          {
+            "rgb": [
+              255,
+              255,
+              255
+            ],
+            "share": 0.8705759822289862
+          },
+          {
+            "rgb": [
+              206,
+              208,
+              212
+            ],
+            "share": 0.0532592361999854
+          },
+          {
+            "rgb": [
+              69,
+              71,
+              76
+            ],
+            "share": 0.0098117210289048
+          }
+        ]
+      },
+      "grid": {
+        "pass": true,
+        "center": {
+          "cx": 1150.15625,
+          "cy": 1140.703125,
+          "source": "bbox-of-.recharts-polar-grid"
+        },
+        "outerRadiusPx": 126.3599853515625,
+        "gridBBox": {
+          "w": 218.86181640625,
+          "h": 252.719970703125
+        },
+        "radialLineCount": 6,
+        "cardBg": [
+          255,
+          255,
+          255
+        ],
+        "axes": [
+          {
+            "dimension": "兴趣",
+            "angleDeg": 90,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.782353321914599,
+            "outerBandAxis": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.172530695210753,
+              "radiusRatio": 0.9912250794819257,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 3.9480818497793204,
+              "radiusRatio": 0.8630959260622466,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 2.5428160809706775,
+              "contrastRaw": 2.5428160809706775,
+              "radiusRatio": 0.3,
+              "rgb": [
+                160,
+                162,
+                172,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.7241216413995775,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "能力",
+            "angleDeg": 30,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.9984313585792813,
+            "outerBandAxis": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.9833111817617117,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 5.2747992949487505,
+              "contrastRaw": 3.9480818497793204,
+              "radiusRatio": 0.78,
+              "rgb": [
+                102,
+                108,
+                120,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 2.5428160809706775,
+              "contrastRaw": 2.5188857106058915,
+              "radiusRatio": 0.49389049414524205,
+              "rgb": [
+                160,
+                162,
+                172,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.9813233173065312,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "技能",
+            "angleDeg": 330,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.9316595209773655,
+            "outerBandAxis": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.92,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 17.58429441823381,
+              "contrastRaw": 14.811657896495547,
+              "radiusRatio": 0.8274833863212837,
+              "rgb": [
+                15,
+                25,
+                43,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 2.5428160809706775,
+              "contrastRaw": 2.5428160809706775,
+              "radiusRatio": 0.4820196475649211,
+              "rgb": [
+                160,
+                162,
+                172,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.9021843401043915,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "痛点",
+            "angleDeg": 270,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.4471826719750385,
+            "outerBandAxis": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.172530695210753,
+              "radiusRatio": 0.9833111817617117,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.8512250794819256,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.3949667726425675,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.3956948860106981,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "焦虑",
+            "angleDeg": 209.99999999999997,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.15260309279749093,
+            "outerBandAxis": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 3.1946717056181346,
+              "radiusRatio": 0.9793542329016048,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.8512250794819256,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 1.6989820737425612,
+              "contrastRaw": 1.6989820737425612,
+              "radiusRatio": 0.4820196475649211,
+              "rgb": [
+                198,
+                198,
+                205,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.13453626124363735,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "认知",
+            "angleDeg": 150,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.1717443450210317,
+            "outerBandAxis": {
+              "contrast": 3.894397382520053,
+              "contrastRaw": 3.4970406432761876,
+              "radiusRatio": 0.9872681306218187,
+              "rgb": [
+                127,
+                129,
+                135,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 3.4511303180621407,
+              "contrastRaw": 3.4511303180621407,
+              "radiusRatio": 0.8551820283420326,
+              "rgb": [
+                136,
+                138,
+                144,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 1.6989820737425612,
+              "contrastRaw": 1.6851539883273925,
+              "radiusRatio": 0.49389049414524205,
+              "rgb": [
+                198,
+                198,
+                205,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.15432100554417225,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          }
+        ],
+        "axisDirectionsMeasured": "6/6",
+        "edgeMidDirectionsMeasured": "6/6",
+        "saturatedAxes": [
+          "能力"
+        ],
+        "bandContaminatedAxes": [
+          "能力",
+          "技能"
+        ],
+        "gridDarkestContrast": 3.894397382520053,
+        "gridDarkestContrastPureGrid": 3.894397382520053,
+        "innerBandDarkestContrast": 1.6989820737425612,
+        "pureGridDirections": [
+          "兴趣",
+          "痛点",
+          "焦虑",
+          "认知"
+        ],
+        "gate": 1.4,
+        "edgeMidGatePass": true,
+        "conclusion": "6/6 方向都测到最外圈六边形；最暗一档 3.89:1，其中不含\"顶满那条轴\"的 3.89:1（阈值 1.4）"
+      },
+      "polygon": {
+        "pass": true,
+        "samples": 720,
+        "cardBg": [
+          255,
+          255,
+          255
+        ],
+        "strokeDarkestRgb": [
+          9,
+          20,
+          38,
+          255
+        ],
+        "strokeContrast": 18.426453729900217,
+        "strokeMeanContrast": 18.32714812287607,
+        "gate": 10
+      }
+    },
+    "labels_1440": {
+      "pass": true,
+      "labelCount": 6,
+      "panelRect": {
+        "x": 940.65625,
+        "y": 854.203125,
+        "w": 419.328125,
+        "h": 621
+      },
+      "contentBox": {
+        "left": 960.65625,
+        "right": 1339.984375,
+        "top": 874.203125,
+        "bottom": 1455.203125
+      },
+      "labels": [
+        {
+          "dimension": "兴趣",
+          "missing": false,
+          "rect": {
+            "x": 1137.15625,
+            "y": 993.3431396484375,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "兴趣"
+        },
+        {
+          "dimension": "能力",
+          "missing": false,
+          "rect": {
+            "x": 1265.515380859375,
+            "y": 1065.13818359375,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "能力"
+        },
+        {
+          "dimension": "技能",
+          "missing": false,
+          "rect": {
+            "x": 1265.515380859375,
+            "y": 1199.498046875,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "技能"
+        },
+        {
+          "dimension": "痛点",
+          "missing": false,
+          "rect": {
+            "x": 1136.15625,
+            "y": 1271.2930908203125,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "痛点"
+        },
+        {
+          "dimension": "焦虑",
+          "missing": false,
+          "rect": {
+            "x": 1006.7970581054688,
+            "y": 1199.498046875,
+            "w": 28.00006103515625,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "焦虑"
+        },
+        {
+          "dimension": "认知",
+          "missing": false,
+          "rect": {
+            "x": 1006.7970581054688,
+            "y": 1065.13818359375,
+            "w": 27.00006103515625,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "认知"
+        }
+      ],
+      "clipped": [],
+      "overlaps": [],
+      "badFontSize": []
+    },
+    "bottom_1440": {
+      "pass": true,
+      "gap": 20,
+      "expected": 20,
+      "panelPaddingBottom": 20,
+      "leafTag": "p",
+      "leafBottom": 1455.203125,
+      "panelBottom": 1475.203125,
+      "tolerance": 1
+    },
+    "probeCrossCheck": {
+      "pass": true,
+      "status": "checked",
+      "tolerance": 0.04,
+      "maxDelta": 0.011888275013974825,
+      "rows": [
+        {
+          "dimension": "兴趣",
+          "angleDeg": 90,
+          "probeRadiusRatio": 0.7823528015194681,
+          "probeAngleDeltaDeg": 0,
+          "measuredRadiusRatio": 0.782353321914599,
+          "delta": 5.203951309873389e-7
+        },
+        {
+          "dimension": "能力",
+          "angleDeg": 30,
+          "probeRadiusRatio": 1.0000002054569148,
+          "probeAngleDeltaDeg": 0.00000679645842183163,
+          "measuredRadiusRatio": 0.9984313585792813,
+          "delta": 0.0015688468776334785
+        },
+        {
+          "dimension": "技能",
+          "angleDeg": 330,
+          "probeRadiusRatio": 0.9323531948792609,
+          "probeAngleDeltaDeg": 0.000014122034144747886,
+          "measuredRadiusRatio": 0.9316595209773655,
+          "delta": 0.000693673901895453
+        },
+        {
+          "dimension": "痛点",
+          "angleDeg": 270,
+          "probeRadiusRatio": 0.4352943969610637,
+          "probeAngleDeltaDeg": 0,
+          "measuredRadiusRatio": 0.4471826719750385,
+          "delta": 0.011888275013974825
+        },
+        {
+          "dimension": "焦虑",
+          "angleDeg": 209.99999999999997,
+          "probeRadiusRatio": 0.14705898716388469,
+          "probeAngleDeltaDeg": 0.000046964333961341254,
+          "measuredRadiusRatio": 0.15260309279749093,
+          "delta": 0.005544105633606244
+        },
+        {
+          "dimension": "认知",
+          "angleDeg": 150,
+          "probeRadiusRatio": 0.16176494381398582,
+          "probeAngleDeltaDeg": 0.000029616037863888778,
+          "measuredRadiusRatio": 0.1717443450210317,
+          "delta": 0.00997940120704588
+        }
+      ],
+      "probeSaturated": [
+        "能力"
+      ],
+      "measuredSaturated": [
+        "能力"
+      ],
+      "saturatedAgree": true,
+      "probeReportedContrast": {
+        "gridRingAndSpoke": "1.70:1",
+        "angleAxisLine": "4.48:1",
+        "dataPolygon": "18.43:1",
+        "strokes": {
+          "grid": "rgb(197, 198, 205)",
+          "axisLine": "rgb(117, 119, 125)",
+          "polygon": "rgb(9, 20, 38)"
+        }
+      },
+      "probeSvg": {
+        "center": {
+          "x": 189.5,
+          "y": 180.5
+        },
+        "outerRadius": 126.36000000000001,
+        "ringCount": 5,
+        "vertexCount": 6
+      }
+    },
+    "probe": {
+      "available": true,
+      "file": "tools\\render-check\\audit\\radar-lines-after.txt",
+      "probeSvg": {
+        "center": {
+          "x": 189.5,
+          "y": 180.5
+        },
+        "outerRadius": 126.36000000000001,
+        "ringCount": 5,
+        "vertexCount": 6
+      },
+      "probeReportedContrast": {
+        "gridRingAndSpoke": "1.70:1",
+        "angleAxisLine": "4.48:1",
+        "dataPolygon": "18.43:1",
+        "strokes": {
+          "grid": "rgb(197, 198, 205)",
+          "axisLine": "rgb(117, 119, 125)",
+          "polygon": "rgb(9, 20, 38)"
+        }
+      },
+      "byAngle": [
+        {
+          "angleDeg": 90,
+          "radiusRatio": 0.7823528015194681
+        },
+        {
+          "angleDeg": 29.999993203541578,
+          "radiusRatio": 1.0000002054569148
+        },
+        {
+          "angleDeg": 329.99998587796586,
+          "radiusRatio": 0.9323531948792609
+        },
+        {
+          "angleDeg": 270,
+          "radiusRatio": 0.4352943969610637
+        },
+        {
+          "angleDeg": 210.00004696433393,
+          "radiusRatio": 0.14705898716388469
+        },
+        {
+          "angleDeg": 150.00002961603786,
+          "radiusRatio": 0.16176494381398582
+        }
+      ]
+    },
+    "pixels_1200": {
+      "gate": false,
+      "cardBg": {
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "share": 0.872466584612727,
+        "top3": [
+          {
+            "rgb": [
+              255,
+              255,
+              255
+            ],
+            "share": 0.872466584612727
+          },
+          {
+            "rgb": [
+              206,
+              208,
+              212
+            ],
+            "share": 0.045457882576493705
+          },
+          {
+            "rgb": [
+              69,
+              71,
+              76
+            ],
+            "share": 0.011025458314439334
+          }
+        ]
+      },
+      "grid": {
+        "pass": true,
+        "center": {
+          "cx": 988.15625,
+          "cy": 1146.5,
+          "source": "bbox-of-.recharts-polar-grid"
+        },
+        "outerRadiusPx": 111.239990234375,
+        "gridBBox": {
+          "w": 192.67333984375,
+          "h": 222.47998046875
+        },
+        "radialLineCount": 6,
+        "cardBg": [
+          255,
+          255,
+          255
+        ],
+        "axes": [
+          {
+            "dimension": "兴趣",
+            "angleDeg": 90,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.782352915356236,
+            "outerBandAxis": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.9919165830844155,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 3.547328603422578,
+              "radiusRatio": 0.8609061559699674,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 2.5428160809706775,
+              "contrastRaw": 2.5428160809706775,
+              "radiusRatio": 0.3,
+              "rgb": [
+                160,
+                162,
+                172,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.7236606172869311,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "能力",
+            "angleDeg": 30,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.9984310553080045,
+            "outerBandAxis": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.9829270101988636,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.8519165830844154,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 2.5188857106058915,
+              "contrastRaw": 2.4620353127861376,
+              "radiusRatio": 0.4528227390543829,
+              "rgb": [
+                160,
+                163,
+                173,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.9798634445251614,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "技能",
+            "angleDeg": 330,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.9316601316502704,
+            "outerBandAxis": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.92,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.8249478644277597,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 2.5188857106058915,
+              "contrastRaw": 2.5188857106058915,
+              "radiusRatio": 0.4528227390543829,
+              "rgb": [
+                160,
+                163,
+                173,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.898957288555194,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "痛点",
+            "angleDeg": 270,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.4471830537890467,
+            "outerBandAxis": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.9829270101988636,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 3.547328603422578,
+              "radiusRatio": 0.8519165830844154,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.3898957288555194,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.3865516340787334,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "焦虑",
+            "angleDeg": 209.99999999999997,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.15260414954837745,
+            "outerBandAxis": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.9829270101988636,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 3.547328603422578,
+              "radiusRatio": 0.8519165830844154,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 1.6851539883273925,
+              "contrastRaw": 1.6851539883273925,
+              "radiusRatio": 0.45731752549715887,
+              "rgb": [
+                198,
+                199,
+                206,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.13484359328327908,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "认知",
+            "angleDeg": 150,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.17174440027103322,
+            "outerBandAxis": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.018404618256945,
+              "radiusRatio": 0.9919165830844155,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 3.9522094273112076,
+              "contrastRaw": 3.9522094273112076,
+              "radiusRatio": 0.8519165830844154,
+              "rgb": [
+                126,
+                128,
+                133,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 1.6851539883273925,
+              "contrastRaw": 1.6851539883273925,
+              "radiusRatio": 0.45731752549715887,
+              "rgb": [
+                198,
+                199,
+                206,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.14383316616883102,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          }
+        ],
+        "axisDirectionsMeasured": "6/6",
+        "edgeMidDirectionsMeasured": "6/6",
+        "saturatedAxes": [
+          "能力"
+        ],
+        "bandContaminatedAxes": [
+          "能力",
+          "技能"
+        ],
+        "gridDarkestContrast": 4.476423100208515,
+        "gridDarkestContrastPureGrid": 4.476423100208515,
+        "innerBandDarkestContrast": 1.6851539883273925,
+        "pureGridDirections": [
+          "兴趣",
+          "痛点",
+          "焦虑",
+          "认知"
+        ],
+        "gate": 1.4,
+        "edgeMidGatePass": true,
+        "conclusion": "6/6 方向都测到最外圈六边形；最暗一档 4.48:1，其中不含\"顶满那条轴\"的 4.48:1（阈值 1.4）"
+      },
+      "polygon": {
+        "pass": true,
+        "samples": 720,
+        "cardBg": [
+          255,
+          255,
+          255
+        ],
+        "strokeDarkestRgb": [
+          9,
+          20,
+          38,
+          255
+        ],
+        "strokeContrast": 18.426453729900217,
+        "strokeMeanContrast": 18.320010898239943,
+        "gate": 10
+      }
+    },
+    "labels_1200": {
+      "pass": true,
+      "labelCount": 6,
+      "panelRect": {
+        "x": 808.65625,
+        "y": 868,
+        "w": 359.34375,
+        "h": 645
+      },
+      "contentBox": {
+        "left": 828.65625,
+        "right": 1148,
+        "top": 888,
+        "bottom": 1493
+      },
+      "labels": [
+        {
+          "dimension": "兴趣",
+          "missing": false,
+          "rect": {
+            "x": 975.15625,
+            "y": 1014.260009765625,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "兴趣"
+        },
+        {
+          "dimension": "能力",
+          "missing": false,
+          "rect": {
+            "x": 1090.421142578125,
+            "y": 1078.4949951171875,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "能力"
+        },
+        {
+          "dimension": "技能",
+          "missing": false,
+          "rect": {
+            "x": 1090.421142578125,
+            "y": 1197.7349853515625,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "技能"
+        },
+        {
+          "dimension": "痛点",
+          "missing": false,
+          "rect": {
+            "x": 974.15625,
+            "y": 1261.969970703125,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "痛点"
+        },
+        {
+          "dimension": "焦虑",
+          "missing": false,
+          "rect": {
+            "x": 857.891357421875,
+            "y": 1197.7349853515625,
+            "w": 28,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "焦虑"
+        },
+        {
+          "dimension": "认知",
+          "missing": false,
+          "rect": {
+            "x": 857.891357421875,
+            "y": 1078.4949951171875,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "认知"
+        }
+      ],
+      "clipped": [],
+      "overlaps": [],
+      "badFontSize": []
+    },
+    "bottom_1200": {
+      "pass": true,
+      "gap": 20,
+      "expected": 20,
+      "panelPaddingBottom": 20,
+      "leafTag": "p",
+      "leafBottom": 1493,
+      "panelBottom": 1513,
+      "tolerance": 1
+    },
+    "pixels_1100": {
+      "gate": false,
+      "cardBg": {
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "share": 0.8764883907882914,
+        "top3": [
+          {
+            "rgb": [
+              255,
+              255,
+              255
+            ],
+            "share": 0.8764883907882914
+          },
+          {
+            "rgb": [
+              206,
+              208,
+              212
+            ],
+            "share": 0.03602402231995082
+          },
+          {
+            "rgb": [
+              69,
+              71,
+              76
+            ],
+            "share": 0.011892939896912091
+          }
+        ]
+      },
+      "grid": {
+        "pass": true,
+        "center": {
+          "cx": 909.328125,
+          "cy": 1156.5,
+          "source": "bbox-of-.recharts-polar-grid"
+        },
+        "outerRadiusPx": 96.47998046875,
+        "gridBBox": {
+          "w": 167.1082763671875,
+          "h": 192.9599609375
+        },
+        "radialLineCount": 6,
+        "cardBg": [
+          255,
+          255,
+          255
+        ],
+        "axes": [
+          {
+            "dimension": "兴趣",
+            "angleDeg": 90,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.782353447272396,
+            "outerBandAxis": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.9873714895921373,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 3.547328603422578,
+              "radiusRatio": 0.8629187564210921,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 2.5212186740906586,
+              "contrastRaw": 2.032109534297186,
+              "radiusRatio": 0.49174962422377533,
+              "rgb": [
+                160,
+                163,
+                172,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.7410863855135102,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "能力",
+            "angleDeg": 30,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.9984310774412037,
+            "outerBandAxis": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.9718242227631826,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 6.145633782733268,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.78,
+              "rgb": [
+                91,
+                98,
+                110,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 2.5428160809706775,
+              "contrastRaw": 2.243082324136045,
+              "radiusRatio": 0.4813847796711388,
+              "rgb": [
+                160,
+                162,
+                172,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.9742953879478317,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "技能",
+            "angleDeg": 330,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.9316592574929354,
+            "outerBandAxis": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.92,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.8110945336579096,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 2.5428160809706775,
+              "contrastRaw": 2.5428160809706775,
+              "radiusRatio": 0.4710199351185023,
+              "rgb": [
+                160,
+                162,
+                172,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.8913766315267396,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "痛点",
+            "angleDeg": 270,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.4471827390648374,
+            "outerBandAxis": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.9770066450395007,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.8421890673158191,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.39846602325004676,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.39386409300018727,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "焦虑",
+            "angleDeg": 209.99999999999997,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.15260357735257626,
+            "outerBandAxis": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.982189067315819,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.8525539118684556,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 1.7027138874287426,
+              "contrastRaw": 1.5203612292579507,
+              "radiusRatio": 0.49174962422377533,
+              "rgb": [
+                197,
+                198,
+                205,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.14510782373691108,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "认知",
+            "angleDeg": 150,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.1717437962146881,
+            "outerBandAxis": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.9925539118684555,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.8629187564210921,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 1.7027138874287426,
+              "contrastRaw": 1.6691333183856738,
+              "radiusRatio": 0.49174962422377533,
+              "rgb": [
+                197,
+                198,
+                205,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.1554726682895476,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          }
+        ],
+        "axisDirectionsMeasured": "6/6",
+        "edgeMidDirectionsMeasured": "6/6",
+        "saturatedAxes": [
+          "能力"
+        ],
+        "bandContaminatedAxes": [
+          "能力",
+          "技能"
+        ],
+        "gridDarkestContrast": 4.476423100208515,
+        "gridDarkestContrastPureGrid": 4.476423100208515,
+        "innerBandDarkestContrast": 1.7027138874287426,
+        "pureGridDirections": [
+          "兴趣",
+          "痛点",
+          "焦虑",
+          "认知"
+        ],
+        "gate": 1.4,
+        "edgeMidGatePass": true,
+        "conclusion": "6/6 方向都测到最外圈六边形；最暗一档 4.48:1，其中不含\"顶满那条轴\"的 4.48:1（阈值 1.4）"
+      },
+      "polygon": {
+        "pass": true,
+        "samples": 720,
+        "cardBg": [
+          255,
+          255,
+          255
+        ],
+        "strokeDarkestRgb": [
+          9,
+          20,
+          38,
+          255
+        ],
+        "strokeContrast": 18.426453729900217,
+        "strokeMeanContrast": 18.328812150012126,
+        "gate": 10
+      }
+    },
+    "labels_1100": {
+      "pass": true,
+      "labelCount": 6,
+      "panelRect": {
+        "x": 750.328125,
+        "y": 868,
+        "w": 317.65625,
+        "h": 665
+      },
+      "contentBox": {
+        "left": 770.328125,
+        "right": 1047.984375,
+        "top": 888,
+        "bottom": 1513
+      },
+      "labels": [
+        {
+          "dimension": "兴趣",
+          "missing": false,
+          "rect": {
+            "x": 896.328125,
+            "y": 1039.02001953125,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "兴趣"
+        },
+        {
+          "dimension": "能力",
+          "missing": false,
+          "rect": {
+            "x": 998.8104248046875,
+            "y": 1095.875,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "能力"
+        },
+        {
+          "dimension": "技能",
+          "missing": false,
+          "rect": {
+            "x": 998.8104248046875,
+            "y": 1200.35498046875,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "技能"
+        },
+        {
+          "dimension": "痛点",
+          "missing": false,
+          "rect": {
+            "x": 895.328125,
+            "y": 1257.2099609375,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "痛点"
+        },
+        {
+          "dimension": "焦虑",
+          "missing": false,
+          "rect": {
+            "x": 791.8457641601562,
+            "y": 1200.35498046875,
+            "w": 28,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "焦虑"
+        },
+        {
+          "dimension": "认知",
+          "missing": false,
+          "rect": {
+            "x": 791.8457641601562,
+            "y": 1095.875,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "认知"
+        }
+      ],
+      "clipped": [],
+      "overlaps": [],
+      "badFontSize": []
+    },
+    "bottom_1100": {
+      "pass": true,
+      "gap": 20,
+      "expected": 20,
+      "panelPaddingBottom": 20,
+      "leafTag": "p",
+      "leafBottom": 1513,
+      "panelBottom": 1533,
+      "tolerance": 1
+    },
+    "pixels_1920": {
+      "gate": false,
+      "cardBg": {
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "share": 0.8705759822289862,
+        "top3": [
+          {
+            "rgb": [
+              255,
+              255,
+              255
+            ],
+            "share": 0.8705759822289862
+          },
+          {
+            "rgb": [
+              206,
+              208,
+              212
+            ],
+            "share": 0.0532592361999854
+          },
+          {
+            "rgb": [
+              69,
+              71,
+              76
+            ],
+            "share": 0.0098117210289048
+          }
+        ]
+      },
+      "grid": {
+        "pass": true,
+        "center": {
+          "cx": 1390.15625,
+          "cy": 1140.703125,
+          "source": "bbox-of-.recharts-polar-grid"
+        },
+        "outerRadiusPx": 126.3599853515625,
+        "gridBBox": {
+          "w": 218.86181640625,
+          "h": 252.719970703125
+        },
+        "radialLineCount": 6,
+        "cardBg": [
+          255,
+          255,
+          255
+        ],
+        "axes": [
+          {
+            "dimension": "兴趣",
+            "angleDeg": 90,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.782353321914599,
+            "outerBandAxis": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.172530695210753,
+              "radiusRatio": 0.9912250794819257,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 3.9480818497793204,
+              "radiusRatio": 0.8630959260622466,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 2.5428160809706775,
+              "contrastRaw": 2.5428160809706775,
+              "radiusRatio": 0.3,
+              "rgb": [
+                160,
+                162,
+                172,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.7241216413995775,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "能力",
+            "angleDeg": 30,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.9984313585792813,
+            "outerBandAxis": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.9833111817617117,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 5.2747992949487505,
+              "contrastRaw": 3.9480818497793204,
+              "radiusRatio": 0.78,
+              "rgb": [
+                102,
+                108,
+                120,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 2.5428160809706775,
+              "contrastRaw": 2.5188857106058915,
+              "radiusRatio": 0.49389049414524205,
+              "rgb": [
+                160,
+                162,
+                172,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.9813233173065312,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "技能",
+            "angleDeg": 330,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.9316595209773655,
+            "outerBandAxis": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.92,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 17.58429441823381,
+              "contrastRaw": 14.811657896495547,
+              "radiusRatio": 0.8274833863212837,
+              "rgb": [
+                15,
+                25,
+                43,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 2.5428160809706775,
+              "contrastRaw": 2.5428160809706775,
+              "radiusRatio": 0.4820196475649211,
+              "rgb": [
+                160,
+                162,
+                172,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.9021843401043915,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "痛点",
+            "angleDeg": 270,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.4471826719750385,
+            "outerBandAxis": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.172530695210753,
+              "radiusRatio": 0.9833111817617117,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.8512250794819256,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.3949667726425675,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.3956948860106981,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "焦虑",
+            "angleDeg": 209.99999999999997,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.15260309279749093,
+            "outerBandAxis": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 3.1946717056181346,
+              "radiusRatio": 0.9793542329016048,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.8512250794819256,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 1.6989820737425612,
+              "contrastRaw": 1.6989820737425612,
+              "radiusRatio": 0.4820196475649211,
+              "rgb": [
+                198,
+                198,
+                205,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.13453626124363735,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "认知",
+            "angleDeg": 150,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.1717443450210317,
+            "outerBandAxis": {
+              "contrast": 3.894397382520053,
+              "contrastRaw": 3.4970406432761876,
+              "radiusRatio": 0.9872681306218187,
+              "rgb": [
+                127,
+                129,
+                135,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 3.4511303180621407,
+              "contrastRaw": 3.4511303180621407,
+              "radiusRatio": 0.8551820283420326,
+              "rgb": [
+                136,
+                138,
+                144,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 1.6989820737425612,
+              "contrastRaw": 1.6851539883273925,
+              "radiusRatio": 0.49389049414524205,
+              "rgb": [
+                198,
+                198,
+                205,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.15432100554417225,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          }
+        ],
+        "axisDirectionsMeasured": "6/6",
+        "edgeMidDirectionsMeasured": "6/6",
+        "saturatedAxes": [
+          "能力"
+        ],
+        "bandContaminatedAxes": [
+          "能力",
+          "技能"
+        ],
+        "gridDarkestContrast": 3.894397382520053,
+        "gridDarkestContrastPureGrid": 3.894397382520053,
+        "innerBandDarkestContrast": 1.6989820737425612,
+        "pureGridDirections": [
+          "兴趣",
+          "痛点",
+          "焦虑",
+          "认知"
+        ],
+        "gate": 1.4,
+        "edgeMidGatePass": true,
+        "conclusion": "6/6 方向都测到最外圈六边形；最暗一档 3.89:1，其中不含\"顶满那条轴\"的 3.89:1（阈值 1.4）"
+      },
+      "polygon": {
+        "pass": true,
+        "samples": 720,
+        "cardBg": [
+          255,
+          255,
+          255
+        ],
+        "strokeDarkestRgb": [
+          9,
+          20,
+          38,
+          255
+        ],
+        "strokeContrast": 18.426453729900217,
+        "strokeMeanContrast": 18.32714812287607,
+        "gate": 10
+      }
+    },
+    "labels_1920": {
+      "pass": true,
+      "labelCount": 6,
+      "panelRect": {
+        "x": 1180.65625,
+        "y": 854.203125,
+        "w": 419.328125,
+        "h": 621
+      },
+      "contentBox": {
+        "left": 1200.65625,
+        "right": 1579.984375,
+        "top": 874.203125,
+        "bottom": 1455.203125
+      },
+      "labels": [
+        {
+          "dimension": "兴趣",
+          "missing": false,
+          "rect": {
+            "x": 1377.15625,
+            "y": 993.3431396484375,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "兴趣"
+        },
+        {
+          "dimension": "能力",
+          "missing": false,
+          "rect": {
+            "x": 1505.515380859375,
+            "y": 1065.13818359375,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "能力"
+        },
+        {
+          "dimension": "技能",
+          "missing": false,
+          "rect": {
+            "x": 1505.515380859375,
+            "y": 1199.498046875,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "技能"
+        },
+        {
+          "dimension": "痛点",
+          "missing": false,
+          "rect": {
+            "x": 1376.15625,
+            "y": 1271.2930908203125,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "痛点"
+        },
+        {
+          "dimension": "焦虑",
+          "missing": false,
+          "rect": {
+            "x": 1246.797119140625,
+            "y": 1199.498046875,
+            "w": 28,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "焦虑"
+        },
+        {
+          "dimension": "认知",
+          "missing": false,
+          "rect": {
+            "x": 1246.797119140625,
+            "y": 1065.13818359375,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "认知"
+        }
+      ],
+      "clipped": [],
+      "overlaps": [],
+      "badFontSize": []
+    },
+    "bottom_1920": {
+      "pass": true,
+      "gap": 20,
+      "expected": 20,
+      "panelPaddingBottom": 20,
+      "leafTag": "p",
+      "leafBottom": 1455.203125,
+      "panelBottom": 1475.203125,
+      "tolerance": 1
+    },
+    "pixels_390": {
+      "gate": false,
+      "cardBg": {
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "share": 0.8731399295131184,
+        "top3": [
+          {
+            "rgb": [
+              255,
+              255,
+              255
+            ],
+            "share": 0.8731399295131184
+          },
+          {
+            "rgb": [
+              206,
+              208,
+              212
+            ],
+            "share": 0.029684984553800635
+          },
+          {
+            "rgb": [
+              69,
+              71,
+              76
+            ],
+            "share": 0.01405386590088326
+          }
+        ]
+      },
+      "grid": {
+        "pass": true,
+        "center": {
+          "cx": 195.00000762939453,
+          "cy": 2523.390625,
+          "source": "bbox-of-.recharts-polar-grid"
+        },
+        "outerRadiusPx": 82.800048828125,
+        "gridBBox": {
+          "w": 143.413818359375,
+          "h": 165.60009765625
+        },
+        "radialLineCount": 6,
+        "cardBg": [
+          255,
+          255,
+          255
+        ],
+        "axes": [
+          {
+            "dimension": "兴趣",
+            "angleDeg": 90,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.7823522994318185,
+            "outerBandAxis": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.9924637253832387,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 2.373531269962139,
+              "radiusRatio": 0.8585023691651753,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 2.5188857106058915,
+              "contrastRaw": 2.2142481766514606,
+              "radiusRatio": 0.4871979572400332,
+              "rgb": [
+                160,
+                163,
+                173,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.7246372538323863,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "能力",
+            "angleDeg": 30,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.9984292234160226,
+            "outerBandAxis": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.974347794037429,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.7800000000000001,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 2.5428160809706775,
+              "contrastRaw": 2.1645008060510222,
+              "radiusRatio": 0.48115931345809665,
+              "rgb": [
+                160,
+                162,
+                172,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.972221648891785,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "技能",
+            "angleDeg": 330,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.9316571788373756,
+            "outerBandAxis": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.92,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.8162318626916194,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 2.5428160809706775,
+              "contrastRaw": 2.5428160809706775,
+              "radiusRatio": 0.46908202589422354,
+              "rgb": [
+                160,
+                162,
+                172,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.8756033483808002,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "痛点",
+            "angleDeg": 270,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.44718254820230785,
+            "outerBandAxis": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.9683091502554925,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.8343477940374291,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 16.182288659281408,
+              "radiusRatio": 0.37850236916517516,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.38043455826200284,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "焦虑",
+            "angleDeg": 209.99999999999997,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.15260211362912504,
+            "outerBandAxis": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 3.1423525590354506,
+              "radiusRatio": 0.974347794037429,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.8403864378193656,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 1.7027138874287426,
+              "contrastRaw": 1.6851539883273925,
+              "radiusRatio": 0.48115931345809665,
+              "rgb": [
+                197,
+                198,
+                205,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.13285016320260418,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          },
+          {
+            "dimension": "认知",
+            "angleDeg": 150,
+            "angleSource": "radial-line",
+            "labelPresent": true,
+            "dataRadiusRatio": 0.17174392537351085,
+            "outerBandAxis": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.9864250816013022,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "outerBandEdgeMid": {
+              "contrast": 4.476423100208515,
+              "contrastRaw": 4.476423100208515,
+              "radiusRatio": 0.8524637253832388,
+              "rgb": [
+                117,
+                119,
+                125,
+                255
+              ]
+            },
+            "innerBand": {
+              "contrast": 1.7027138874287426,
+              "contrastRaw": 1.6678404821596806,
+              "radiusRatio": 0.48115931345809665,
+              "rgb": [
+                197,
+                198,
+                205,
+                255
+              ]
+            },
+            "fullRayDarkest": {
+              "contrast": 18.426453729900217,
+              "contrastRaw": 18.426453729900217,
+              "radiusRatio": 0.15096609454841384,
+              "rgb": [
+                9,
+                20,
+                38,
+                255
+              ]
+            }
+          }
+        ],
+        "axisDirectionsMeasured": "6/6",
+        "edgeMidDirectionsMeasured": "6/6",
+        "saturatedAxes": [
+          "能力"
+        ],
+        "bandContaminatedAxes": [
+          "能力",
+          "技能"
+        ],
+        "gridDarkestContrast": 4.476423100208515,
+        "gridDarkestContrastPureGrid": 4.476423100208515,
+        "innerBandDarkestContrast": 1.7027138874287426,
+        "pureGridDirections": [
+          "兴趣",
+          "痛点",
+          "焦虑",
+          "认知"
+        ],
+        "gate": 1.4,
+        "edgeMidGatePass": true,
+        "conclusion": "6/6 方向都测到最外圈六边形；最暗一档 4.48:1，其中不含\"顶满那条轴\"的 4.48:1（阈值 1.4）"
+      },
+      "polygon": {
+        "pass": true,
+        "samples": 720,
+        "cardBg": [
+          255,
+          255,
+          255
+        ],
+        "strokeDarkestRgb": [
+          9,
+          20,
+          38,
+          255
+        ],
+        "strokeContrast": 18.426453729900217,
+        "strokeMeanContrast": 18.335396086918806,
+        "gate": 10
+      }
+    },
+    "labels_390": {
+      "pass": true,
+      "labelCount": 6,
+      "panelRect": {
+        "x": 32,
+        "y": 2297.390625,
+        "w": 326,
+        "h": 564
+      },
+      "contentBox": {
+        "left": 52,
+        "right": 338,
+        "top": 2317.390625,
+        "bottom": 2841.390625
+      },
+      "labels": [
+        {
+          "dimension": "兴趣",
+          "missing": false,
+          "rect": {
+            "x": 182,
+            "y": 2419.590576171875,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "兴趣"
+        },
+        {
+          "dimension": "能力",
+          "missing": false,
+          "rect": {
+            "x": 272.6351013183594,
+            "y": 2469.605712890625,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "能力"
+        },
+        {
+          "dimension": "技能",
+          "missing": false,
+          "rect": {
+            "x": 272.6351013183594,
+            "y": 2560.405517578125,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "技能"
+        },
+        {
+          "dimension": "痛点",
+          "missing": false,
+          "rect": {
+            "x": 181,
+            "y": 2610.420654296875,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "痛点"
+        },
+        {
+          "dimension": "焦虑",
+          "missing": false,
+          "rect": {
+            "x": 89.3648910522461,
+            "y": 2560.405517578125,
+            "w": 28,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "焦虑"
+        },
+        {
+          "dimension": "认知",
+          "missing": false,
+          "rect": {
+            "x": 89.3648910522461,
+            "y": 2469.605712890625,
+            "w": 27,
+            "h": 16
+          },
+          "inside": true,
+          "overflow": {
+            "left": 0,
+            "right": 0,
+            "top": 0,
+            "bottom": 0
+          },
+          "fontSize": "13px",
+          "fontSizePx": 13,
+          "fontSizeOk": true,
+          "text": "认知"
+        }
+      ],
+      "clipped": [],
+      "overlaps": [],
+      "badFontSize": []
+    },
+    "bottom_390": {
+      "pass": true,
+      "gap": 20,
+      "expected": 20,
+      "panelPaddingBottom": 20,
+      "leafTag": "p",
+      "leafBottom": 2841.390625,
+      "panelBottom": 2861.390625,
+      "tolerance": 1
+    },
+    "homeRegression": {
+      "baseline": {
+        "path": "D:\\文档\\CODE_PROJIECTS\\AAA鸿蒙就业小助手\\tools\\render-check\\audit\\preview\\before-home-1440.png",
+        "name": "before-home-1440.png",
+        "mtime": "2026-10-16T19:09:16.881Z",
+        "source": "candidate",
+        "tried": []
+      },
+      "fresh": {
+        "width": 1440,
+        "height": 1282
+      },
+      "radarRegion": {
+        "x": 356,
+        "y": 829,
+        "w": 524.65625,
+        "h": 224,
+        "left": 356,
+        "top": 829,
+        "right": 880.65625,
+        "bottom": 1053
+      },
+      "allowedRegion": {
+        "x": 350,
+        "y": 823,
+        "w": 536.65625,
+        "h": 236
+      },
+      "pageErrors": [],
+      "baselineSize": {
+        "width": 1440,
+        "height": 1282
+      },
+      "diff": {
+        "comparedWidth": 1440,
+        "comparedHeight": 1282,
+        "sizeMatch": true,
+        "diffTotal": 3963,
+        "diffRatio": 0.0021467108684347373,
+        "diffInside": 3053,
+        "diffOutside": 910,
+        "diffOutsideRatio": 0.0004929363841220315,
+        "outsideBBox": {
+          "x0": 835,
+          "y0": 401,
+          "x1": 880,
+          "y1": 446
+        },
+        "outsideTopRows": [
+          {
+            "y": 409,
+            "count": 34
+          },
+          {
+            "y": 438,
+            "count": 34
+          },
+          {
+            "y": 439,
+            "count": 31
+          },
+          {
+            "y": 407,
+            "count": 30
+          },
+          {
+            "y": 408,
+            "count": 30
+          }
+        ]
+      },
+      "diffInsideRatioOfRegion": 0.02410563685406832,
+      "pass": true,
+      "status": "PASS",
+      "thresholdOffRegionRatio": 0.001
+    },
+    "tsc": {
+      "pass": true,
+      "status": 0,
+      "stdout": "",
+      "stderr": "",
+      "error": null,
+      "command": "npx tsc -p tsconfig.app.json --noEmit"
+    },
+    "oxlint": {
+      "pass": true,
+      "command": "npx oxlint --format=json src/components/ProfileRadar.tsx src/pages/profile/ProfilePage.tsx",
+      "status": 0,
+      "count": 2,
+      "allowed": 2,
+      "codes": [
+        "react(set-state-in-effect)",
+        "react(set-state-in-effect)"
+      ],
+      "foreign": [],
+      "note": null,
+      "parseError": null,
+      "stderr": ""
+    }
+  },
+  "verdict": "PASS",
+  "items": [
+    {
+      "id": "1_grid_pixels",
+      "name": "网格线像素可见性（1440px，6 条轴方向）",
+      "pass": true,
+      "detail": "6/6 方向都测到最外圈六边形；最暗一档 3.89:1，其中不含\"顶满那条轴\"的 3.89:1（阈值 1.4）"
+    },
+    {
+      "id": "1b_probe_crosscheck",
+      "name": "与实现方探针表的几何交叉校验（不读像素，只对齐 r/R）",
+      "pass": true,
+      "detail": "6 轴 r/R 与探针 d= 的最大偏差 0.0119（容差 0.04）；探针顶满轴 [\"能力\"] vs 实测顶满轴 [\"能力\"]（一致=true）；探针自带对比度：网格 1.70:1 / 最外圈 axisLine 4.48:1 / 数据描边 18.43:1"
+    },
+    {
+      "id": "2_polygon_stroke",
+      "name": "数据多边形描边对比度（1440px）",
+      "pass": true,
+      "detail": "18.43:1（阈值 10）"
+    },
+    {
+      "id": "3_axis_labels",
+      "name": "轴标签不被裁 / 不重叠 / 13px（1100/1200/1440/1920/390）",
+      "pass": true,
+      "detail": "1440:PASS  1200:PASS  1100:PASS  1920:PASS  390:PASS"
+    },
+    {
+      "id": "4_home_regression",
+      "name": "首页整页回归（雷达区以外无差异）",
+      "pass": true,
+      "detail": "基线 before-home-1440.png（mtime 2026-10-16T19:09:16.881Z）；总差异 3963px（0.215%），区内 3053px（占雷达矩形 2.41%），区外 910px（0.049%，阈值 0.10%）；区外差异范围 x[835-880] y[401-446]，最多的行 [{\"y\":409,\"count\":34},{\"y\":438,\"count\":34},{\"y\":439,\"count\":31},{\"y\":407,\"count\":30},{\"y\":408,\"count\":30}]"
+    },
+    {
+      "id": "5_bottom_whitespace",
+      "name": "雷达卡底部死白 = 20px（1440/1200）",
+      "pass": true,
+      "detail": "1440:20.0px  1200:20.0px"
+    },
+    {
+      "id": "6_static",
+      "name": "tsc 无输出 + oxlint 只有 2 条既有告警",
+      "pass": true,
+      "detail": "tsc:PASS  oxlint:PASS(2 条 set-state-in-effect)"
+    }
+  ]
+}
