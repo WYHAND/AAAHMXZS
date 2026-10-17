@@ -8,36 +8,36 @@ import { Button } from '@/components/ui/button'
  * 404 / 兜底页（设计说明书 2.1 /404、/*）
  * 公开路由：未登录用户也能看到，所以不做守卫。
  *
- * 版式（2026-10 收口）：与登录/注册同一套骨架 —— 卡片用 `Panel`（白底 + 12px 圆角 +
- * 极轻阴影，不画可见描边），标题是真 `<h1>`（26/700），
- * 主按钮「回到首页」是整屏唯一的 warm/lg（规格同登录页：rounded-xl + 15px/600），
- * 「和 AI 聊聊」退成 ghost。
- * 外层不再自铺底色：`BlankLayout` 已经给了 `bg-canvas`，这里再包一层只会写出重复的壳。
+ * 版式（2026-10 收口）：与登录/注册同一套骨架 —— 居中一张 `Panel`，
+ * 里面是「空态」那套结构（图标圈 + 一句人话 + 动作），主按钮「回到首页」是
+ * 整屏唯一 warm/lg，次动作「去成长任务」退成 ghost。
+ *
+ * 为什么没有直接用 `EmptyState` 组件：本页需要**页面级**的 `<h1>`（26/700），
+ * 而 EmptyState 的标题是 16px 的 `<p>`（工具 tools/render-check/check-404.mjs 会断言
+ * 这一页有 26px 的 h1）。所以这里复用它的**外观**（居中图标圈 + 标题 + 描述 + 动作），
+ * 但把标题落成真正的 h1。若后续统一把 EmptyState 的标题改成可传的语义标签，这里可以收敛。
+ *
+ * 外层不再自铺底色：`BlankLayout` 已经给了 bg-canvas 与 448px 居中窄栏。
  */
 export default function NotFoundPage() {
   return (
-    <Panel>
-      <div className="flex flex-col gap-3">
-        <span className="flex size-9 items-center justify-center rounded-lg bg-secondary-fixed text-on-secondary-fixed">
-          <Compass className="size-4" aria-hidden />
+    <Panel className="mx-auto w-full gap-6">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <span className="flex size-10 items-center justify-center rounded-full bg-surface-container text-on-surface-variant">
+          <Compass className="size-5" aria-hidden />
         </span>
-        <h1 className="text-headline-xl font-bold text-primary">这个页面不存在</h1>
-        <p className="text-body-md text-on-surface-variant">
-          链接可能写错了，或者这个功能还没上线。回首页看看下一步该做什么。
+        <h1 className="text-headline-xl font-bold tracking-tight text-primary">这个页面不存在</h1>
+        <p className="max-w-[42ch] text-body-md text-on-surface-variant">
+          可能是链接过期了，或者这个功能还没上线。回首页看看下一步该做什么。
         </p>
       </div>
 
-      <div className="mt-5 flex flex-col gap-2">
-        <Button
-          variant="warm"
-          size="lg"
-          className="w-full rounded-xl text-[15px] font-semibold"
-          asChild
-        >
+      <div className="flex flex-col gap-2">
+        <Button variant="warm" size="lg" className="w-full" asChild>
           <Link to="/">回到首页</Link>
         </Button>
-        <Button variant="ghost" className="w-full" asChild>
-          <Link to="/chat">和 AI 聊聊我现在的情况</Link>
+        <Button variant="ghost" size="sm" className="w-full" asChild>
+          <Link to="/task">去成长任务</Link>
         </Button>
       </div>
     </Panel>

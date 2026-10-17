@@ -18,7 +18,7 @@ import type { ResumeData, ResumeExperienceItem, ResumeStar } from '@/types'
  *   顶部一条 24×2 的琥珀短条作文档标识（不是通栏色带）；
  * - 抬头：姓名 24/600；同一行右侧「求职意向：xxx / 城市」13px 次要色；
  *   联系方式（学校 · 专业 · 年级 + 邮箱）13px，配 lucide 极小图标，之间用细分隔符；
- * - 模块标题 13/600 + 一条发丝线（线只在**文档宽度内**，不横贯屏幕）+ 14px 正文；
+ * - 模块标题 16/600（text-headline-sm）+ 一条发丝线（线只在**文档宽度内**，不横贯屏幕）+ 14px 正文；
  * - 模块顺序照真实数据：基本信息（抬头）/ 求职意向 / 教育背景 / 技能 /
  *   项目经历 / 校园与实践经历 / 自我评价。
  *
@@ -249,7 +249,7 @@ export function ResumeSheet({ data, className }: ResumeSheetProps) {
 }
 
 /**
- * 模块：标题 13/600 + 一条发丝线。
+ * 模块：标题 16/600（text-headline-sm）+ 一条发丝线。
  *
  * ⚠️ `resume-section-title` 与里面那个 `<span class="bg-border">` 都不许改名/换结构：
  * 打印样式正是靠 `.resume-section-title span` 把这条线换成主色 0.6pt。
@@ -258,7 +258,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <section className="flex flex-col gap-3">
       <div className="resume-section-title flex flex-col gap-1.5">
-        <h3 className="text-body-sm font-semibold tracking-wide text-primary">{title}</h3>
+        <h3 className="text-headline-sm text-primary">{title}</h3>
         <span className="block h-px w-full bg-border" aria-hidden />
       </div>
       {children}
@@ -293,7 +293,7 @@ function EducationList({ items }: { items: ResumeData['education'] }) {
               <span className="text-body-md font-semibold text-primary">{title}</span>
               {period ? (
                 /* 期间：等宽 + 12px（规范里唯一允许 12px 用 font-numeric 的地方） */
-                <span className="font-numeric text-caption text-caption-foreground">{period}</span>
+                <span className="font-numeric text-caption text-on-surface-variant">{period}</span>
               ) : null}
             </div>
             <Bullets items={item.highlights} />
@@ -318,7 +318,7 @@ function Skills({ items }: { items: string[] }) {
         {items.map((skill, index) => (
           <li key={index} className="flex items-center gap-2 text-body-md text-primary">
             {index > 0 ? (
-              <span className="text-secondary" aria-hidden>
+              <span className="text-on-surface-variant" aria-hidden>
                 ·
               </span>
             ) : null}
@@ -332,7 +332,7 @@ function Skills({ items }: { items: string[] }) {
     <ul className="flex flex-col gap-1.5">
       {items.map((skill, index) => (
         <li key={index} className="flex items-start gap-2 text-body-md leading-[1.7] text-primary">
-          <span className="text-secondary" aria-hidden>
+          <span className="text-on-surface-variant" aria-hidden>
             ·
           </span>
           <span className="min-w-0">{skill}</span>
@@ -356,7 +356,7 @@ function ExperienceList({ items }: { items: ResumeExperienceItem[] }) {
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
               <span className="text-body-md font-semibold text-primary">{title}</span>
               {period ? (
-                <span className="font-numeric text-caption text-caption-foreground">{period}</span>
+                <span className="font-numeric text-caption text-on-surface-variant">{period}</span>
               ) : null}
             </div>
             <div className="flex flex-col gap-1">

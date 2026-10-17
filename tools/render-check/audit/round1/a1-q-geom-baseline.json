@@ -6,47 +6,49 @@
   },
   "q1": {
     "rootY": 0,
-    "rootH": 780,
-    "rootCssH": "780px",
-    "rootBottom": 780,
-    "cardY": 235,
-    "cardH": 272,
+    "rootH": 792,
+    "rootCssH": "792px",
+    "rootBottom": 792,
+    "rootPadTop": "76px",
+    "rootMarginTop": "0px",
+    "cardY": 275,
+    "cardH": 284,
     "prev": {
       "text": "上一题",
       "x": 384,
-      "y": 734,
-      "w": 76,
-      "h": 36
+      "y": 750,
+      "w": 68,
+      "h": 32
     },
     "skip": {
       "text": "跳过这题",
-      "x": 968,
-      "y": 724,
-      "w": 88,
-      "h": 36
+      "x": 976,
+      "y": 740,
+      "w": 80,
+      "h": 32
     },
     "chain": [
       {
         "tag": "div",
-        "cls": "mx-auto flex h-[calc(100svh-11rem)] w-full max-w-2xl flex-col gap-5 md:h-[calc(100svh-7.5r",
+        "cls": "mx-auto flex h-[calc(100svh-var(--spacing-shell-total))] min-h-0 w-full max-w-2xl flex-col",
         "y": 0,
-        "h": 780,
-        "pt": "0px",
+        "h": 792,
+        "pt": "76px",
         "pb": "0px",
         "mt": "0px",
         "minH": "0px",
-        "hCss": "780px"
+        "hCss": "792px"
       },
       {
         "tag": "div",
         "cls": "",
         "y": 0,
-        "h": 780,
+        "h": 792,
         "pt": "0px",
         "pb": "0px",
         "mt": "0px",
         "minH": "0px",
-        "hCss": "780px"
+        "hCss": "792px"
       },
       {
         "tag": "body",
@@ -60,51 +62,57 @@
         "hCss": "900px"
       }
     ],
-    "innerH": 900
+    "innerH": 900,
+    "htmlScrollH": 900,
+    "bodyScrollH": 900,
+    "docScrollH": 900,
+    "canScroll": false
   },
   "q2": {
     "rootY": 0,
-    "rootH": 780,
-    "rootCssH": "780px",
-    "rootBottom": 780,
-    "cardY": 262,
-    "cardH": 218,
+    "rootH": 792,
+    "rootCssH": "792px",
+    "rootBottom": 792,
+    "rootPadTop": "76px",
+    "rootMarginTop": "0px",
+    "cardY": 303,
+    "cardH": 227,
     "prev": {
       "text": "上一题",
       "x": 384,
-      "y": 734,
-      "w": 76,
-      "h": 36
+      "y": 750,
+      "w": 68,
+      "h": 32
     },
     "skip": {
       "text": "跳过并提交",
-      "x": 954,
-      "y": 724,
-      "w": 102,
-      "h": 36
+      "x": 962,
+      "y": 740,
+      "w": 94,
+      "h": 32
     },
     "chain": [
       {
         "tag": "div",
-        "cls": "mx-auto flex h-[calc(100svh-11rem)] w-full max-w-2xl flex-col gap-5 md:h-[calc(100svh-7.5r",
+        "cls": "mx-auto flex h-[calc(100svh-var(--spacing-shell-total))] min-h-0 w-full max-w-2xl flex-col",
         "y": 0,
-        "h": 780,
-        "pt": "0px",
+        "h": 792,
+        "pt": "76px",
         "pb": "0px",
         "mt": "0px",
         "minH": "0px",
-        "hCss": "780px"
+        "hCss": "792px"
       },
       {
         "tag": "div",
         "cls": "",
         "y": 0,
-        "h": 780,
+        "h": 792,
         "pt": "0px",
         "pb": "0px",
         "mt": "0px",
         "minH": "0px",
-        "hCss": "780px"
+        "hCss": "792px"
       },
       {
         "tag": "body",
@@ -118,7 +126,11 @@
         "hCss": "900px"
       }
     ],
-    "innerH": 900
+    "innerH": 900,
+    "htmlScrollH": 900,
+    "bodyScrollH": 900,
+    "docScrollH": 900,
+    "canScroll": false
   },
   "errors": []
 }

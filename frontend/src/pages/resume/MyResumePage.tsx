@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Lightbulb,
+  ArrowRight,
+  Gauge,
   Loader2,
-  Pencil,
   Plus,
   Printer,
   RefreshCw,
@@ -14,8 +14,10 @@ import { toast } from 'sonner'
 
 import { resumeApi } from '@/api/resume'
 import { EmptyState } from '@/components/EmptyState'
+import { Reveal, staggerDelay } from '@/components/Motion'
 import { PageShell } from '@/components/PageShell'
 import { Panel } from '@/components/Panel'
+import { Stat, StatGroup } from '@/components/StatGroup'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -421,6 +423,31 @@ export default function MyResumePage() {
   const saveLine = relativeSaved === '—' ? '' : relativeSaved
   /** 完整度：**本地按已填字段数算的**，没有后端字段，所以如实写成「已填 x/y 项」 */
   const { filled, total } = countFilled(sections, form)
+  const percent = total ? Math.round((filled / total) * 100) : 0
+  /**
+   * 右列「下一步」用的缺项，按**当前这一侧**算：填写态读表单的实时内容，
+   * 展示态读文档那份。不共用一份：填写态里 previewData 可能还是上一次保存的旧内容，
+   * 拿它说"缺什么"就不准了（会把已经写好的说成还没写）。
+   */
+  const formMissing = view === 'form' ? missingSections(buildResumeData(sections, form)) : []
+  const heroMissing = view === 'preview' ? missing : formMissing
+  /*
+   * 主角卡的**同一个**实心主按钮，在两种态里指向「这一屏该做的那件事」：
+   * - 展示态：回填写继续改；
+   * - 填写态但已经写过一点：直接润色（这页真正的主行动）；
+   * - 填写态还是一片空白：滚到表单起点开始写。
+   * 全页只有这一个实心按钮；底部吸底条里那个是它的弱化副本（见 FormView）。
+   * 刻意不用 useCallback：本行在提前 return（加载中 / 模板失败）之后，加 Hook 会踩 rules-of-hooks。
+   */
+  const scrollToFormStart = () => {
+    document.getElementById('resume-form-start')?.scrollIntoView({ block: 'start' })
+  }
+  const heroCta =
+    view === 'preview'
+      ? { label: '继续完善', run: goEdit }
+      : hasContent
+        ? { label: '让 AI 帮我改得更像简历', run: handlePolish }
+        : { label: '开始填写', run: scrollToFormStart }
 
   return (
     <PageShell
@@ -429,38 +456,31 @@ export default function MyResumePage() {
       breadcrumb="简历"
       actions={
         /*
-         * 操作组：统一成一行、统一高度。
-         * 「编辑简历」是本页唯一主按钮（warm / lg）；其余两个降级成 sm outline / ghost ——
-         * sm 是 32px，lg 是 44px，靠 items-center 居中对齐，不是把三个按钮拉成一样高
-         * （那会让主次重新变糊）。窄屏整组换行到标题下方，不挤压标题。
+         * 页头右侧只放**次要**动作，且只在展示态出现：打印导出让用户把成果带走，
+         * 「回到填写」与主角卡的「继续完善」同路（都回填写态）。
+         * 整页唯一的实心主按钮留给主角卡（见 CompletenessHero）——主次与任务列表一致。
          */
-        <div className="flex flex-wrap items-center gap-2">
-          {view === 'preview' ? (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.print()}
-                className="gap-1.5"
-              >
-                <Printer className="size-4" />
-                打印 / 导出
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={goEdit}
-                className="gap-1.5 text-on-surface-variant"
-              >
-                回到填写
-              </Button>
-            </>
-          ) : null}
-          <Button variant="warm" size="lg" onClick={goEdit} className="gap-1.5">
-            <Pencil className="size-4" />
-            编辑简历
-          </Button>
-        </div>
+        view === 'preview' ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.print()}
+              className="gap-1.5"
+            >
+              <Printer className="size-4" />
+              打印 / 导出
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={goEdit}
+              className="gap-1.5 text-on-surface-variant"
+            >
+              回到填写
+            </Button>
+          </div>
+        ) : null
       }
     >
       <div className="flex flex-col gap-6">
@@ -468,103 +488,151 @@ export default function MyResumePage() {
          * 头部信息行：这份简历存过没有 —— 只认后端给的 resume.updated_at，不编时间。
          * 字号 13px 走 body-sm，颜色次要色（保存时间是辅助信息，不该和标题一样响）。
          */}
-        <p data-print="hide" className="flex flex-wrap items-center gap-2 text-body-sm text-on-surface-variant">
-          {hasSavedResume && saveLine ? (
-            <span className="inline-block size-1.5 rounded-full bg-secondary" aria-hidden />
-          ) : null}
-          {hasSavedResume && saveLine ? `最近保存：${saveLine}` : '这份简历还没保存到服务器'}
-        </p>
+        <Reveal fade>
+          <p data-print="hide" className="flex flex-wrap items-center gap-2 text-body-sm text-on-surface-variant">
+            {hasSavedResume && saveLine ? (
+              <span className="inline-block size-1.5 rounded-full bg-secondary" aria-hidden />
+            ) : null}
+            {hasSavedResume && saveLine ? `最近保存：${saveLine}` : '这份简历还没保存到服务器'}
+          </p>
+        </Reveal>
 
         {loadError.mine ? (
           /* 提示块统一成卡内浅底（inset），不再各写一套「圆角边框白卡」 */
-          <Panel inset className="flex-row flex-wrap items-center justify-between gap-2 p-4">
-            <p className="text-body-sm text-on-surface-variant">
-              你以前保存过的简历这次没读出来，下面看到的可能是空的。
-            </p>
-            <Button variant="outline" size="sm" onClick={() => void reload()} className="gap-1.5">
-              <RefreshCw className="size-3" />
-              重新加载
-            </Button>
-          </Panel>
+          <Reveal fade>
+            <Panel inset className="flex-row flex-wrap items-center justify-between gap-2">
+              <p className="text-body-sm text-on-surface-variant">
+                你以前保存过的简历这次没读出来，下面看到的可能是空的。
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void reload()}
+                className="motion-press gap-1.5"
+              >
+                <RefreshCw className="size-3" />
+                重新加载
+              </Button>
+            </Panel>
+          </Reveal>
         ) : null}
 
         {/* 旧结构简历：内容已经尽力搬进新表单了，说清哪来的、少的是什么 */}
         {legacyData ? (
-          <Panel inset className="gap-1 p-4">
-            <p className="text-body-md text-on-surface">
-              这份简历是很早以前存下的旧格式，我把能认出来的内容搬到了新格式里。
-            </p>
-            <p className="text-body-sm text-on-surface-variant">
-              姓名、学校这些能看到；旧格式里没有的项（比如项目的情境 / 任务 / 行动 / 结果）是空的，点「回到填写」补上就行。保存一次就会换成新格式。
-            </p>
-          </Panel>
+          <Reveal fade delay={40}>
+            <Panel inset className="gap-1">
+              <p className="text-body-md text-on-surface">
+                这份简历是很早以前存下的旧格式，我把能认出来的内容搬到了新格式里。
+              </p>
+              <p className="text-body-sm text-on-surface-variant">
+                姓名、学校这些能看到；旧格式里没有的项（比如项目的情境 / 任务 / 行动 / 结果）是空的，点「回到填写」补上就行。保存一次就会换成新格式。
+              </p>
+            </Panel>
+          </Reveal>
         ) : null}
 
-        {view === 'form' ? (
-          <FormView
-            sections={sections}
-            form={form}
-            touched={touched}
-            hasContent={hasContent}
-            polishing={polishing}
-            saving={saving}
-            savedOnce={Boolean(resume)}
-            onField={setField}
-            onMultiple={setMultipleField}
-            onAddEntry={addEntry}
-            onRemoveEntry={removeEntry}
-            onPolish={handlePolish}
-            onSave={() => void handleSave()}
+        {/*
+         * 主角卡 = 页面唯一的主角（一屏一个）：整页唯一的实心主按钮、唯一的一段"完成度"叙事。
+         * 大块进场走 rise-in-lg（320ms），数字与进度条在卡内各自就位。
+         * 三个数字走 StatGroup；琥珀只给其中一个（填充率），其余走主墨。
+         */}
+        <Reveal lg>
+          <CompletenessHero
+            percent={percent}
+            filled={filled}
+            total={total}
+            missing={heroMissing}
+            ctaLabel={heroCta.label}
+            onCta={heroCta.run}
           />
+        </Reveal>
+
+        {view === 'form' ? (
+          /* 填写态：左 7 = 经历分区，右 5 = 下一步；窄屏（<lg）自动并成一列 */
+          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+            <div className="min-w-0 lg:col-span-7">
+              <FormView
+                sections={sections}
+                form={form}
+                touched={touched}
+                hasContent={hasContent}
+                polishing={polishing}
+                saving={saving}
+                savedOnce={Boolean(resume)}
+                onField={setField}
+                onMultiple={setMultipleField}
+                onAddEntry={addEntry}
+                onRemoveEntry={removeEntry}
+                onPolish={handlePolish}
+                onSave={() => void handleSave()}
+              />
+            </div>
+            <aside
+              data-print="hide"
+              className="flex flex-col gap-4 lg:col-span-5 lg:sticky lg:top-4"
+            >
+              <Reveal delay={120}>
+                <GuideCard
+                  filled={filled}
+                  total={total}
+                  missing={heroMissing}
+                  onJump={scrollToFormStart}
+                />
+              </Reveal>
+            </aside>
+          </div>
         ) : previewData ? (
           /*
-           * 展示态 = 简历工作台：左边是简历文档纸，右边是导引栏。
-           *
-           * 两栏只在 xl（≥1280px）出现 —— 文档最窄要 820px 才不至于把正文挤成窄条，
-           * 加上 300px 导引栏与卡片间距，1280px 是能放下的最小宽度。
-           * 1024–1279px（用户日常的 1025px 窗口就在这一档）**单列**：导引栏移到文档下方，
-           * 绝不让文档被压窄、也不让按钮被裁掉。
+           * 展示态 = 简历工作台：左 7 是文档纸，右 5 是「下一步」导引。
+           * 这一层还挂着打印铺满纸张的类名与回填写时的滚动锚点，名字一个字都不能改。
+           * 窄屏（<lg）自动单列：导引栏落到文档下方，绝不把文档压成窄条。
            */
-          <div id="resume-view-top" className="resume-page flex flex-col gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_300px] xl:items-start xl:gap-8">
-            <div className="flex min-w-0 flex-col gap-4">
+          <div
+            id="resume-view-top"
+            className="resume-page grid grid-cols-1 items-start gap-6 lg:grid-cols-12"
+          >
+            <div className="flex min-w-0 flex-col gap-4 lg:col-span-7">
               {polishing ? (
-                <Panel
-                  data-print="hide"
-                  className="ai-inset flex-row items-start gap-2.5 bg-surface-container-low p-4 shadow-none"
-                >
-                  <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-secondary" />
-                  <div className="flex flex-col gap-1">
-                    <p className="text-body-md text-primary">
-                      正在把你的内容改写成简历口吻，要一会儿。
-                    </p>
-                    <p className="text-body-sm text-on-surface-variant">
-                      下面这份是先按你写的内容原样排出来的。改好之后我在这儿原地换成润色版，你不用管它。
-                    </p>
-                  </div>
-                </Panel>
+                /* 状态条：与页面其它提示块同一种内嵌浅底外观，只多一条 AI 竖条 */
+                <Reveal fade>
+                  <Panel
+                    inset
+                    data-print="hide"
+                    className="ai-inset flex-row items-start gap-2.5"
+                  >
+                    <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-secondary" />
+                    <div className="flex flex-col gap-1">
+                      <p className="text-body-md text-primary">
+                        正在把你的内容改写成简历口吻，要一会儿。
+                      </p>
+                      <p className="text-body-sm text-on-surface-variant">
+                        下面这份是先按你写的内容原样排出来的。改好之后我在这儿原地换成润色版，你不用管它。
+                      </p>
+                    </div>
+                  </Panel>
+                </Reveal>
               ) : null}
 
               {polishError ? (
-                <Panel
-                  data-print="hide"
-                  className="ai-inset gap-2 bg-surface-container-low p-4 shadow-none"
-                >
-                  <p className="text-body-md text-primary">润色这次没成功：{polishError}</p>
-                  <p className="text-body-sm text-on-surface-variant">
-                    下面这份是按你写的内容原样排出来的，一个字都没丢。可以再点一次，或者先「编辑」回去把内容存下来。
-                  </p>
-                  <div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void runPolish()}
-                      className="gap-1.5"
-                    >
-                      <Sparkles className="size-4" />
-                      再润色一次
-                    </Button>
-                  </div>
-                </Panel>
+                <Reveal fade>
+                  <Panel inset data-print="hide" className="ai-inset">
+                    <p className="text-body-md text-primary">润色这次没成功：{polishError}</p>
+                    <p className="text-body-sm text-on-surface-variant">
+                      下面这份是按你写的内容原样排出来的，一个字都没丢。可以再点一次，或者先「编辑」回去把内容存下来。
+                    </p>
+                    <div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void runPolish()}
+                        className="motion-press gap-1.5"
+                      >
+                        <Sparkles className="size-4" />
+                        再润色一次
+                      </Button>
+                    </div>
+                  </Panel>
+                </Reveal>
               ) : null}
 
               {isEmptySheet ? (
@@ -573,44 +641,29 @@ export default function MyResumePage() {
                  * 「这一节还没填，先空着」这种开发占位文案）。给一个克制的空态 + 去填写。
                  */
                 <EmptyState
-                  className="mx-auto w-full max-w-[820px] items-center gap-3 border border-border bg-card py-8 shadow-none"
+                  className="mx-auto w-full max-w-[820px]"
                   title="这份简历还是空的。"
                   description="下面每一项都是简历会问到的问题，想到多少写多少，写半句也行。"
                   action={
-                    <Button variant="warm" size="sm" onClick={goEdit}>
+                    <Button variant="outline" size="sm" onClick={goEdit} className="motion-press">
                       去填写
                     </Button>
                   }
                 />
               ) : (
+                /* 简历纸是**打印内容**，画面上的进场一律不给它加（打印会错乱），只静止上屏 */
                 <ResumeSheet data={previewData} />
               )}
             </div>
 
-            {previewData ? (
-              <aside
-                data-print="hide"
-                className="flex flex-col gap-3 xl:sticky xl:top-4"
-              >
-                <CompletenessCard
-                  hasSavedResume={hasSavedResume}
-                  saveLine={saveLine}
-                  filled={filled}
-                  total={total}
-                  missing={missing}
-                  onFirstMissing={() =>
-                    document.getElementById('resume-form-start')?.scrollIntoView({ block: 'start' })
-                  }
-                />
-                <NextStepCard
-                  filled={filled}
-                  missing={missing}
-                  onJump={() =>
-                    document.getElementById('resume-form-start')?.scrollIntoView({ block: 'start' })
-                  }
-                />
-              </aside>
-            ) : null}
+            <aside
+              data-print="hide"
+              className="flex flex-col gap-4 lg:col-span-5 lg:sticky lg:top-4"
+            >
+              <Reveal delay={80}>
+                <GuideCard filled={filled} total={total} missing={heroMissing} onJump={goEdit} />
+              </Reveal>
+            </aside>
           </div>
         ) : (
           <FailureCard
@@ -684,224 +737,210 @@ function FormView({
   onSave,
 }: FormViewProps) {
   const busy = polishing || saving
-  const { filled, total } = countFilled(sections, form)
-  const percent = total ? Math.round((filled / total) * 100) : 0
 
   return (
     /*
      * 整块填写态标 data-print='hide'：打印的是简历（展示态），
      * 不该把"问题 + 输入框"的空白行印出来。
      *
-     * 2026-10 收口：整页原来 4248px / 9 张白卡，一段一张大卡 + 卡里再叠临时底色 ——
-     * 现在统一成 Panel（20px 内边距、无描边），可重复段的每条用 Panel inset，
-     * 段内字段间距 16px。字段一个都没删、也没藏。
+     * 2026-10 收口（第二版）：完整度已经升成页面顶部的主角卡，这里不再重复一块；
+     * 每段一张 Panel（默认 20px 内边距、无描边），可重复段的每条用 Panel inset。
+     * 字段一个都没删、也没藏。
      */
-    <div data-print="hide" className="flex flex-col gap-3">
-      {/*
-        简历完整度：原来是"一段一张大卡"里最显眼的一张（白卡 + 24px 数字），
-        现在降级成页面第一条卡内浅底块 —— 它是进度提示，不是这一页的主角。
-        数字仍是**本地按已填字段数算的**（没有后端字段），所以如实写「已填 x/y 项」。
-      */}
-      <Panel inset className="gap-2 p-4">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-body-sm font-medium text-on-surface-variant">简历完整度</span>
-          <span className="font-numeric text-headline-lg font-semibold leading-none text-primary">
-            {percent}%
-          </span>
-        </div>
-        <Progress value={percent} className="h-1.5 bg-surface-container" />
-        <p className="text-body-sm text-on-surface-variant">
-          已填 {filled}/{total} 项 · 空着的不影响保存，随时回来补；我不会替你编经历。
-        </p>
-      </Panel>
-
-      {/* 空态：还没写过任何内容时给一句诚实的说明 + 「开始填写」 */}
+    <div data-print="hide" className="flex flex-col gap-4">
+      {/* 空态：还没写过任何内容时给一句诚实的说明 + 「从第一个问题开始」 */}
       {!hasContent && !savedOnce ? (
         <EmptyState
-          className="gap-2 border border-border bg-card py-5 shadow-none"
-          title="我不会替你编经历：你写什么，我只帮你改得更像简历。空着的项目会一直空着。"
-          description="下面每一项都是简历会问到的问题，想到多少写多少，写半句也行。"
+          className="gap-2"
+          title="还一个字都没写。"
+          description="我不会替你编经历：下面每一项都是简历会问到的问题，想到多少写多少，写半句也行；空着的项目会一直空着。"
           action={
             <Button
-              variant="warm"
+              variant="outline"
               size="sm"
               onClick={() =>
                 document.getElementById('resume-form-start')?.scrollIntoView({ block: 'start' })
               }
+              className="motion-press"
             >
-              开始填写
+              从第一个问题开始
             </Button>
           }
         />
       ) : null}
 
       <div id="resume-form-start" className="flex flex-col gap-3">
-        {sections.map((section) => (
-          /* 每段一张 Panel；本页规格是「描边分层、无阴影、16px 内边距」，可重复段每条再套一层 Panel inset */
-          <Panel key={section.key} as="section" className="gap-3 border border-border p-4 shadow-none">
-            <div className="flex flex-col gap-1">
-              <h2 className="flex flex-wrap items-center gap-2 text-headline-sm text-primary">
-                {section.label}
-                <span className="rounded-full bg-surface-container px-2 py-0.5 text-caption font-normal text-on-surface-variant">
-                  {section.fields.length} 项
-                </span>
-              </h2>
+        {sections.map((section, index) => (
+          /*
+           * 每段一张 Panel（默认白卡、20px 内边距）；可重复段每条再套一层 Panel inset。
+           * 进场只错开头几项（staggerDelay 自带上限 7），不让长表单一起抖。
+           */
+          <Reveal key={section.key} delay={staggerDelay(index)}>
+            <Panel as="section" className="gap-4">
+              <div className="flex flex-col gap-1">
+                <h2 className="flex flex-wrap items-center gap-2 text-headline-sm text-primary">
+                  {section.label}
+                  <span className="rounded-full bg-surface-container px-2 py-0.5 text-caption font-normal text-on-surface-variant">
+                    {section.fields.length} 项
+                  </span>
+                </h2>
+                {section.repeatable ? (
+                  <p className="text-body-sm text-on-surface-variant">
+                    这一段可以写多条，每一条都是简历上独立的一条。
+                  </p>
+                ) : section.key === 'skills' ? (
+                  /* 原来这段说明挤在底部吸底条里（一大片灰字）；挪到技能栏旁边，写的人才看得到 */
+                  <p className="text-body-sm text-on-surface-variant">
+                    写关键词就行（一个一行）；润色时我会把它们展开成简历上的说法，不会加你没写过的技术、也不会加数字。
+                  </p>
+                ) : null}
+              </div>
               {section.repeatable ? (
-                <p className="text-body-sm text-on-surface-variant">
-                  这一段可以写多条，每一条都是简历上独立的一条。
-                </p>
-              ) : null}
-            </div>
-            {section.repeatable ? (
-              <Entries
-                section={section}
-                form={form}
-                touched={touched}
-                busy={busy}
-                onField={onField}
-                onMultiple={onMultiple}
-                onAddEntry={onAddEntry}
-                onRemoveEntry={onRemoveEntry}
-              />
-            ) : (
-              <FieldList
-                section={section}
-                index={0}
-                form={form}
-                touched={touched}
-                busy={busy}
-                onField={onField}
-                onMultiple={onMultiple}
-              />
-            )}
-          </Panel>
+                <Entries
+                  section={section}
+                  form={form}
+                  touched={touched}
+                  busy={busy}
+                  onField={onField}
+                  onMultiple={onMultiple}
+                  onAddEntry={onAddEntry}
+                  onRemoveEntry={onRemoveEntry}
+                />
+              ) : (
+                <FieldList
+                  section={section}
+                  index={0}
+                  form={form}
+                  touched={touched}
+                  busy={busy}
+                  onField={onField}
+                  onMultiple={onMultiple}
+                />
+              )}
+            </Panel>
+          </Reveal>
         ))}
       </div>
 
-      {/* 动作区：吸底常驻（页面很长，润色/保存不该只有滚到底才够得着） */}
+      {/*
+       * 底部吸底条：整页唯一的实心主按钮已经升到顶部主角卡（同屏只留一个），
+       * 这里只放它的**弱化副本**（ghost，滚到表单底部也够得着）+ 次要动作「保存」。
+       */}
       <div className="sticky bottom-4 z-10 flex flex-col gap-1.5 rounded-xl border border-border bg-card/95 px-3.5 py-2.5 backdrop-blur">
-        {/* 窄屏也不让两个按钮换行：主按钮 + 次按钮挤成一行才不至于把首屏内容挡住一半 */}
+        {/* 窄屏也不让两个按钮换行：两个都挤成一行才不至于把首屏内容挡住一半 */}
         <div className="flex flex-nowrap items-center gap-2">
-          {/* 本页唯一主 CTA：升 size="lg"（h-11 / 圆角 12 / 15px / 600） */}
-          <Button
-            variant="warm"
-            size="lg"
-            onClick={onPolish}
-            disabled={!hasContent || busy}
-            className="gap-1.5 rounded-xl"
-            title={hasContent ? undefined : '先写一点内容，我才能帮你改'}
-          >
-            <Sparkles className="size-4" />
-            {polishing ? '正在润色…' : '让 AI 帮我改得更像简历'}
-          </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={onSave}
             disabled={busy}
-            className="gap-1.5 rounded-lg"
+            className="motion-press gap-1.5"
           >
             <Save className="size-4" />
             {saving ? '保存中…' : '保存'}
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onPolish}
+            disabled={!hasContent || busy}
+            className="motion-press gap-1.5"
+            title={hasContent ? undefined : '先写一点内容，我才能帮你改'}
+          >
+            <Sparkles className="size-4" />
+            {polishing ? '正在润色…' : '让 AI 帮我改得更像简历'}
+          </Button>
         </div>
         <p className="text-body-sm text-on-surface-variant">
-          润色只改写你写过的内容，不会替你编经历。技能那一栏会把关键词展开成简历上的说法
-          （比如「Java」写成「熟悉 Java 基础语法、面向对象编程…」），但不会加你没写过的技术、也不会加数字。
+          润色只改写你写过的内容，不会替你编经历；空着的项目不会自己长出来。
         </p>
       </div>
     </div>
   )
 }
 
-/* --------------------------------- 导引栏 --------------------------------- */
+/* --------------------------------- 主角卡 / 导引卡 --------------------------------- */
 
 /**
- * 导引栏的卡：白卡 + 1px 描边 + **无阴影**（本页所有卡的分层都靠描边，不靠投影）。
- * 不用 Panel：Panel 的静止态是"白底 + 极轻阴影、不画描边"，本页规格与它相反，
- * 而 Panel.tsx 是全站共用件、不许为一个页面改。这里是页面私有的卡，16px 内边距。
- */
-function RailCard({ children }: { children: React.ReactNode }) {
-  return (
-    <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
-      {children}
-    </section>
-  )
-}
-
-/**
- * 「简历完整指引」。
+ * 主角卡：简历完整度。整页最大的一张 Panel，也是**全页唯一**带实心主按钮的地方。
+ * 那个按钮的文案与去向由页面按状态决定（见 heroCta）：展示态回填写，填写态有内容就润色，
+ * 还空着就滚到表单起点 —— 主角卡永远指向「这一屏该做的那件事」。
  *
- * 两个数字都是真的：`filled/total` 来自 `countFilled(sections, form)`（本地按已填字段数算），
- * 缺什么来自文档的同一份模块分析 —— **文档里没印出来的模块，在这里说**。
- * 这正是"提醒放文档外"：正式简历上不留「这一节还没填」这种开发占位文案。
- * 不编百分比之外的任何统计（项目数、得分、HR 视角之类的都是编的，一律没有）。
+ * 三个数字都是真的：`filled/total` 来自 countFilled（本地按已填字段数算），
+ * 缺什么来自与文档同一份模块分析 —— **文档里没印出来的模块，只有这里会说出来**。
+ * 不编任何额外统计（项目数、得分、HR 视角之类的一律没有）。
+ *
+ * data-print='hide'：打印的是简历本身，这张卡是页面外壳，不该印到纸上。
  */
-function CompletenessCard({
-  hasSavedResume,
-  saveLine,
+function CompletenessHero({
+  percent,
   filled,
   total,
   missing,
-  onFirstMissing,
+  ctaLabel,
+  onCta,
 }: {
-  hasSavedResume: boolean
-  saveLine: string
+  percent: number
   filled: number
   total: number
   missing: string[]
-  onFirstMissing: () => void
+  ctaLabel: string
+  onCta: () => void
 }) {
-  const percent = total ? Math.round((filled / total) * 100) : 0
-  const missingText = missing.length ? missing.join(' / ') : ''
-
   return (
-    <RailCard>
-      <div className="flex items-center justify-between gap-3">
+    <Panel data-print="hide" className="gap-5">
+      <div className="flex flex-col gap-2">
         <h2 className="flex items-center gap-2 text-headline-sm text-primary">
-          <Lightbulb className="size-4 shrink-0 text-secondary" aria-hidden />
-          简历完整指引
+          <Gauge className="size-[18px] shrink-0 text-secondary" aria-hidden />
+          简历完整度
         </h2>
-        <span className="shrink-0 rounded-full bg-surface-container px-2 py-0.5 text-caption text-on-surface-variant">
-          已填 {filled}/{total} 项
-        </span>
+        <p className="max-w-[52ch] text-body-md text-on-surface-variant">
+          {completenessLine(percent, missing)}
+        </p>
       </div>
 
-      <Progress value={percent} className="h-1.5 bg-surface-container" />
+      {/* 本页唯一的进度条（主卡规格 6px）；值上屏时从左长出来一次 */}
+      <Progress value={percent} className="grow-x h-1.5 bg-surface-container" />
 
-      <p className="text-body-sm text-on-surface-variant">
-        {missing.length
-          ? `文档里现在只排出了填过的部分。还缺：${missingText} —— 空着的项目不会自己长出来，我不会替你编。`
-          : '每一项都填过了，文档会按真实内容排出来。随时回来改，改完再润色一次就行。'}
-      </p>
+      {/* 琥珀只给一个数字（填充率），其余走主墨 */}
+      <StatGroup columns={3}>
+        <Stat value={percent} unit="%" label="已经写好" accent />
+        <Stat value={filled} label="写好的项" />
+        <Stat value={total - filled} label="还空着的项" />
+      </StatGroup>
 
-      {missing.length ? (
-        <div>
-          <Button variant="outline" size="sm" onClick={onFirstMissing} className="gap-1.5">
-            去补「{missing[0]}」
-          </Button>
-        </div>
-      ) : null}
-
-      <p className="text-body-sm text-on-surface-variant">
-        {hasSavedResume
-          ? `这份简历存在服务器上${saveLine ? `，${saveLine}存过一次` : ''}。`
-          : '这份简历还没保存到服务器：点填写区底部的「保存」，以后打开这一页内容都在。'}
-      </p>
-    </RailCard>
+      <div>
+        <Button variant="warm" size="lg" onClick={onCta} className="motion-press gap-1.5">
+          {ctaLabel}
+          <ArrowRight className="size-4" aria-hidden />
+        </Button>
+      </div>
+    </Panel>
   )
 }
 
 /**
- * 「下一步」。第一句引导按真实缺什么派生（缺项目就说项目），
- * 按钮跳到填写区的起点（沿用页面里既有的做法，不新造滚动逻辑）。
+ * 完整度的一句话人话。三种口径各说各的，不把"都写完了"套到空简历上。
+ * `missing` 是当前那一侧的缺项（填写态读表单、展示态读文档）。
  */
-function NextStepCard({
+function completenessLine(percent: number, missing: string[]): string {
+  if (percent <= 0) return '还是一片空白。想到多少写多少，写半句也行，我不会替你编经历。'
+  if (!missing.length) return '每一段都有着落了。接下来把它改得更像简历，投出去会更稳。'
+  return `已经填了 ${percent}%。补上「${missing[0]}」，这份简历会更有说服力。`
+}
+
+/**
+ * 右列「下一步」。第一句引导按真实缺什么派生（缺项目就说项目），
+ * 按钮跳到填写区的起点（沿用页面里既有的滚动锚点，不新造逻辑）。
+ */
+function GuideCard({
   filled,
+  total,
   missing,
   onJump,
 }: {
   filled: number
+  total: number
   missing: string[]
   onJump: () => void
 }) {
@@ -913,15 +952,29 @@ function NextStepCard({
     : '每一段都有着落了。接下来是把它改得更像简历 —— 回填写区点一次「让 AI 帮我改得更像简历」。'
 
   return (
-    <RailCard>
-      <h2 className="text-headline-sm text-primary">下一步</h2>
-      <p className="text-body-sm text-on-surface-variant">{guide}</p>
+    <Panel className="gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-headline-sm text-primary">下一步</h2>
+        <span className="shrink-0 rounded-full bg-surface-container px-2 py-0.5 text-caption text-on-surface-variant">
+          已填 {filled}/{total} 项
+        </span>
+      </div>
+      <p className="text-body-md text-on-surface-variant">{guide}</p>
+      {missing.length ? (
+        <p className="text-body-sm text-on-surface-variant">
+          还没写到的部分：{missing.join(' / ')}。空着的项目不会自己长出来，我不会替你编。
+        </p>
+      ) : (
+        <p className="text-body-sm text-on-surface-variant">
+          每一项都填过了，文档会按真实内容排出来。随时回来改，改完再润色一次就行。
+        </p>
+      )}
       <div>
-        <Button variant="outline" size="sm" onClick={onJump} className="gap-1.5">
+        <Button variant="outline" size="sm" onClick={onJump} className="motion-press gap-1.5">
           {first ? `去填「${first}」` : filled ? '回去接着改' : '开始填写'}
         </Button>
       </div>
-    </RailCard>
+    </Panel>
   )
 }
 
@@ -972,7 +1025,8 @@ function Entries({
           <Panel key={index} inset className="gap-2 p-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               {/* 浅底上的小字必须用 on-surface-variant：caption-foreground 在 #f5f3f0 上只有 2.3:1 */}
-              <span className="text-caption text-on-surface-variant">                {section.label} 第 {index + 1} 条
+              <span className="text-caption text-on-surface-variant">
+                {section.label} 第 {index + 1} 条
               </span>
               <div className="flex items-center gap-1">
                 {!open ? (
@@ -981,7 +1035,7 @@ function Entries({
                     size="xs"
                     disabled={busy}
                     onClick={() => setExpanded((prev) => ({ ...prev, [index]: true }))}
-                    className="gap-1"
+                    className="motion-press gap-1"
                   >
                     开始填这一条
                   </Button>
@@ -991,7 +1045,7 @@ function Entries({
                   size="xs"
                   disabled={busy}
                   onClick={() => onRemoveEntry(section, index)}
-                  className="gap-1 text-on-surface-variant"
+                  className="motion-press gap-1 text-on-surface-variant"
                 >
                   <Trash2 className="size-3" />
                   删掉这条
@@ -1022,7 +1076,7 @@ function Entries({
           size="sm"
           disabled={busy}
           onClick={() => onAddEntry(section)}
-          className="gap-1.5"
+          className="motion-press gap-1.5"
         >
           <Plus className="size-4" />
           再加一条
@@ -1177,10 +1231,10 @@ function FailureCard({
   onRetry: () => void
 }) {
   return (
-    <Panel className="items-center gap-3 border border-border p-4 text-center shadow-none">
+    <Panel className="items-center gap-3 text-center">
       <p className="text-body-md text-on-surface">{title}</p>
       <p className="max-w-md text-body-sm text-on-surface-variant">{description}</p>
-      <Button variant="outline" size="sm" onClick={onRetry} className="gap-1.5">
+      <Button variant="outline" size="sm" onClick={onRetry} className="motion-press gap-1.5">
         <RefreshCw className="size-4" />
         重新加载
       </Button>

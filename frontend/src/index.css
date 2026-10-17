@@ -256,12 +256,18 @@
    * 历史上的 `bg-secondary text-secondary-foreground`（想要"浅灰底深灰字"）一律改写成
    * `bg-surface-container text-on-surface`。
    */
-  --secondary: #9b4500;
+  /*
+   * 2026-10-15 用户要求：全站切黑白 —— 原来的琥珀强调色 / 浅桃底一律换成中性灰。
+   * 下面 `--secondary*` / `--accent*` / `--ai-accent` / `--stage-explore` 都按这个来，
+   * 所以 `text-secondary` / `bg-secondary` / `bg-secondary-fixed` 全站自动变灰，不用逐个组件改。
+   * （上面那段"琥珀/浅桃"的老描述仅在讲历史，实际值以本处为准。）
+   */
+  --secondary: #45474c;
   --secondary-foreground: #ffffff;
   --muted: #f5f3f0;
   --muted-foreground: #64748b;
-  --accent: #ffdbca;
-  --accent-foreground: #331200;
+  --accent: #efeeeb;
+  --accent-foreground: #1b1c1a;
 
   /* ---- 状态 ---- */
   --destructive: #ba1a1a;
@@ -292,12 +298,12 @@
   --outline: #75777d;
   --outline-variant: #c5c6cd;
   --primary-container: #1e293b;
-  --secondary-fixed: #ffdbca;
-  --on-secondary-fixed: #331200;
-  --accent-amber: #b45309;
+  --secondary-fixed: #efeeeb;
+  --on-secondary-fixed: #1b1c1a;
+  --accent-amber: #45474c;
   /* 琥珀"文字色"的**别名校验**：等价于 text-secondary（#9b4500）。
      只有 text-secondary 会生成工具类，--accent-ink 是给需要 var() 的地方（SVG/内联样式）用的。 */
-  --accent-ink: #9b4500;
+  --accent-ink: #45474c;
 
   /*
    * ---- 状态色（2026-10-11 用户要求：给首页两个面板加"克制的状态色"）----
@@ -348,8 +354,8 @@
   --medal-shadow: 0 2px 6px rgba(28, 25, 23, 0.16);
 
   /* 阶段 / AI：统一成稿子里的琥珀棕（旧的 ai-accent 是偏黄的赭黄） */
-  --ai-accent: #b45309;
-  --stage-explore: #b45309;
+  --ai-accent: #45474c;
+  --stage-explore: #45474c;
 
   /* ---- 阴影：极轻的环境扩散（DESIGN.md Elevation）---- */
   --shadow-card: 0 1px 3px 0 rgba(15, 23, 42, 0.03), 0 1px 2px -1px rgba(15, 23, 42, 0.02);
@@ -393,14 +399,14 @@
   --color-outline: #75777d;
   --color-outline-variant: #c5c6cd;
   --color-primary-container: #1e293b;
-  --color-secondary-fixed: #ffdbca;
-  --color-on-secondary-fixed: #331200;
+  --color-secondary-fixed: #efeeeb;
+  --color-on-secondary-fixed: #1b1c1a;
   --color-on-primary: #ffffff;
   --color-on-secondary: #ffffff;
   --color-error: #ba1a1a;
   --color-on-error: #ffffff;
-  --color-accent-amber: #b45309;
-  --color-accent-ink: #9b4500;
+  --color-accent-amber: #45474c;
+  --color-accent-ink: #45474c;
   /*
    * 状态色（首页两个面板）—— 必须写成 var() 引用上面 :root 的定义，
    * 写死字面值会被 Tailwind 内联进工具类（见上面 --caption-foreground 的坑），
@@ -560,6 +566,140 @@
     .typing-dot {
       animation: none;
       opacity: 0.6;
+    }
+  }
+}
+
+/* ==========================================================================
+   2026-10-12 前端迭代：统一动效语汇（只增不改；主页 / AI 对话不使用）
+   --------------------------------------------------------------------------
+   纪律（写动效前先读一遍，越界就不高级了）：
+   1. 只做两类动效 —— **进场（一次）** 与 **交互反馈**。不做装饰性循环动画。
+   2. 节拍一支笔：进场 220ms（大块 320ms）、反馈 140–160ms，
+      缓动统一 cubic-bezier(0.22, 1, 0.36, 1)（先快后缓，收得稳）。
+   3. 位移一律很小（≤10px），**不做弹跳 / 回弹 / 旋转**。
+   4. 动效不得改变布局占位（动画前后盒子尺寸一致），避免加载时的抖动。
+   5. prefers-reduced-motion: reduce → 全部关闭。
+   6. 列表错峰只错开头几项（见 components/Motion.tsx 的 staggerDelay），
+      否则最后一项要等一秒才出现。
+   ========================================================================== */
+/*
+   动效节拍取值（外部规范，改这里就是改全站动效）：
+   - 缓动：Material 3 的 emphasized decelerate = cubic-bezier(0.05, 0.7, 0.1, 1)。
+     M3 明确「进入屏幕的转场用 decelerate」；NN/g 也说进场用 ease-out（起手快、收尾稳，
+     眼睛能预判它停在哪），线性运动看着不自然。
+   - 时长：M3 short4 = 200ms、medium2 = 300ms。NN/g 的实测口径：简单反馈约 100ms，
+     大面积变化 200–300ms，超过 400ms 就开始觉得拖；**进场要比退场略慢**。
+   - 位移：6px（大块 10px）。位移越大越容易"晕"，也让错峰看起来更慢。
+*/
+:root {
+  --motion-ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --motion-ease-feedback: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-dur-sm: 140ms;
+  --motion-dur-md: 200ms;
+  --motion-dur-lg: 300ms;
+  --motion-rise: 6px;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-rise));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 数字/进度条变化时的补间（只给真正会变的值加） */
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@layer components {
+  /* 进场：单块上浮。rise-in-lg 给页面主角区（位移更大、更从容） */
+  .rise-in {
+    animation: rise-in var(--motion-dur-md) var(--motion-ease-enter) both;
+  }
+  .rise-in-lg {
+    --motion-rise: 10px;
+    animation: rise-in var(--motion-dur-lg) var(--motion-ease-enter) both;
+  }
+  /* 只淡入（不适合位移的场景：整页容器、覆盖层、内容替换） */
+  .fade-in {
+    animation: fade-in var(--motion-dur-md) ease-out both;
+  }
+
+  /*
+    交互反馈：只给**真正可点**的元素加。
+    ⚠️ 层叠纪律：这几个类都写 transition-property，同一元素同时挂时**后定义的赢**。
+    所以按「弱 → 强」排列：motion-press < motion-press-color < motion-lift。
+    这样 `motion-lift motion-press` 会取 motion-lift 那条更全的过渡，而按下轻缩依然生效。
+    （同理：不要和 Tailwind 的 transition-* 工具类同挂 —— 它在 utilities 层，会盖掉这里。）
+  */
+  .motion-press {
+    transition: transform var(--motion-dur-sm) ease-out;
+  }
+  .motion-press-color {
+    transition:
+      transform var(--motion-dur-sm) ease-out,
+      background-color var(--motion-dur-sm) ease-out,
+      color var(--motion-dur-sm) ease-out,
+      border-color var(--motion-dur-sm) ease-out;
+  }
+  .motion-lift {
+    transition:
+      transform var(--motion-dur-sm) var(--motion-ease-feedback),
+      box-shadow var(--motion-dur-sm) var(--motion-ease-feedback),
+      border-color var(--motion-dur-sm) ease-out,
+      background-color var(--motion-dur-sm) ease-out;
+    will-change: transform;
+  }
+
+  .motion-press:active,
+  .motion-press-color:active {
+    transform: scale(0.985);
+  }
+  .motion-lift:hover {
+    transform: translateY(-2px);
+  }
+
+  /*
+    进度条 / 数值条：值出现时从左长出来。
+    ⚠️ 用 transform: scaleX 而不是宽度 —— 动 width 会触发布局（每帧重排），
+    也是 CLS 的常见来源；合成层上的 transform 才是稳的。
+  */
+  .grow-x {
+    transform-origin: left center;
+    animation: grow-x 520ms var(--motion-ease-enter) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rise-in,
+    .rise-in-lg,
+    .fade-in,
+    .grow-x {
+      animation: none;
+    }
+    .motion-lift:hover,
+    .motion-press:active,
+    .motion-press-color:active {
+      transform: none;
     }
   }
 }

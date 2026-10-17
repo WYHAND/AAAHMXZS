@@ -3,7 +3,9 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, ExternalLink, ListChecks, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { AIThinking } from '@/components/AIThinking'
 import { EmptyState } from '@/components/EmptyState'
+import { Reveal } from '@/components/Motion'
 import { Panel } from '@/components/Panel'
 import { StepList } from '@/components/StepList'
 import { TaskAbandonDialog } from '@/components/TaskAbandonDialog'
@@ -21,7 +23,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
-import { Skeleton } from '@/components/ui/skeleton'
 import { PageShell } from '@/components/PageShell'
 import { ONGOING_STATUS, taskProgress, useTaskStore } from '@/store/taskStore'
 import type { TaskStep } from '@/types'
@@ -56,7 +57,7 @@ function ChoiceRow({
               type="button"
               onClick={() => onChange(option)}
               className={cn(
-                'rounded-lg px-3.5 py-1.5 text-body-md transition-colors',
+                'motion-press rounded-lg px-3.5 py-1.5 text-body-md transition-colors',
                 selected
                   ? 'bg-primary-soft text-primary ring-1 ring-primary/30'
                   : 'bg-surface-container-low text-on-surface hover:bg-surface-container',
@@ -74,18 +75,22 @@ function ChoiceRow({
 /**
  * 任务详情与打卡（设计说明书 3.2 ③）
  *
- * 版式（2026-10 收口）：**首屏必须能看到「打卡」** —— 主体是 `lg:grid-cols-12` 两列，
- * 左 7 列步骤时间线、右 5 列「当前步行动指引 + 打卡主按钮」；窄屏单列时顺序为
- * 概览 → 当前步指引 + 打卡 → 步骤列表。
- *
- * - 顶部概览压成一条（难度 / 预计天数 / 已完成 x/y 步 + 琥珀进度条），不再是一张
- *   "任务概览"卡里再套一层内嵌进度面板；
- * - 每一步有「行动指引 (action) + 资源链接 (resource)」，step.feedback 附在该步下方
- *   （StepList 内），所以这里不再单独开一块"上次打卡反馈"；
- * - 打卡弹窗：这一步做到哪了 / 卡在哪 —— 后端只有一个 feedback 字段，
- *   前端把两栏拼成一段文本提交；
- * - 放弃 / 删除：底部合成一行 caption 级 ghost 动作，二次确认仍走
+ * 版式（2026-10 前端迭代 02）：
+ * - 页头走 PageShell，**任务名只在页头出现一次**（页面标题）；主角卡不再重复整句任务名，
+ *   改成一句进度人话（"刚好开头 / 已经过半 / 就差最后一步"）——标题已经说过"做什么"，
+ *   卡上该回答的是"走到哪了、下一步干嘛"。
+ * - 主角卡承担这一页唯一的进度条与唯一的实心 CTA：进度人话 + 关联痛点（浅底 inset）
+ *   + 已完成步数/进度条 + 当前步指引 + 主按钮「完成这一步」；
+ * - 步骤列表**放在主角卡下方**（左 7 列），右侧 5 列只放「为什么值得做」，
+ *   没有这句价值说明时步骤列表自己铺满，不留一个空列；
+ * - 放弃 / 删除退到页面底部一行 ghost 动作，二次确认仍走
  *   TaskAbandonDialog / TaskDeleteDialog（与列表页共用，逻辑一个字没改）。
+ *
+ * 动效（统一语汇，只增不改）：主角卡 / 两列 / 页脚分三段上浮进场；
+ * 进度条 grow-x 从左长出来；主 CTA、资源链、页脚动作加 motion-press。不写 keyframes。
+ *
+ * 打卡弹窗：这一步做到哪了 / 卡在哪 —— 后端只有一个 feedback 字段，
+ * 前端把两栏拼成一段文本提交。
  */
 export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -128,7 +133,9 @@ export default function TaskDetailPage() {
   if (loading && !task) {
     return (
       <PageShell title="任务详情" breadcrumb="成长任务">
-        <Skeleton className="h-48 rounded-xl" />
+        <Reveal fade>
+          <AIThinking text="正在把这个任务读出来…" lines={3} />
+        </Reveal>
       </PageShell>
     )
   }
@@ -136,16 +143,29 @@ export default function TaskDetailPage() {
   if (!task) {
     return (
       <PageShell title="任务详情" breadcrumb="成长任务">
-        <EmptyState
-          icon={<ListChecks className="size-5" />}
-          title="这个任务打不开了"
-          description={error ?? '可能已经被删除，或链接不对。'}
-          action={
-            <Button variant="warm" asChild>
-              <Link to="/task">回到任务列表</Link>
-            </Button>
-          }
-        />
+        <Reveal fade>
+          <EmptyState
+            icon={<ListChecks className="size-5" />}
+            title="这个任务现在打不开"
+            description={error ?? '可能它已经被删掉了，或者这个链接不对。'}
+            action={
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (id) void fetchTask(id)
+                  }}
+                >
+                  再试一次
+                </Button>
+                <Button variant="warm" size="lg" className="motion-press" asChild>
+                  <Link to="/task">回到成长任务</Link>
+                </Button>
+              </div>
+            }
+          />
+        </Reveal>
       </PageShell>
     )
   }
@@ -170,8 +190,9 @@ export default function TaskDetailPage() {
   }
 
   const percent = taskProgress(task)
-  const canAbandon = task.status === ONGOING_STATUS
+  const total = steps.length
   const doneSteps = steps.filter((s) => s.completed).length
+  const canAbandon = task.status === ONGOING_STATUS
 
   return (
     <PageShell
@@ -181,10 +202,10 @@ export default function TaskDetailPage() {
           {task.status}
         </Badge>
       }
-      description={task.pain_point ? `关联痛点：${task.pain_point}` : undefined}
+      description={task.description ?? undefined}
       breadcrumb="成长任务"
       actions={
-        <Button variant="ghost" size="sm" asChild className="gap-1.5">
+        <Button variant="ghost" size="sm" asChild className="motion-press gap-1.5">
           <Link to="/task">
             <ArrowLeft className="size-4" />
             返回列表
@@ -192,163 +213,180 @@ export default function TaskDetailPage() {
         </Button>
       }
     >
-      <div className="grid items-start gap-6 lg:grid-cols-12">
-        {/* 概览：压成一条（窄屏第 1 屏位） */}
-        <Panel data-print="card" className="gap-3 lg:col-span-12">
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-body-sm text-on-surface-variant">已完成的部分</span>
-              <span className="text-body-md text-primary">
-                <span className="font-numeric text-headline-lg font-semibold">{percent}%</span>
-                <span className="ml-2 text-body-sm text-on-surface-variant">
-                  {progressHint(percent)}
-                </span>
+      {/* 主角卡：这一页唯一的进度条与唯一的实心 CTA 都在这里，首屏就能看到。
+          任务名已经在页头当过标题，这里不再重复，改成一句进度人话 + 唯一的进度条。 */}
+      <Reveal lg>
+        <Panel data-print="card" className="gap-5">
+          {/* 顶部一行：身份标签（状态点）+ 成本读数；步数读数贴到进度条下面，别拆成两件事 */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="inline-flex items-center gap-2 text-caption tracking-wide text-caption-foreground">
+              <span className="size-1.5 rounded-full bg-secondary" aria-hidden />
+              你正在做的这一件
+            </span>
+            {task.difficulty || task.estimated_days ? (
+              <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body-sm text-on-surface-variant">
+                {task.difficulty ? (
+                  <span>
+                    难度 <span className="font-medium text-primary">{task.difficulty}</span>
+                  </span>
+                ) : null}
+                {task.difficulty && task.estimated_days ? <Dot /> : null}
+                {task.estimated_days ? (
+                  <span>
+                    预计 <span className="font-medium text-primary">{task.estimated_days}</span> 天
+                  </span>
+                ) : null}
               </span>
-            </div>
-            <Progress
-              value={percent}
-              className="h-1.5 bg-surface-container [&>[data-slot=progress-indicator]]:bg-secondary"
-            />
+            ) : null}
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body-md">
-            {task.difficulty ? (
-              <span className="text-on-surface-variant">
-                难度 <span className="font-medium text-primary">{task.difficulty}</span>
+          {/* 一句人话：标题说了"做什么"，这里只回答"走到哪了" */}
+          <p className="max-w-[42ch] text-headline-sm text-primary">
+            {heroLine(doneSteps, total)}
+          </p>
+
+          {/* 关联痛点：AI 输出面板的唯一写法（暖色只留左侧竖条） */}
+          {task.pain_point ? (
+            <Panel inset className="ai-inset">
+              <span className="text-body-md text-on-surface">
+                <span className="text-on-surface-variant">关联痛点：</span>
+                {task.pain_point}
               </span>
-            ) : null}
-            {task.difficulty && task.estimated_days ? <Dot /> : null}
-            {task.estimated_days ? (
-              <span className="text-on-surface-variant">
-                预计 <span className="font-medium text-primary">{task.estimated_days}</span> 天
-              </span>
-            ) : null}
-            {task.difficulty || task.estimated_days ? <Dot /> : null}
-            <span className="text-on-surface-variant">
-              已完成 <span className="font-medium text-primary">{doneSteps}</span>/
-              {steps.length || '—'} 步
+            </Panel>
+          ) : null}
+
+          {/* 唯一的进度条：grow-x 从左长出来（值更新时组件自己的 transition 接管）；
+              步数读数就贴在条下面，读"量"不跑第二处 */}
+          <div className="flex flex-col gap-2">
+            <Progress
+              value={percent}
+              aria-label={'已完成 ' + percent + '%'}
+              className="grow-x h-1.5 bg-surface-container [&>[data-slot=progress-indicator]]:bg-secondary"
+            />
+            <span className="text-body-sm tabular-nums text-on-surface-variant">
+              {total ? (
+                <>
+                  已完成 <span className="font-medium text-primary">{doneSteps}</span>/{total} 步
+                </>
+              ) : (
+                '步骤还在拆解，很快就能开始'
+              )}
             </span>
           </div>
 
-          {task.description ? (
-            <p className="text-body-sm text-on-surface-variant">{task.description}</p>
-          ) : null}
-        </Panel>
-
-        {/*
-         * 右侧（窄屏第 2 屏位）：当前步的行动指引 + 打卡主按钮。
-         * 桌面上 sticky 贴住内容顶部，打卡永远在首屏。
-         */}
-        {activeStep ? (
-          <div
-            data-print="card"
-            className="self-start lg:order-3 lg:col-span-5 lg:sticky lg:top-[calc(var(--spacing-shell)+1rem)]"
-          >
-            <Panel className="gap-3.5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 flex-col gap-0.5">
+          {/* 当前步与主 CTA：点主按钮走打卡弹窗（步骤组件的现有行为，一个字没改） */}
+          <div className="flex flex-col gap-3 border-t border-outline-variant/40 pt-4 md:flex-row md:items-start md:justify-between">
+            <div className="flex min-w-0 flex-col gap-1.5">
+              {activeStep ? (
+                <>
                   <span className="text-body-sm text-on-surface-variant">
-                    第 {activeStep.step_order} 步 · {activeStep.completed ? '已完成' : '待完成'}
+                    现在做：第 {activeStep.step_order} 步 · {activeStep.title}
                   </span>
-                  <span className="text-headline-sm text-primary">{activeStep.title}</span>
-                </div>
-              </div>
+                  {activeStep.action ? (
+                    <p className="text-body-md text-on-surface">{activeStep.action}</p>
+                  ) : (
+                    <p className="text-body-md text-on-surface-variant">
+                      这一步没有额外说明，按标题做就行，做完打个卡。
+                    </p>
+                  )}
+                  {resourceLink ? (
+                    <a
+                      href={resourceLink.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="motion-press inline-flex w-fit items-center gap-1.5 rounded-full bg-surface-container px-3 py-1 text-body-sm text-primary hover:bg-surface-container-high"
+                    >
+                      {resourceLink.label}
+                      <ExternalLink className="size-3.5" />
+                    </a>
+                  ) : null}
+                </>
+              ) : (
+                <span className="text-body-sm text-on-surface-variant">
+                  步骤还在生成中，先看看上面的任务说明。
+                </span>
+              )}
+            </div>
 
-              {/* 行动指引：卡内浅底块 */}
-              <Panel inset className="text-body-md text-on-surface-variant">
-                {activeStep.action ? (
-                  <p className="whitespace-pre-wrap leading-relaxed">{activeStep.action}</p>
-                ) : (
-                  <p>这一步没有额外说明，按标题做就行，做完打卡。</p>
-                )}
-              </Panel>
-
-              {/* 本页唯一实心主按钮：放在指引正下方，首屏就能看到 */}
-              <div className="flex flex-col gap-2">
+            {activeStep ? (
+              <div className="flex shrink-0 flex-col gap-2 md:items-end">
                 <Button
                   variant="warm"
                   size="lg"
-                  className="w-full"
+                  className="motion-press w-full md:w-auto"
                   onClick={() => setCheckInOpen(true)}
                   disabled={activeStep.completed}
                 >
-                  {activeStep.completed ? '这一步已完成' : '打卡'}
+                  {activeStep.completed ? '这一步已完成' : '完成这一步'}
                 </Button>
-                {activeStep.completed ? (
-                  <span className="text-caption text-caption-foreground">
-                    在左边点一个还没开始的步骤，就能继续打卡。
-                  </span>
-                ) : null}
+                <span className="text-caption text-caption-foreground">
+                  {activeStep.completed
+                    ? '在下面点一个还没开始的步骤，就能继续。'
+                    : '点两下就好，不用写小作文。'}
+                </span>
               </div>
-
-              {resourceLink ? (
-                <a
-                  href={resourceLink.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex w-fit items-center gap-1.5 rounded-full bg-surface-container px-3 py-1 text-body-sm text-primary hover:bg-surface-container-high"
-                >
-                  {resourceLink.label}
-                  <ExternalLink className="size-3.5" />
-                </a>
-              ) : null}
-            </Panel>
-          </div>
-        ) : null}
-
-        {/* 左列（窄屏第 3 屏位）：步骤时间线 */}
-        <Panel data-print="card" className="gap-4 lg:order-2 lg:col-span-7">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-headline-sm text-primary">任务步骤</span>
-            {steps.length ? (
-              <span className="text-body-sm text-on-surface-variant">
-                共 {steps.length} 步 · 已完成 {doneSteps} 步
-              </span>
             ) : null}
           </div>
-
-          {steps.length ? (
-            <StepList
-              steps={steps}
-              activeStepId={activeStepId}
-              onSelect={(step) => setActiveStepId(step.id)}
-            />
-          ) : (
-            <p className="text-body-sm text-on-surface-variant">步骤还在生成中。</p>
-          )}
-
-          {/* 为什么值得做：AI 输出面板的唯一写法（暖色只留左侧竖条） */}
-          {task.value_note ? (
-            <p className="ai-inset rounded-lg bg-surface-container-low px-3.5 py-3 text-body-md text-on-surface">
-              <span className="font-medium text-primary">为什么值得做：</span>
-              {task.value_note}
-            </p>
-          ) : null}
         </Panel>
-      </div>
+      </Reveal>
 
-      {/* 放弃 / 删除：一行 caption 级 ghost 动作（与列表页共用同一套确认弹窗） */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-        {canAbandon ? (
+      {/* 步骤列表（左 7）与「为什么值得做」（右 5）；没有价值说明时步骤铺满，不留空列 */}
+      <Reveal delay={160}>
+        <div className={cn('grid items-start gap-6', task.value_note ? 'lg:grid-cols-12' : undefined)}>
+          <Panel data-print="card" className={cn('gap-4', task.value_note ? 'lg:col-span-7' : undefined)}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-headline-sm text-primary">任务步骤</span>
+              {total ? (
+                <span className="text-body-sm text-on-surface-variant">
+                  共 {total} 步 · 已完成 {doneSteps} 步
+                </span>
+              ) : null}
+            </div>
+
+            {total ? (
+              <StepList
+                steps={steps}
+                activeStepId={activeStepId}
+                onSelect={(step) => setActiveStepId(step.id)}
+              />
+            ) : (
+              <p className="text-body-sm text-on-surface-variant">步骤还在生成中，稍后刷新看看。</p>
+            )}
+          </Panel>
+
+          {task.value_note ? (
+            <Panel data-print="card" className="gap-3 lg:col-span-5">
+              <h2 className="text-headline-sm text-primary">这个任务为什么值得做</h2>
+              <p className="text-body-md text-on-surface">{task.value_note}</p>
+            </Panel>
+          ) : null}
+        </div>
+      </Reveal>
+
+      {/* 放弃 / 删除：一行弱化动作（与列表页共用同一套确认弹窗） */}
+      <Reveal delay={360}>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          {canAbandon ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="motion-press px-0 text-body-sm text-on-surface-variant hover:bg-transparent hover:text-primary"
+              onClick={() => setAbandonOpen(true)}
+            >
+              放弃这个任务
+            </Button>
+          ) : null}
           <Button
             variant="ghost"
             size="sm"
-            className="px-0 text-body-sm text-on-surface-variant hover:bg-transparent hover:text-primary"
-            onClick={() => setAbandonOpen(true)}
+            className="motion-press gap-1 px-0 text-body-sm text-on-surface-variant hover:bg-transparent hover:text-destructive"
+            onClick={() => setDeleteOpen(true)}
           >
-            放弃这个任务
+            <Trash2 className="size-3.5" />
+            删除这个任务
           </Button>
-        ) : null}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="gap-1 px-0 text-body-sm text-on-surface-variant hover:bg-transparent hover:text-destructive"
-          onClick={() => setDeleteOpen(true)}
-        >
-          <Trash2 className="size-3.5" />
-          删除这个任务
-        </Button>
-      </div>
+        </div>
+      </Reveal>
 
       <TaskAbandonDialog
         task={abandonOpen ? task : null}
@@ -398,7 +436,7 @@ export default function TaskDetailPage() {
             <Button variant="outline" onClick={() => setCheckInOpen(false)}>
               取消
             </Button>
-            <Button variant="warm" onClick={() => void handleCheckIn()} disabled={submitting}>
+            <Button variant="warm" className="motion-press" onClick={() => void handleCheckIn()} disabled={submitting}>
               {submitting ? '提交中…' : '提交打卡'}
             </Button>
           </DialogFooter>
@@ -417,11 +455,16 @@ function Dot() {
   )
 }
 
-/** 把进度比例翻译成人话（只说进度，不编步骤数） */
-function progressHint(percent: number): string {
-  if (percent <= 0) return '还没开始'
-  if (percent < 40) return '刚开头'
-  if (percent < 70) return '已经过半'
-  if (percent < 100) return '就差最后几步'
-  return '全部做完了'
+/**
+ * 把「走了多少步」翻译成一句人话（只说真实的步数，不编进度）。
+ * 标题已经回答"做什么"，主角卡上这句是"走到哪了、还差多少"。
+ */
+function heroLine(doneSteps: number, total: number): string {
+  if (!total) return '这一步一步的清单还在拆，很快就能开始。'
+  const left = total - doneSteps
+  if (doneSteps <= 0) return '从第 1 步开始，做完打个卡就算走了一步。'
+  if (left <= 0) return '这个任务已经全部做完，可以回看走过的路了。'
+  if (left === 1) return '就差最后 1 步了，一鼓作气。'
+  if (doneSteps * 2 < total) return '刚开了个头，把手上这一步做完就顺了。'
+  return '已经走了一半多，还剩 ' + left + ' 步。'
 }

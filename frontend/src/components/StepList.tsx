@@ -37,7 +37,9 @@ export function StepList({ steps, activeStepId, onSelect, className }: StepListP
               type="button"
               onClick={() => onSelect?.(step)}
               className={cn(
-                'flex w-full items-start gap-3 rounded-lg px-4 py-3 text-left transition-colors',
+                // motion-press-color：按下的轻缩与背景过渡同时生效
+                // （不能写 transition-colors —— 它会把轻缩的过渡盖成瞬跳）
+                'motion-press-color flex w-full items-start gap-3 rounded-lg px-4 py-3 text-left',
                 active
                   ? 'bg-primary-soft ring-1 ring-primary/30'
                   : 'bg-surface-container-low hover:bg-surface-container',

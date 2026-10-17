@@ -36,8 +36,8 @@ export const NAV_ITEMS: NavItem[] = [
   { key: '/task', to: '/task', label: '成长任务', icon: ListChecks, mobileTab: true },
   { key: '/resume', to: '/resume', label: '简历', icon: FileText },
   { key: '/interview', to: '/interview', label: '模拟面试', icon: Mic },
-  { key: '/report', to: '/report', label: '成长报告', icon: BarChart3 },
   { key: '/profile', to: '/profile', label: '个人中心', icon: User, mobileTab: true },
+  { key: '/report', to: '/report', label: '成长报告', icon: BarChart3 },
 ]
 
 export const NAV_BY_KEY: Record<string, NavItem> = Object.fromEntries(

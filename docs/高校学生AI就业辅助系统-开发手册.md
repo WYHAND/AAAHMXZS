@@ -14,7 +14,7 @@
 
 1. **技术栈按实际实现改定**（2.1 / 2.3 / 2.6 / 3.x）：React 19 + React Router v7 + TypeScript 6 + Vite 8；UI 层 **shadcn/ui（Radix）+ Tailwind CSS v4（CSS-first，无 `tailwind.config.js`）**，不再使用 Ant Design；图表库 **Recharts**，不再使用 ECharts；包管理器 **npm**，不再是 pnpm。
 2. **数据库由 PostgreSQL 改为 SQLite**（2.3 / 3.4 / 3.5 / 5.1 / 5.5 / 16.2 / 16.5）：默认 `sqlite:///./data/app.db`，PostgreSQL 路径保留为生产可选项（连接串一换即切回）。
-3. **UI 规范与主题定稿**（8.5）：浅米黄底 `#FAF7EE`（`--background: hsl(43 44% 96%)`）+ 低饱和克制蓝主色 `#4E6D92`（`--primary: hsl(213 30% 44%)`），替代原「主色蓝紫 `#6366f1` + 白灰辅色」。
+3. **UI 规范与主题定稿**（8.5）：近白画布 `#fbf9f6` + 主墨 `#091426`（标题/正文/主按钮/强调/进度条）+ 浅桃 `#ffdbca`（小面积强调底）；**全站删除琥珀色**——原 `--secondary`（琥珀 `#9b4500`）及其「AI / 强调」角色一并移除，强调改由主墨承担。替代原「主色蓝紫 `#6366f1` + 白灰辅色」，以及过渡期的「浅米黄 + 克制蓝」。
 4. **奖章由 1 枚扩到 3 枚**（1.5 / 5.4 / 11.12）：`first_task` 起步行动家 / `five_steps` 坚持打卡者 / `profile_shape` 方向初现，条件必须由真实行为证据驱动。这是用户验收界面后对「砍掉奖章墙」的正式推翻。
 5. **接口契约补齐**（10.2 / 10.3）：新增 `POST /chat/conversations/{id}/opening`（AI 先开口）、`DELETE /chat/conversations/{id}`、`POST /report/save`、`GET /home/summary`、`POST /events`；`GET /badge` 由裸数组改为 `{total, obtained_count, items[]}` 总览；`POST /task/generate` 增加 `reused`。（另有 `GET /resume/{id}/file`、`POST /resume/upload` 等简历端点，**已于 2026-11 随老简历链路删除**，见要点 11 与 9.17。）
 6. **统一信封与错误分层定案**（6.2 / 6.5 / 6.6 / 10.1）：所有 JSON 接口统一 `{code,message,data}`（失败时 `data` 恒为 `null`）；HTTP 状态码由 `CODE_TO_HTTP_STATUS` 唯一推导，`3001` 刻意保持 200。
@@ -1360,18 +1360,19 @@ const res = await fetch(`${API_BASE}/chat/conversations/${id}/stream`, {
 
 - 组件库：shadcn/ui（Radix 底座），组件即源码放在 `src/components/ui/`
 - 样式：Tailwind CSS v4（CSS-first，**无 `tailwind.config.js`**），主题写 `src/index.css`
-- 主题：**浅米黄底 + 低饱和克制蓝主色**
+- 主题：**近白画布 `#fbf9f6` + 主墨 `#091426` + 浅桃 `#ffdbca`**（完整 token 表以 `docs/设计系统-页面规范.md` 第二节为准）
 
 | token | 值 | 用途 |
 |---|---|---|
-| `--background` | `hsl(43 44% 96%)`（`#FAF7EE`） | 全站底色（纸感） |
-| `--foreground` | `hsl(30 12% 14%)` | 正文 |
-| `--primary` | `hsl(213 30% 44%)`（`#4E6D92`） | **可点的东西**（主按钮、链接、选中态） |
-| `--accent` | `hsl(38 45% 88%)`（赭黄浅底） | **仅**用于 AI 主动类卡片 |
-| `--stage-explore` / `--stage-prepare` / `--stage-sprint` | 赭黄 / 克制蓝 / 砖红 | 阶段标识 |
+| `--background` | `#fbf9f6` | 全站画布 |
+| `--foreground` | `#1b1c1a` | 正文 |
+| `--primary` | `#091426` | **可点的东西 + 强调**（主按钮、链接、选中态、强调数字、进度条填充、AI 提示竖条） |
+| `--accent` | `#ffdbca`（浅桃） | 小面积强调底（chip、状态点、小按钮） |
+| `--stage-*` | 阶段色 | 阶段标识（取值以 `frontend/src/index.css` 为准） |
 | `--medal-*` | 金色系 + 铸模中性灰 | 「我的奖章」专用，组件里只允许引用这些变量 |
+| ~~`--secondary`~~ | ~~琥珀 `#9b4500`~~ | **已于 2026-10-15 删除**：强调角色移交主墨 |
 
-- 主色纪律：**蓝是动作色，暖色负责氛围**；颜色只允许语义类名（`bg-primary` / `text-muted-foreground` / `bg-stage-*`），**禁止 Tailwind 默认色板类**（`bg-blue-500`）；一屏最多一个实心主按钮。
+- 用色纪律：**只有主墨是"动作 / 强调色"**，浅桃只做小面积点缀；颜色只允许语义类名（`bg-primary` / `text-on-surface-variant` / `bg-stage-*`），**禁止 Tailwind 默认色板类**（`bg-blue-500`）；**全站不使用琥珀色**（`text-secondary` / `bg-secondary` 不再表示琥珀）；一屏最多一个实心主按钮。
 - 字体：系统默认（`PingFang SC` / `Microsoft YaHei` / `Segoe UI`），正文 14px、行高 1.6；数字用等宽（`font-numeric`）。
 - 提示：sonner，4s 自动消失，顶部居中。AI 失败类提示在调用处给「重试」动作。
 - **界面不允许出现英文字段名或设计术语**：所有英文枚举必须先经中文映射（例如分数维度 → 方向清晰度 / 行动力 / 简历完整度 / 综合得分；阶段 slug → 职业探索期 / 求职准备期 / 求职冲刺期；标签来源 → 职业测评 / 和 AI 对话 / 简历 / 模拟面试 / 每日一问 / 成长任务），未知值走兜底文案，**不允许把 `clarity_score`、`pain_point`、`stage` 这类字段名直接渲染给用户**。

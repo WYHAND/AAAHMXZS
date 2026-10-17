@@ -16,7 +16,7 @@
 | 桌面端 | Electron（M3 阶段包壳） |
 | 部署 | Docker Compose + Nginx + Uvicorn |
 
-> 与《开发手册 V1.0》的偏差：UI 层由 Ant Design 改为 **shadcn/ui**；主色由蓝紫 `#6366f1` 改为**克制蓝 `#4E6D92`**，底色为浅米黄 `#FAF7EE`。手册 2.1 / 8.5 待同步修订。
+> **配色定稿（2026-10-15）**：近白画布 `#fbf9f6` + 主墨 `#091426`（标题/正文/主按钮/强调/进度条）+ 浅桃 `#ffdbca`（小面积强调底）；**全站删除琥珀色**。UI 层为 **shadcn/ui**。真源见 `docs/设计系统-页面规范.md`。
 
 ---
 
@@ -39,7 +39,7 @@
 | 文档 | 说明 |
 |---|---|
 | `docs/高校学生AI就业辅助系统-开发手册.md` | 开发手册 V1.0：项目概述、技术栈、环境、数据库、后端/AI/前端规范、部署 |
-| `docs/前端设计说明书-高校学生AI就业辅助系统.md` | 前端设计 V1.2：路由与守卫、页面线框、store 划分、API 层、shadcn 主题与暖色调色板 |
+| `docs/前端设计说明书-高校学生AI就业辅助系统.md` | 前端设计 V1.3：路由与守卫、页面线框、store 划分、API 层（**配色以《设计系统-页面规范》为准**） |
 
 ---
 
@@ -129,6 +129,6 @@ docker-compose up -d
 
 ## 约定
 
-- 颜色只允许语义类（`bg-primary` / `text-muted-foreground` / `bg-accent` / `bg-stage-*`），**禁止** Tailwind 默认色板类（`bg-blue-500`）。
+- 颜色只允许语义类（`bg-primary` / `text-on-surface-variant` / `bg-accent` / `bg-stage-*`），**禁止** Tailwind 默认色板类（`bg-blue-500`）。**全站已删除琥珀色**（不用 `text-secondary` / `bg-secondary` 表示强调；强调一律用主墨 `text-primary` / `bg-primary`）。
 - 一屏最多一个 `bg-primary` 实心主按钮。
 - 源码文件统一 UTF-8；`.ps1` 脚本内禁止写中文（PowerShell 5.1 会按 ANSI 解析）。

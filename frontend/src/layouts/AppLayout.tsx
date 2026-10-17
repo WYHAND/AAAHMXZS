@@ -36,7 +36,7 @@ import { cn } from '@/lib/utils'
  *   左侧 Logo + 「AI 就业助手」+「桌面版」标签；右侧阶段 pill、通知、头像、
  *   以及**仅桌面端**的最小化/最大化/关闭（真的连 Electron IPC，不是画上去的）。
  * - **左侧 240px 亚麻侧栏**（w-60，bg-surface-container-low，右下角一道 1px 分隔线）：
- *   两组标题（核心导航 / 就业求职）+ 底部个人中心。
+ *   三组标题（核心导航 / 就业求职 / 我的）。
  * - **内容区**：左让 240px（pl-60）、上让 44px（pt-11），内层 max-w-[1040px] 居中，
  *   外边距 32px（px-margin py-margin）。
  *
@@ -77,14 +77,15 @@ export function AppLayout() {
   const desktop = (window as unknown as { electronAPI?: DesktopBridge }).electronAPI
   const isDesktopShell = Boolean(desktop?.isDesktop)
 
-  /** 稿子的两个分组：核心导航（每天要走的闭环）/ 就业求职 */
+  /** 侧栏分组（组内顺序仍按阶段自适应，见 constants/stage.ts） */
   const groups: Array<{ title: string; keys: string[] }> = [
     { title: '核心导航', keys: ['/', '/chat', '/daily', '/task'] },
-    { title: '就业求职', keys: ['/resume', '/interview', '/report'] },
+    { title: '就业求职', keys: ['/resume', '/interview'] },
+    // 「我的」这一组和上面两组一样，就是一组普通导航项（不再吊在侧栏最底部）
+    { title: '我的', keys: ['/profile', '/report'] },
   ]
   const groupItems = (keys: string[]): NavItem[] =>
     items.filter((item) => keys.includes(item.key))
-  const profileItem = items.find((item) => item.key === '/profile')
 
   return (
     <div className="min-h-svh bg-surface text-on-surface">
@@ -106,7 +107,7 @@ export function AppLayout() {
         </div>
 
         <div className="app-no-drag flex items-center gap-4">
-          {/* 阶段 pill：点进个人中心（稿子里是可展开的状态块） */}
+          {/* 阶段 pill：状态显示 + 个人中心快捷方式（不再是唯一入口 —— 侧栏已一级可见） */}
           <NavLink
             to="/profile"
             className="flex items-center gap-1.5 rounded-full bg-surface-container-low px-3 py-1 text-on-surface transition-colors hover:bg-surface-container"
@@ -206,11 +207,6 @@ export function AppLayout() {
               </div>
             ))}
           </nav>
-
-          <div className="px-2 pt-1.5">
-            <div className="mx-1 mb-2 h-px bg-outline-variant/30" aria-hidden />
-            {profileItem ? <SideNavItem item={profileItem} /> : null}
-          </div>
         </aside>
       ) : null}
 
