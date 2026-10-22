@@ -25,15 +25,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const POLISH_MESSAGE = '已润色；还有 2 项你没填，先空着（项目经历、校园与实践经历）'
 const RESUME = {
   id: 'pv-polish-1',
-  title: '林小满-鸿蒙客户端开发-2026 秋招',
-  target_job: '鸿蒙应用开发工程师',
+  title: '林小满-前端开发-2026 秋招',
+  target_job: '前端开发工程师',
   completeness: 0.62,
   updated_at: new Date().toISOString(),
   parsed_data: {
     basic: { name: '林小满', grade: '大三', major: '软件工程', school: '华中科技大学', contact: 'lin@example.com' },
-    target: { direction: '鸿蒙应用开发工程师', city: '武汉' },
+    target: { direction: '前端开发工程师', city: '武汉' },
     education: [{ school: '华中科技大学', major: '软件工程', period: '2023.09 - 2027.06', highlights: ['专业排名前 20%'] }],
-    skills: ['熟悉 ArkTS 基础语法与状态管理。能使用 ArkTS 独立完成页面与组件开发。'],
+    skills: ['熟悉 Vue 基础语法与状态管理。能使用 Vue 独立完成页面与组件开发。'],
     projects: [],
     campus: [],
     self_evaluation: '做事比较较真，答应的事会做完。',

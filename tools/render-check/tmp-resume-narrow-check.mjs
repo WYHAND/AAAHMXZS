@@ -37,14 +37,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const SAVED = {
   id: 'chk-1',
   title: '林小满的简历',
-  target_job: '鸿蒙应用开发工程师',
+  target_job: '前端开发工程师',
   completeness: 0.62,
   updated_at: '2026-10-17T10:00:00+08:00',
   parsed_data: {
     basic: { name: '林小满', grade: '大三', major: '软件工程', school: '华中科技大学', contact: 'lin@example.com' },
-    target: { direction: '鸿蒙应用开发工程师', city: '武汉' },
+    target: { direction: '前端开发工程师', city: '武汉' },
     education: [{ school: '华中科技大学', major: '软件工程', period: '2023.09 - 2027.06', highlights: ['专业排名前 20%'] }],
-    skills: ['ArkTS', 'TypeScript'],
+    skills: ['Vue', 'TypeScript'],
     projects: [],
     campus: [],
     self_evaluation: '做事比较较真，答应的事会做完。',

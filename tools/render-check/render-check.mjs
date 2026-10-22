@@ -79,7 +79,7 @@ const tags = [
     id: 't1000000-0000-4000-8000-000000000003',
     user_id: user.id,
     dimension: '兴趣',
-    label: '对鸿蒙应用开发感兴趣',
+    label: '对前端开发感兴趣',
     weight: 0.64,
     source: 'chat',
     extra: null,
@@ -115,8 +115,8 @@ const profile = {
 const task = {
   id: TASK_ID,
   user_id: user.id,
-  title: '做一个鸿蒙待办清单小应用',
-  description: '从 0 到 1 写一个能跑在真机上的 ArkTS 小应用，用来填上「缺项目经验」这个洞。',
+  title: '做一个待办清单 Web 应用',
+  description: '从 0 到 1 写一个能能真正跑起来的 Vue 小应用，用来填上「缺项目经验」这个洞。',
   pain_point: '缺项目经验',
   status: '进行中',
   value_note: '简历上能写成一个完整项目，面试时能讲清楚技术选型。',
@@ -132,7 +132,7 @@ const taskSteps = [
     id: 's1',
     task_id: TASK_ID,
     step_order: 1,
-    title: '装好 DevEco Studio 并跑通 Hello World',
+    title: '装好 Node.js 与 Vite 并跑通 Hello World',
     action: '用官网最新稳定版，创建一个 Empty Ability 模板工程，先确认模拟器能起来。',
     resource: 'https://developer.huawei.com/consumer/cn/deveco-studio/',
     completed: true,
@@ -245,16 +245,16 @@ const resumeTemplate = {
 /** parsed_data 的契约结构（basic/target/education/skills/projects/campus/self_evaluation） */
 const resumeParsedData = {
   basic: { name: '林小满', grade: '大三', major: '软件工程', school: '华中科技大学', contact: 'lin@example.com' },
-  target: { direction: '鸿蒙应用开发工程师', city: '武汉' },
+  target: { direction: '前端开发工程师', city: '武汉' },
   education: [{ school: '华中科技大学', major: '软件工程', period: '2023.09 - 2027.06', highlights: ['专业排名前 20%'] }],
-  skills: ['ArkTS', 'TypeScript'],
+  skills: ['Vue', 'TypeScript'],
   projects: [
     {
-      name: '鸿蒙待办清单', role: '独立开发', period: '2025.03 - 2025.06',
+      name: '待办清单 Web 应用', role: '独立开发', period: '2025.03 - 2025.06',
       star: {
         situation: '想做一个能写进简历的完整项目。',
-        task: '做出一份能跑在真机上的鸿蒙小应用。',
-        action: '用 ArkTS + ArkUI 写列表与本地持久化。',
+        task: '做出一份能能真正跑起来的Web 应用。',
+        action: '用 Vue + Vite 写列表与本地持久化。',
         result: '上线后日活约 800。',
       },
     },
@@ -269,8 +269,8 @@ const resumeParsedData = {
  */
 const resumeMineSaved = {
   id: RESUME_ID,
-  title: '林小满-鸿蒙客户端开发-2026 秋招',
-  target_job: '鸿蒙应用开发工程师',
+  title: '林小满-前端开发-2026 秋招',
+  target_job: '前端开发工程师',
   parsed_data: resumeParsedData,
   completeness: 0.82,
   updated_at: NOW,
@@ -326,7 +326,7 @@ const interviewQuestions = {
       id: 'q-1',
       interview_id: SESSION_ID,
       question_order: 1,
-      content: '先花一分钟介绍一下你自己，重点讲和鸿蒙客户端开发相关的部分。',
+      content: '先花一分钟介绍一下你自己，重点讲和前端开发相关的部分。',
       answer: null,
       followups: null,
       score: null,
@@ -337,7 +337,7 @@ const interviewQuestions = {
       id: 'q-2',
       interview_id: SESSION_ID,
       question_order: 2,
-      content: '你那个鸿蒙待办清单，为什么选 Preferences 而不是关系型数据库？',
+      content: '你那个待办清单 Web 应用，为什么选 localStorage 而不是 IndexedDB？',
       answer: null,
       followups: null,
       score: null,
@@ -370,7 +370,7 @@ const interviewReview = {
   },
   strengths: [
     '能把项目背景讲清楚，技术选型有理由。',
-    '对 ArkUI 声明式写法的理解比较扎实。',
+    '对 Vue 声明式写法的理解比较扎实。',
   ],
   improvements: [
     '回答里缺少量化结果，建议每个项目准备一个数字。',
@@ -379,7 +379,7 @@ const interviewReview = {
   question_reviews: [
     {
       question: '先花一分钟介绍一下你自己。',
-      answer: '我是软件工程大三学生，做过一个鸿蒙待办清单应用。',
+      answer: '我是软件工程大三学生，做过一个待办清单 Web 应用应用。',
       score: 68,
       comment: '结构完整但缺亮点，建议把最有说服力的一段经历前置。',
     },
@@ -410,7 +410,7 @@ const growthReport = {
     completed_steps: 7,
     active_days: 12,
     highlights: [
-      '方向清晰度一周内涨了 8 分，从「都在试」变成「锁定鸿蒙客户端」。',
+      '方向清晰度一周内涨了 8 分，从「都在试」变成「锁定前端」。',
       '第一次把一个小项目完整做完并录了演示。',
     ],
     suggestions: [
@@ -633,7 +633,7 @@ async function installApiMock(page, opts = {}) {
         ongoing_tasks: [
           {
             id: TASK_ID,
-            title: '做一个鸿蒙待办清单小应用',
+            title: '做一个待办清单 Web 应用',
             difficulty: '中等',
             estimated_days: 14,
             done_steps: 2,
@@ -642,7 +642,7 @@ async function installApiMock(page, opts = {}) {
           },
         ],
         next_action: {
-          text: '先把这个鸿蒙小项目的删除交互补完',
+          text: '先把这个小项目的删除交互补完',
           route: `/task/${TASK_ID}`,
           reason: '任务已经做到一半，收尾比开新的更划算。',
         },

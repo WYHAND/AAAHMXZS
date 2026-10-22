@@ -133,9 +133,9 @@ async function main() {
   check('页面不出现假数字"3-5 题"', !(await page.locator('body').innerText()).includes('3-5 题'))
 
   // 5) 填目标岗位 -> 摘要联动
-  await page.locator('#target_job').fill('鸿蒙开发工程师')
+  await page.locator('#target_job').fill('前端开发工程师')
   await page.waitForTimeout(300)
-  check('摘要联动目标岗位', (await readSummary()).includes('鸿蒙开发工程师'), await readSummary())
+  check('摘要联动目标岗位', (await readSummary()).includes('前端开发工程师'), await readSummary())
 
   // 6) 列表语义（选项组应是 ul/li，不是裸 div）
   const lists = await page.evaluate(() => document.querySelectorAll('main ul').length)

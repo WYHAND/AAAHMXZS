@@ -48,7 +48,7 @@ const user = {
 const tags = [
   { id: 't1', user_id: user.id, dimension: '痛点', label: '缺项目经验', weight: 0.86, source: 'chat', extra: null, updated_at: NOW },
   { id: 't2', user_id: user.id, dimension: '能力', label: '算法基础扎实', weight: 0.72, source: 'test', extra: null, updated_at: NOW },
-  { id: 't3', user_id: user.id, dimension: '兴趣', label: '对鸿蒙应用开发感兴趣', weight: 0.64, source: 'chat', extra: null, updated_at: NOW },
+  { id: 't3', user_id: user.id, dimension: '兴趣', label: '对前端开发感兴趣', weight: 0.64, source: 'chat', extra: null, updated_at: NOW },
 ]
 
 const profileTested = {
@@ -63,14 +63,14 @@ const profileUntested = {
 }
 
 const task = {
-  id: TASK_ID, user_id: user.id, title: '做一个鸿蒙待办清单小应用',
-  description: '从 0 到 1 写一个能跑在真机上的 ArkTS 小应用。', pain_point: '缺项目经验',
+  id: TASK_ID, user_id: user.id, title: '做一个待办清单 Web 应用',
+  description: '从 0 到 1 写一个能能真正跑起来的 Vue 小应用。', pain_point: '缺项目经验',
   status: '进行中', value_note: '简历上能写成一个完整项目。', difficulty: '中等',
   estimated_days: 14, created_at: '2026-09-10T20:05:00+08:00', updated_at: NOW, progress: 0.4,
 }
 const taskSteps = [
-  { id: 's1', task_id: TASK_ID, step_order: 1, title: '装好 DevEco Studio 并跑通 Hello World', action: '用官网稳定版建模板工程。', resource: null, completed: true, feedback: '顺利。', completed_at: '2026-09-11T21:40:00+08:00' },
-  { id: 's2', task_id: TASK_ID, step_order: 2, title: '实现待办列表页与本地存储', action: '用 List 渲染，preferences 存本地。', resource: null, completed: false, feedback: null, completed_at: null },
+  { id: 's1', task_id: TASK_ID, step_order: 1, title: '装好 Node.js 与 Vite 并跑通 Hello World', action: '用官网稳定版建模板工程。', resource: null, completed: true, feedback: '顺利。', completed_at: '2026-09-11T21:40:00+08:00' },
+  { id: 's2', task_id: TASK_ID, step_order: 2, title: '实现待办列表页与本地存储', action: '用列表组件渲染，localStorage 存本地。', resource: null, completed: false, feedback: null, completed_at: null },
 ]
 const taskDetail = { ...task, steps: taskSteps }
 
@@ -145,16 +145,16 @@ const resumeTemplate = {
 /** parsed_data 的契约结构（backend types ResumeData：basic/target/education/skills/projects/campus/self_evaluation） */
 const resumeParsedData = {
   basic: { name: '林小满', grade: '大三', major: '软件工程', school: '华中科技大学', contact: 'lin@example.com' },
-  target: { direction: '鸿蒙应用开发工程师', city: '武汉' },
+  target: { direction: '前端开发工程师', city: '武汉' },
   education: [{ school: '华中科技大学', major: '软件工程', period: '2023.09 - 2027.06', highlights: ['专业排名前 20%'] }],
-  skills: ['ArkTS', 'TypeScript'],
+  skills: ['Vue', 'TypeScript'],
   projects: [
     {
-      name: '鸿蒙待办清单', role: '独立开发', period: '2025.03 - 2025.06',
+      name: '待办清单 Web 应用', role: '独立开发', period: '2025.03 - 2025.06',
       star: {
         situation: '想做一个能写进简历的完整项目。',
-        task: '做出一份能跑在真机上的鸿蒙小应用。',
-        action: '用 ArkTS + ArkUI 写列表与本地持久化。',
+        task: '做出一份能能真正跑起来的Web 应用。',
+        action: '用 Vue + Vite 写列表与本地持久化。',
         result: '上线后日活约 800。',
       },
     },
@@ -169,8 +169,8 @@ const resumeParsedData = {
  */
 const resumeMineSaved = {
   id: RESUME_ID,
-  title: '林小满-鸿蒙客户端开发-2026 秋招',
-  target_job: '鸿蒙应用开发工程师',
+  title: '林小满-前端开发-2026 秋招',
+  target_job: '前端开发工程师',
   parsed_data: resumeParsedData,
   completeness: 0.82,
   updated_at: NOW,
@@ -190,7 +190,7 @@ const dailyHistory = {
 }
 
 /** N2 用的题目：首屏只给 1 道（贴近后端「答一题给下一题」的增量行为） */
-const IV_FIRST_QUESTION = { id: 'q-1', interview_id: SESSION_ID, question_order: 1, content: '先花一分钟介绍一下你自己，重点讲鸿蒙客户端开发相关的部分。', answer: null, followups: [], score: null, created_at: NOW, answered_at: null, kind: 'main', current_followup: null, followup_round: 0 }
+const IV_FIRST_QUESTION = { id: 'q-1', interview_id: SESSION_ID, question_order: 1, content: '先花一分钟介绍一下你自己，重点讲前端开发相关的部分。', answer: null, followups: [], score: null, created_at: NOW, answered_at: null, kind: 'main', current_followup: null, followup_round: 0 }
 const ivQuestionsResponse = {
   interview_id: SESSION_ID, mode: '全真', scene: '项目', status: '进行中',
   questions: [IV_FIRST_QUESTION], current_index: 1,
@@ -208,13 +208,13 @@ const IV_ANSWER_SEQ = [
 ].map((x) => ({ ...x, interview_id: SESSION_ID }))
 
 /** N3：逐题点评，含 answer_summary / comment / better_answer */
-const REVIEW_ANSWER = '我是软件工程大三学生，做过一个鸿蒙待办清单应用，负责全部客户端开发。'
+const REVIEW_ANSWER = '我是软件工程大三学生，做过一个待办清单 Web 应用应用，负责全部客户端开发。'
 const REVIEW_COMMENT = '结构完整但缺亮点，建议把最有说服力的一段经历前置。'
-const REVIEW_BETTER = '先说结论：两年鸿蒙客户端经验，做过一个 800 日活的小应用，再展开细节。'
+const REVIEW_BETTER = '先说结论：两年前端经验，做过一个 800 日活的小应用，再展开细节。'
 const interviewReview = {
   interview_id: SESSION_ID, status: '已完成', overall_score: 71,
   dimension_scores: { 表达清晰度: 74, 项目深度: 66, 技术基础: 78, 岗位匹配: 68 },
-  strengths: ['能把项目背景讲清楚，技术选型有理由。', '对 ArkUI 声明式写法理解扎实。'],
+  strengths: ['能把项目背景讲清楚，技术选型有理由。', '对 Vue 声明式写法理解扎实。'],
   improvements: ['回答里缺少量化结果。', '被追问边界情况时容易泛泛而谈。'],
   question_reviews: [
     { question: '先花一分钟介绍一下你自己。', answer_summary: REVIEW_ANSWER, score: 68, comment: REVIEW_COMMENT, better_answer: REVIEW_BETTER },
@@ -347,7 +347,7 @@ async function installApi(page, opts = {}) {
         /* 2026-10 首页改版：后端 /home/summary 新增三个统计字段
            （口径与 /report 共用 report_service.collect_growth_counts） */
         completed_tasks: 1, completed_steps: 7, active_days: 12,
-        next_action: { text: '先把这个鸿蒙小项目的删除交互补完', route: `/task/${TASK_ID}`, reason: '任务已经做到一半。' },
+        next_action: { text: '先把这个小项目的删除交互补完', route: `/task/${TASK_ID}`, reason: '任务已经做到一半。' },
       })
     }
 

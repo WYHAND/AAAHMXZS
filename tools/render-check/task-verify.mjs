@@ -36,9 +36,9 @@ const TASKS = [
   T({ id: 'b', title: '用一天时间画出技术兴趣地图', value_note: '迷茫常常是因为选项太多又太模糊。', difficulty: '简单', estimated_days: 3, progress: 0.5 }),
   T({ id: 'c', title: '把简历里的项目描述补上量化结果', value_note: '把「做了什么」改成「做出了什么结果」。', difficulty: '中等', estimated_days: 2, progress: 0 }),
   T({ id: 'd', title: '整理一次课程项目的技术选型理由', difficulty: '简单', estimated_days: 1, progress: 0.2 }),
-  T({ id: 'e', title: '读完《鸿蒙应用开发实战》前三章', difficulty: '中等', estimated_days: 5, progress: 0 }),
-  T({ id: 'f', title: '搭建 ArkTS 基础环境并跑通 Hello World', status: '已完成', progress: 1 }),
-  T({ id: 'g', title: '读完《鸿蒙应用开发实战》前三章', status: '已放弃', progress: 0.2 }),
+  T({ id: 'e', title: '读完《JavaScript 高级程序设计》前三章', difficulty: '中等', estimated_days: 5, progress: 0 }),
+  T({ id: 'f', title: '搭建 Vue + Vite 基础环境并跑通 Hello World', status: '已完成', progress: 1 }),
+  T({ id: 'g', title: '读完《JavaScript 高级程序设计》前三章', status: '已放弃', progress: 0.2 }),
 ]
 
 /** /home/summary 只覆盖前 2 条（模拟后端 MAX_ONGOING_TASKS=2） */

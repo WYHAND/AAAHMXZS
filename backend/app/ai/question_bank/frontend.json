@@ -1,0 +1,194 @@
+{
+  "id": "frontend",
+  "name": "前端",
+  "aliases": ["前端", "web前端", "web 前端", "大前端", "h5", "网页", "web开发", "web 开发", "javascript", "js开发", "vue", "react", "小程序开发", "前端工程师", "前端开发"],
+  "sources": [
+    "haizlin/fe-interview（6000+ 前端面试题，MIT）",
+    "liyupi/mianshiya 面试鸭（前端 / JavaScript / CSS / React 题库）",
+    "牛客网前端校招面经高频题",
+    "本项目自写考察点与参考要点"
+  ],
+  "note": "题目为社区公开的前端高频面试题（事实性引用），参考要点为本项目自写。",
+  "questions": [
+    {
+      "id": "fe-tech-01",
+      "scene": "技术",
+      "level": "基础",
+      "question": "说说 CSS 盒模型，标准盒模型和 IE 盒模型有什么区别？box-sizing 怎么用？",
+      "intent": "考察 CSS 基础",
+      "reference_points": ["标准盒模型 width 只含 content", "IE 盒模型 width 含 padding+border", "box-sizing: border-box 切换", "实际项目常全局设 border-box"],
+      "followup_hints": ["如果全局设成 border-box，有没有遇到副作用？"]
+    },
+    {
+      "id": "fe-tech-02",
+      "scene": "技术",
+      "level": "基础",
+      "question": "让一个 div 水平垂直居中，你能说出几种方案？各自适合什么场景？",
+      "intent": "考察 CSS 布局",
+      "reference_points": ["flex 的 justify-content + align-items", "绝对定位 + transform", "grid 的 place-items", "能比较兼容性与适用场景"],
+      "followup_hints": ["如果这个元素的宽高都未知，你的方案还成立吗？"]
+    },
+    {
+      "id": "fe-tech-03",
+      "scene": "技术",
+      "level": "基础",
+      "question": "什么是闭包？它有什么用，又可能带来什么问题？",
+      "intent": "考察 JavaScript 核心",
+      "reference_points": ["函数能访问外层作用域变量", "用途：私有变量、柯里化、防抖节流", "风险：变量常驻内存、循环里用 var 的坑"],
+      "followup_hints": ["闭包导致的内存问题怎么释放？"]
+    },
+    {
+      "id": "fe-tech-04",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "讲讲 JavaScript 的原型链，属性和方法是怎么一层层找到的？",
+      "intent": "考察原型与继承",
+      "reference_points": ["__proto__ 与 prototype 的区别", "查找沿原型链向上", "原型链终点是 null", "ES6 class 本质仍是原型继承"],
+      "followup_hints": ["instanceof 是怎么判断的？"]
+    },
+    {
+      "id": "fe-tech-05",
+      "scene": "技术",
+      "level": "基础",
+      "question": "this 的指向是怎么确定的？call、apply、bind 有什么区别？",
+      "intent": "考察 this 与函数调用",
+      "reference_points": ["this 取决于调用方式而非定义位置", "箭头函数没有自己的 this", "call/apply 立即执行、bind 返回新函数", "apply 传数组、call 逐个传"],
+      "followup_hints": ["箭头函数能不能被 bind 改变 this？"]
+    },
+    {
+      "id": "fe-tech-06",
+      "scene": "技术",
+      "level": "基础",
+      "question": "var、let、const 有什么区别？什么是暂时性死区？",
+      "intent": "考察 ES6 基础",
+      "reference_points": ["作用域（函数/块级）", "变量提升与 TDZ", "const 的不可重新赋值（非不可变）"],
+      "followup_hints": ["用 const 声明对象，能修改它的属性吗？"]
+    },
+    {
+      "id": "fe-tech-07",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "说说浏览器的事件循环，宏任务和微任务是怎么执行的？",
+      "intent": "考察异步机制",
+      "reference_points": ["先同步 → 清空微任务 → 取一个宏任务", "宏任务/微任务各有哪些", "Promise.then 属微任务", "能举一段代码的执行顺序"],
+      "followup_hints": ["setTimeout(fn, 0) 一定比 Promise.then 先执行吗？"]
+    },
+    {
+      "id": "fe-tech-08",
+      "scene": "技术",
+      "level": "基础",
+      "question": "Promise 有哪几种状态？async/await 相对 Promise 解决了什么问题？",
+      "intent": "考察异步编程",
+      "reference_points": ["pending/fulfilled/rejected、状态不可逆", "async 返回 Promise", "await 让异步代码更像同步、错误用 try/catch", "能说清依旧要处理 rejection"],
+      "followup_hints": ["多个 await 串行执行时性能问题怎么优化？"]
+    },
+    {
+      "id": "fe-tech-09",
+      "scene": "技术",
+      "level": "基础",
+      "question": "防抖和节流有什么区别？分别用在什么场景？",
+      "intent": "考察性能与手写能力",
+      "reference_points": ["防抖=停止后触发、节流=固定间隔触发", "输入搜索用防抖、滚动/resize 用节流", "能说出实现思路（定时器/时间戳）"],
+      "followup_hints": ["防抖的立即执行版本怎么改？"]
+    },
+    {
+      "id": "fe-tech-10",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "深拷贝和浅拷贝有什么区别？你会怎么实现一个深拷贝？",
+      "intent": "考察对象与引用",
+      "reference_points": ["基本类型 vs 引用类型", "Object.assign/展开是浅拷贝", "递归 + 处理循环引用", "特殊类型（Date/RegExp）的处理"],
+      "followup_hints": ["JSON.parse(JSON.stringify()) 有什么坑？"]
+    },
+    {
+      "id": "fe-tech-11",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "在浏览器地址栏输入一个网址到页面渲染出来，中间都发生了什么？",
+      "intent": "考察网络与渲染综合",
+      "reference_points": ["DNS 解析 → TCP/TLS → 请求响应", "解析 HTML 构建 DOM/CSSOM", "合成渲染树、布局、绘制", "能按阶段有条理地讲"],
+      "followup_hints": ["CSS 会阻塞 DOM 解析吗？JS 呢？"]
+    },
+    {
+      "id": "fe-tech-12",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "重排和重绘有什么区别？日常开发里怎么减少它们？",
+      "intent": "考察渲染性能",
+      "reference_points": ["重排触发几何变化、代价更大", "批量改样式、用 transform/opacity", "避免频繁读取 offsetTop 等触发强制同步布局", "文档片段/虚拟列表"],
+      "followup_hints": ["transform 为什么不触发重排？"]
+    },
+    {
+      "id": "fe-tech-13",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "Vue 的响应式是怎么实现的？Vue2 和 Vue3 有什么区别？",
+      "intent": "考察框架原理",
+      "reference_points": ["Vue2 用 Object.defineProperty", "Vue3 用 Proxy", "Vue2 对数组/新增属性需特殊处理", "依赖收集与派发更新"],
+      "followup_hints": ["Vue3 用 Proxy 后还有哪些响应式限制？"]
+    },
+    {
+      "id": "fe-tech-14",
+      "scene": "技术",
+      "level": "基础",
+      "question": "列表渲染里的 key 有什么用？为什么推荐用唯一 id 而不是索引？",
+      "intent": "考察 diff 与框架理解",
+      "reference_points": ["key 标识节点、辅助 diff 复用", "索引 key 在增删排序时会错位、丢状态", "唯一 id 更稳定"],
+      "followup_hints": ["如果列表完全静态不会变，用索引 key 有问题吗？"]
+    },
+    {
+      "id": "fe-tech-15",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "跨域是怎么产生的？前端能怎么解决？",
+      "intent": "考察同源策略与工程实践",
+      "reference_points": ["同源策略（协议+域名+端口）", "CORS 与服务端响应头", "开发环境反向代理", "JSONP 的局限", "能区分开发与生产方案"],
+      "followup_hints": ["带 Cookie 的跨域请求要注意什么？"]
+    },
+    {
+      "id": "fe-tech-16",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "浏览器缓存有哪几类？强缓存和协商缓存分别靠什么头控制？",
+      "intent": "考察缓存机制",
+      "reference_points": ["强缓存 Cache-Control/Expires", "协商缓存 ETag/If-None-Match、Last-Modified", "304 的流程", "前端如何用 hash 文件名配合缓存"],
+      "followup_hints": ["发了新版前端，怎么保证用户拿到最新资源？"]
+    },
+    {
+      "id": "fe-tech-17",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "一个首屏加载很慢的页面，你会从哪些方向去优化？",
+      "intent": "考察性能优化体系",
+      "reference_points": ["资源层面：压缩/代码分割/懒加载/CDN", "网络层面：缓存/HTTP2/预加载", "渲染层面：SSR/骨架屏", "有优先级和量化指标（FCP/LCP）"],
+      "followup_hints": ["你会用什么指标衡量优化效果？"]
+    },
+    {
+      "id": "fe-proj-01",
+      "scene": "项目",
+      "level": "进阶",
+      "question": "你做过的前端项目里，组件是怎么拆分的？怎么决定一个组件该不该抽出来？",
+      "intent": "考察工程与抽象能力",
+      "reference_points": ["按职责/复用性拆分", "有状态与无状态组件区分", "过度拆分的坏处", "结合具体项目说"],
+      "followup_hints": ["有没有拆完又合并回去的经历？为什么？"]
+    },
+    {
+      "id": "fe-proj-02",
+      "scene": "项目",
+      "level": "进阶",
+      "question": "你的项目里前后端是怎么联调的？接口规范和错误处理是怎么设计的？",
+      "intent": "考察协作与规范性",
+      "reference_points": ["接口约定（字段/状态码/分页）", "统一错误处理与提示", "Mock 与真实联调切换", "鉴权 token 的处理"],
+      "followup_hints": ["后端改了字段，前端怎么防止出错？"]
+    },
+    {
+      "id": "fe-proj-03",
+      "scene": "项目",
+      "level": "进阶",
+      "question": "你的前端项目怎么打包和部署的？有没有做过构建优化？",
+      "intent": "考察工程化落地",
+      "reference_points": ["构建工具（Vite/Webpack）配置", "产物分析与体积优化", "环境变量与多环境部署", "有真实优化数据更好"],
+      "followup_hints": ["打包体积大，你最先动的是哪里？"]
+    }
+  ]
+}

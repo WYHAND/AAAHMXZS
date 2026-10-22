@@ -307,8 +307,8 @@ function EducationList({ items }: { items: ResumeData['education'] }) {
 /**
  * 技能：两种形态。
  *
- * 用户在表单里写的是关键词（ArkTS / TypeScript / Excel），润色会把它们展开成一句能力表述
- * （"熟悉 ArkTS 声明式 UI 与状态管理…"）。短词条拼一行最省地方；展开成句子的必须一条一行 ——
+ * 用户在表单里写的是关键词（Vue / TypeScript / Excel），润色会把它们展开成一句能力表述
+ * （"熟悉 Vue 声明式 UI 与状态管理…"）。短词条拼一行最省地方；展开成句子的必须一条一行 ——
  * 它自己就带顿号逗号，再拼一行会连成一坨、读不出边界。判断逻辑 `skillsAreKeywords` 沿用原实现。
  */
 function Skills({ items }: { items: string[] }) {

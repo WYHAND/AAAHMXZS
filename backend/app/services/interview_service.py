@@ -1,7 +1,7 @@
 """AI 模拟面试业务逻辑（手册 11.9、7.4、7.8）。
 
 流程（11.9）：
-1. ``start_interview``：选模式与场景 -> DeepSeek 基于简历出题 -> 写 interviews + interview_questions
+1. ``start_interview``：选模式与场景 -> **从真实题库检索候选真题** -> DeepSeek 挑选并贴合简历改写出题 -> 写 interviews + interview_questions
 2. ``get_questions``：取题目（含追问出来的题）
 3. ``submit_answer``：存回答 -> 判断是否需要追问（每题 1-2 轮）-> 返回下一题
 4. ``finish_interview``：生成复盘报告 -> 写 interviews.report
@@ -42,7 +42,7 @@ from app.schemas.interview import (
     InterviewReviewResponse,
     InterviewStartRequest,
 )
-from app.services import profile_service
+from app.services import profile_service, question_bank_service
 from app.utils.logger import get_logger, sanitize
 
 logger = get_logger(__name__)

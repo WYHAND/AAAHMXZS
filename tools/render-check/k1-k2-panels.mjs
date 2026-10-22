@@ -29,7 +29,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 /** 三个进行中任务的固定数据：四个面板用的是**同一份数据**，便于直接比较 */
 const TASKS = [
   {
-    id: 't1', user_id: 'u1', title: '做一个鸿蒙待办清单小应用',
+    id: 't1', user_id: 'u1', title: '做一个待办清单 Web 应用',
     description: null, pain_point: '缺项目经验', status: '进行中',
     value_note: '简历上能写成一个完整项目。', difficulty: '中等', estimated_days: 14,
     created_at: '2026-09-10T20:05:00+08:00', updated_at: '2026-09-18T09:24:31+08:00', progress: 0.4,
@@ -48,13 +48,13 @@ const TASKS = [
     created_at: '2026-09-16T09:00:00+08:00', updated_at: '2026-09-22T09:00:00+08:00', progress: 0,
   },
   {
-    id: 't4', user_id: 'u1', title: '搭建 ArkTS 基础环境并跑通 Hello World',
+    id: 't4', user_id: 'u1', title: '搭建 Vue + Vite 基础环境并跑通 Hello World',
     description: null, pain_point: null, status: '已完成',
     value_note: null, difficulty: '简单', estimated_days: 1,
     created_at: '2026-09-08T09:00:00+08:00', updated_at: '2026-09-09T18:00:00+08:00', progress: 1,
   },
   {
-    id: 't5', user_id: 'u1', title: '读完《鸿蒙应用开发实战》前三章',
+    id: 't5', user_id: 'u1', title: '读完《JavaScript 高级程序设计》前三章',
     description: null, pain_point: '拖延', status: '已放弃',
     value_note: null, difficulty: '中等', estimated_days: 5,
     created_at: '2026-09-05T09:00:00+08:00', updated_at: '2026-09-07T09:00:00+08:00', progress: 0.2,

@@ -1,0 +1,168 @@
+{
+  "id": "ai-llm",
+  "name": "AI/大模型",
+  "aliases": ["大模型", "llm", "ai工程师", "ai开发", "ai应用", "算法工程", "agent", "agent开发", "大模型算法", "prompt", "rag", "生成式ai", "aigc", "人工智能"],
+  "sources": [
+    "liyupi/mianshiya 面试鸭（AI大模型 / LLM / Prompt / RAG 题库）",
+    "ni00/DevRusher（大模型算法 / Agent 工程 / Agent 评测 题包）",
+    "swf2020/interview-collector（AI Agent 角色模块）",
+    "牛客网「AI 岗位高频面试题整理」",
+    "本项目自写考察点与参考要点"
+  ],
+  "note": "题目为社区公开的大模型/AI 应用岗高频面试题（事实性引用），参考要点为本项目自写。",
+  "questions": [
+    {
+      "id": "ai-tech-01",
+      "scene": "技术",
+      "level": "基础",
+      "question": "什么是 RAG？一个完整的 RAG 流程包含哪些环节？",
+      "intent": "考察 RAG 基础",
+      "reference_points": ["检索 + 生成", "环节：切分-向量化-存储-召回-重排-拼 Prompt-生成", "解决知识时效与私有知识问题", "与微调的分工"],
+      "followup_hints": ["RAG 和微调，你什么情况下会选哪个？"]
+    },
+    {
+      "id": "ai-tech-02",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "RAG 效果不好，你会从哪些环节排查？",
+      "intent": "考察 RAG 调优",
+      "reference_points": ["召回阶段：切分粒度/embedding/检索数量", "重排与过滤", "Prompt 组织与上下文噪声", "分层定位（先看召回率再看生成）"],
+      "followup_hints": ["怎么判断是“没检索到”还是“检索到了但没用对”？"]
+    },
+    {
+      "id": "ai-tech-03",
+      "scene": "技术",
+      "level": "基础",
+      "question": "大模型的“幻觉”是什么？有哪些缓解手段？",
+      "intent": "考察幻觉治理",
+      "reference_points": ["生成看似合理但不真实的内容", "RAG 提供事实依据、要求引用来源", "结构化输出与校验", "必要时人工/规则兜底"],
+      "followup_hints": ["你怎么评估幻觉有没有变少？"]
+    },
+    {
+      "id": "ai-tech-04",
+      "scene": "技术",
+      "level": "基础",
+      "question": "Prompt 工程里你常用哪些技巧？",
+      "intent": "考察 Prompt 能力",
+      "reference_points": ["角色设定与任务拆解", "少样本示例", "思维链/分步、明确输出格式", "约束与边界（不要编造）"],
+      "followup_hints": ["少样本示例加多了会有什么副作用？"]
+    },
+    {
+      "id": "ai-tech-05",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "微调和 RAG 有什么区别？分别适合什么场景？",
+      "intent": "考察方案选型",
+      "reference_points": ["RAG 补知识、可更新、成本低", "微调改风格/能力/格式，需数据与算力", "两者可组合", "能给出选型标准"],
+      "followup_hints": ["如果只是想让模型稳定输出一种 JSON 格式，你会怎么做？"]
+    },
+    {
+      "id": "ai-tech-06",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "向量检索是怎么工作的？embedding 和余弦相似度是什么关系？",
+      "intent": "考察向量检索",
+      "reference_points": ["文本映射到高维向量", "语义相近则向量距离近", "余弦相似度衡量方向相似", "ANN 索引（HNSW/IVF）加速"],
+      "followup_hints": ["向量检索有什么天然的短板？怎么弥补？"]
+    },
+    {
+      "id": "ai-tech-07",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "LoRA 是什么？它为什么能大幅降低微调成本？",
+      "intent": "考察参数高效微调",
+      "reference_points": ["低秩适配、只训练旁路小矩阵", "冻结原模型参数", "显存与存储开销小、可插拔", "与全量微调的取舍"],
+      "followup_hints": ["多个 LoRA 能合并或切换吗？"]
+    },
+    {
+      "id": "ai-tech-08",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "大模型推理慢、成本高，你有哪些优化思路？",
+      "intent": "考察推理优化",
+      "reference_points": ["量化（INT8/INT4）", "KV Cache、批处理、流式输出", "缓存与路由（简单问题用小模型）", "蒸馏与小模型替代"],
+      "followup_hints": ["量化之后效果掉得厉害怎么办？"]
+    },
+    {
+      "id": "ai-tech-09",
+      "scene": "技术",
+      "level": "基础",
+      "question": "什么是 Function Calling（工具调用）？Agent 是怎么用工具完成任务的？",
+      "intent": "考察 Agent 基础",
+      "reference_points": ["模型输出结构化调用请求", "宿主执行工具并回传结果", "循环直到任务完成", "规划与错误重试"],
+      "followup_hints": ["工具调用失败时，Agent 应该怎么处理？"]
+    },
+    {
+      "id": "ai-tech-10",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "Agent 的“规划”一般怎么做？多步任务怎么防止跑偏？",
+      "intent": "考察 Agent 架构",
+      "reference_points": ["任务分解/ReAct/反思", "状态与记忆管理", "最大步数与校验节点", "人类确认关键动作"],
+      "followup_hints": ["Agent 陷入死循环，你会怎么设计兜底？"]
+    },
+    {
+      "id": "ai-tech-11",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "大模型应用怎么做评测？离线评测和线上评测分别怎么做？",
+      "intent": "考察评测体系",
+      "reference_points": ["构建评测集与标准答案/评分标准", "自动指标 + 人工/LLM 裁判", "线上 A/B 与用户反馈", "回归评测防退化"],
+      "followup_hints": ["用大模型当裁判靠谱吗？有什么风险？"]
+    },
+    {
+      "id": "ai-tech-12",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "什么是提示注入（Prompt Injection）？你会怎么防范？",
+      "intent": "考察安全",
+      "reference_points": ["用户/外部内容试图覆盖系统指令", "输入过滤与隔离、权限最小化", "工具调用需鉴权与确认", "输出校验"],
+      "followup_hints": ["RAG 检索到的文档里藏了恶意指令，你怎么防？"]
+    },
+    {
+      "id": "ai-tech-13",
+      "scene": "技术",
+      "level": "基础",
+      "question": "上下文窗口是什么？长文本处理有哪些常见方案？",
+      "intent": "考察长文本处理",
+      "reference_points": ["模型一次能处理的 token 上限", "滑动窗口/摘要/分块检索", "长上下文的成本与注意力衰减", "按场景选方案"],
+      "followup_hints": ["把整本书塞进上下文，效果一定比检索好吗？"]
+    },
+    {
+      "id": "ai-tech-14",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "你能简单讲讲 Transformer 和自注意力机制吗？",
+      "intent": "考察底层理解",
+      "reference_points": ["Q/K/V 与注意力权重", "多头注意力", "并行化与长距离依赖", "位置编码的作用"],
+      "followup_hints": ["自注意力的计算复杂度是多少？"]
+    },
+    {
+      "id": "ai-proj-01",
+      "scene": "项目",
+      "level": "进阶",
+      "question": "讲一个大模型相关的项目（或你想做的方案）：你要解决什么问题、架构怎么设计、效果如何？",
+      "intent": "考察项目设计能力",
+      "reference_points": ["问题与场景清晰", "架构合理（模型/RAG/工具/存储）", "有效果指标或验证方式", "考虑了成本与延迟"],
+      "followup_hints": ["这个方案里最容易失败的一环是哪个？"]
+    },
+    {
+      "id": "ai-proj-02",
+      "scene": "项目",
+      "level": "进阶",
+      "question": "如果线上用户反馈“答非所问”，你会怎么定位和优化？",
+      "intent": "考察问题排查",
+      "reference_points": ["先分层定位（检索/提示/模型/数据）", "收集 bad case 归类", "针对性优化并回归验证", "建立监控"],
+      "followup_hints": ["你怎么把 bad case 变成可复用的评测用例？"]
+    },
+    {
+      "id": "ai-proj-03",
+      "scene": "项目",
+      "level": "进阶",
+      "question": "大模型应用的成本怎么控制？如果预算被砍一半，你会怎么改方案？",
+      "intent": "考察成本意识",
+      "reference_points": ["缓存、路由到小模型、压缩上下文", "减少无效调用与重试", "按价值分配预算", "有量化取舍"],
+      "followup_hints": ["用小模型替代后效果下降，你怎么补回来？"]
+    }
+  ]
+}

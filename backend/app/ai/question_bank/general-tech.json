@@ -1,0 +1,140 @@
+{
+  "id": "general-tech",
+  "name": "通用技术",
+  "aliases": ["研发", "软件开发", "软件工程师", "程序员", "计算机", "技术岗", "软件工程", "信息技术"],
+  "sources": [
+    "0voice/campus_recruitmen_questions（校招基础八股）",
+    "0voice/Campus_recruitment_interview_questions",
+    "liyupi/mianshiya 面试鸭（计算机基础 / 操作系统 / 网络 / 数据库）",
+    "中国电信天翼云等 AI 面公开真题"
+  ],
+  "note": "岗位名比较泛（研发/软件开发/技术岗）时使用。题目为社区公开的计算机基础高频题，参考要点为本项目自写。",
+  "questions": [
+    {
+      "id": "gt-tech-01",
+      "scene": "技术",
+      "level": "基础",
+      "question": "进程和线程有什么区别？各自适合什么场景？",
+      "intent": "考察操作系统基础",
+      "reference_points": ["进程是资源分配单位、线程是调度单位", "是否共享地址空间", "切换开销差异", "结合场景举例"],
+      "followup_hints": ["多线程一定比多进程快吗？为什么？"]
+    },
+    {
+      "id": "gt-tech-02",
+      "scene": "技术",
+      "level": "基础",
+      "question": "TCP 为什么要三次握手？两次会有什么问题？",
+      "intent": "考察网络基础",
+      "reference_points": ["确认双方收发能力", "防止历史失效连接请求造成资源浪费", "能说清第三次握手的作用"],
+      "followup_hints": ["四次挥手为什么比三次握手多一次？"]
+    },
+    {
+      "id": "gt-tech-03",
+      "scene": "技术",
+      "level": "基础",
+      "question": "HTTP 和 HTTPS 有什么区别？HTTPS 是怎么保证安全的？",
+      "intent": "考察网络与安全基础",
+      "reference_points": ["HTTPS = HTTP + TLS", "对称加密传数据、非对称加密协商密钥", "证书与 CA 的作用"],
+      "followup_hints": ["如果证书被伪造了会怎么样？"]
+    },
+    {
+      "id": "gt-tech-04",
+      "scene": "技术",
+      "level": "基础",
+      "question": "常用的数据结构有哪些？哈希表在什么情况下会退化？",
+      "intent": "考察数据结构基础",
+      "reference_points": ["数组/链表/哈希/树/堆各自特点", "哈希冲突与哈希函数", "最坏情况退化为 O(n)"],
+      "followup_hints": ["哈希表扩容时会发生什么？"]
+    },
+    {
+      "id": "gt-tech-05",
+      "scene": "技术",
+      "level": "基础",
+      "question": "快速排序和归并排序的平均、最坏时间复杂度分别是多少？各自适合什么数据？",
+      "intent": "考察算法基础",
+      "reference_points": ["快排平均 O(n log n)、最坏 O(n^2)", "归并稳定、需要额外空间", "快排对近乎有序数据的表现"],
+      "followup_hints": ["工业界为什么常用快排的变体而不是归并？"]
+    },
+    {
+      "id": "gt-tech-06",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "数据库索引底层为什么常用 B+ 树，而不是二叉树或哈希表？",
+      "intent": "考察数据库基础",
+      "reference_points": ["B+ 树矮、磁盘 IO 次数少", "叶子节点链表便于范围查询", "哈希不支持范围查询", "二叉树高度过高"],
+      "followup_hints": ["什么情况下索引会失效？"]
+    },
+    {
+      "id": "gt-tech-07",
+      "scene": "技术",
+      "level": "基础",
+      "question": "数据库事务的 ACID 分别指什么？举例说明。",
+      "intent": "考察数据库基础",
+      "reference_points": ["原子性/一致性/隔离性/持久性", "能各举一个例子", "隔离级别与脏读/不可重复读的关系"],
+      "followup_hints": ["可重复读和串行化主要差在哪？"]
+    },
+    {
+      "id": "gt-tech-08",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "死锁产生的四个必要条件是什么？实践中怎么避免？",
+      "intent": "考察并发基础",
+      "reference_points": ["互斥/占有并等待/不可剥夺/循环等待", "破坏环（统一加锁顺序）", "超时与重试", "银行家算法的思想"],
+      "followup_hints": ["你项目里有没有可能死锁的地方？"]
+    },
+    {
+      "id": "gt-tech-09",
+      "scene": "技术",
+      "level": "基础",
+      "question": "面向对象的三大特性是什么？在代码里怎么体现？",
+      "intent": "考察编程基础",
+      "reference_points": ["封装/继承/多态", "各有代码层面的体现", "能结合项目举例"],
+      "followup_hints": ["组合和继承你更偏好哪个？为什么？"]
+    },
+    {
+      "id": "gt-tech-10",
+      "scene": "技术",
+      "level": "基础",
+      "question": "你了解哪些设计模式？挑一个你在项目里真正用过的说说。",
+      "intent": "考察工程素养",
+      "reference_points": ["能说清模式解决的问题", "有真实使用场景", "不是背定义"],
+      "followup_hints": ["不用这个模式，代码会糟在哪里？"]
+    },
+    {
+      "id": "gt-tech-11",
+      "scene": "技术",
+      "level": "基础",
+      "question": "团队协作里你常用哪些 Git 命令？分支和冲突一般怎么处理？",
+      "intent": "考察工程协作",
+      "reference_points": ["常用命令（branch/merge/rebase/cherry-pick）", "冲突解决流程", "分支策略（feature 分支/PR）"],
+      "followup_hints": ["rebase 和 merge 的区别你知道吗？"]
+    },
+    {
+      "id": "gt-tech-12",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "如果线上服务变慢或者内存一直涨，你会怎么排查？",
+      "intent": "考察排障思路",
+      "reference_points": ["先看监控与日志定位范围", "分层排查（CPU/内存/IO/网络/DB）", "有工具意识（top/火焰图/慢查询日志）"],
+      "followup_hints": ["你实际用过哪个工具定位过问题？"]
+    },
+    {
+      "id": "gt-tech-13",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "缓存的作用是什么？缓存穿透、击穿、雪崩分别指什么、怎么防？",
+      "intent": "考察缓存设计",
+      "reference_points": ["三者定义要分清", "穿透=查不存在的数据、布隆过滤器/空值缓存", "击穿=热点 key 过期、互斥锁", "雪崩=大量同时过期、随机过期时间"],
+      "followup_hints": ["缓存和数据库的一致性你怎么保证？"]
+    },
+    {
+      "id": "gt-tech-14",
+      "scene": "技术",
+      "level": "基础",
+      "question": "你最近自学了什么技术？是怎么学的、学到什么程度了？",
+      "intent": "考察学习能力",
+      "reference_points": ["有具体技术点和路径", "有可验证产出", "能说清卡点如何突破"],
+      "followup_hints": ["你打算怎么验证自己真的掌握了？"]
+    }
+  ]
+}

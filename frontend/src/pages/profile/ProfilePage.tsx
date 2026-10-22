@@ -250,26 +250,14 @@ export default function ProfilePage() {
             </Panel>
           </Reveal>
 
-          {/* ② 我的奖章：整行；左边文字区（标题 / 描述 / 选中勋章详情），右边三枚勋章横排 */}
-          <Reveal delay={140}>
-            <BadgesPanel
-              overview={overview}
-              loaded={badgesLoaded}
-              failed={badgesFailed}
-              openKey={openBadge}
-              onOpenKeyChange={setOpenBadge}
-            />
-          </Reveal>
-
           {/*
-            ③ 我的画像 | ④ 画像雷达（勘误 9.24.4：**球体当主角**）。
-            - 画像卡拿 7 列（≈600px）：球体要呼吸空间，塞进原来那 5 列会局促；
-            - 去掉原来写死的 `lg:h-[512px]`：高度改由内容决定。
-              两卡**依然视觉等高** —— grid 的 align-items 默认就是 stretch，
-              那行写死的高度本来只是"逼"雷达卡长到 512px 用的。
+            ② 我的画像 | ③ 画像雷达（2026-10-18 上移：这两块才是"我是谁"，
+            原来的顺序是奖章在前、画像在后，首屏只能看到奖章，画像要滚一屏才出现）。
+            - 画像卡拿 7 列（≈600px）：球体要呼吸空间；
+            - 两卡**视觉等高** —— grid 的 align-items 默认就是 stretch。
           */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-            <Reveal delay={250} className="min-w-0 lg:col-span-7">
+            <Reveal delay={140} className="min-w-0 lg:col-span-7">
               <ProfileCard
                 summary={profile.summary}
                 tags={tags}
@@ -277,7 +265,7 @@ export default function ProfilePage() {
               />
             </Reveal>
 
-            <Reveal delay={360} className="min-w-0 lg:col-span-5">
+            <Reveal delay={250} className="min-w-0 lg:col-span-5">
               <Panel data-print="card" className="h-full gap-4">
                 <div className="flex flex-col gap-1.5">
                   <h2 className="text-headline-sm text-primary">画像雷达</h2>
@@ -303,6 +291,18 @@ export default function ProfilePage() {
               </Panel>
             </Reveal>
           </div>
+
+          {/* ④ 我的奖章：整行；左边文字区（标题 / 描述 / 选中勋章详情），右边三枚勋章横排。
+              勋章是"收进来的东西"，放在画像之后，作为这一页的收尾。 */}
+          <Reveal delay={360}>
+            <BadgesPanel
+              overview={overview}
+              loaded={badgesLoaded}
+              failed={badgesFailed}
+              openKey={openBadge}
+              onOpenKeyChange={setOpenBadge}
+            />
+          </Reveal>
         </>
       ) : !failed && ready ? (
         <BadgesPanel

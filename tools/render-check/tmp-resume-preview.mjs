@@ -27,8 +27,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 /** 没有项目经历、也没有校园经历的简历 —— 正是用户说的那种人 */
 const MY_RESUME = {
   id: 'pv-preview-1',
-  title: '林小满-鸿蒙客户端开发-2026 秋招',
-  target_job: '鸿蒙应用开发工程师',
+  title: '林小满-前端开发-2026 秋招',
+  target_job: '前端开发工程师',
   completeness: 0.62,
   updated_at: new Date().toISOString(),
   parsed_data: {
@@ -39,7 +39,7 @@ const MY_RESUME = {
       school: '华中科技大学',
       contact: 'lin@example.com',
     },
-    target: { direction: '鸿蒙应用开发工程师', city: '武汉' },
+    target: { direction: '前端开发工程师', city: '武汉' },
     education: [
       {
         school: '华中科技大学',
@@ -48,7 +48,7 @@ const MY_RESUME = {
         highlights: ['专业排名前 20%'],
       },
     ],
-    skills: ['ArkTS', 'TypeScript'],
+    skills: ['Vue', 'TypeScript'],
     projects: [],
     campus: [],
     self_evaluation: '做事比较较真，答应的事会做完。',

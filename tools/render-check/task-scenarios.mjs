@@ -45,15 +45,15 @@ const T = (over) => ({
 
 const CASES = {
   s1: [
-    T({ title: '做一个鸿蒙待办清单小应用', value_note: '简历上能写成一个完整项目。', difficulty: '中等', estimated_days: 14, pain_point: '缺项目经验', progress: 0.4 }),
+    T({ title: '做一个待办清单 Web 应用', value_note: '简历上能写成一个完整项目。', difficulty: '中等', estimated_days: 14, pain_point: '缺项目经验', progress: 0.4 }),
     T({ title: '用一天时间画出你的技术兴趣地图', value_note: '迷茫常常是因为选项太多又太模糊，把它们写下来、标上感受，你才知道自己真正被什么吸引。', difficulty: '简单', estimated_days: 3, pain_point: '拖延', progress: 0.5 }),
     T({ title: '把简历里的项目描述补上量化结果', value_note: '把「做了什么」改成「做出了什么结果」。', difficulty: '中等', estimated_days: 2, progress: 0 }),
   ],
-  s2: [T({ title: '做一个鸿蒙待办清单小应用', value_note: '简历上能写成一个完整项目。', difficulty: '中等', estimated_days: 14, pain_point: '缺项目经验', progress: 0.4 })],
+  s2: [T({ title: '做一个待办清单 Web 应用', value_note: '简历上能写成一个完整项目。', difficulty: '中等', estimated_days: 14, pain_point: '缺项目经验', progress: 0.4 })],
   s3: [
-    T({ title: '做一个鸿蒙待办清单小应用', value_note: '简历上能写成一个完整项目。', difficulty: '中等', estimated_days: 14, pain_point: '缺项目经验', progress: 0.4 }),
-    T({ title: '搭建 ArkTS 基础环境并跑通 Hello World', status: '已完成', progress: 1 }),
-    T({ title: '读完《鸿蒙应用开发实战》前三章', status: '已放弃', progress: 0.2, pain_point: '拖延' }),
+    T({ title: '做一个待办清单 Web 应用', value_note: '简历上能写成一个完整项目。', difficulty: '中等', estimated_days: 14, pain_point: '缺项目经验', progress: 0.4 }),
+    T({ title: '搭建 Vue + Vite 基础环境并跑通 Hello World', status: '已完成', progress: 1 }),
+    T({ title: '读完《JavaScript 高级程序设计》前三章', status: '已放弃', progress: 0.2, pain_point: '拖延' }),
   ],
   s4: [T({ title: '整理一次课程项目的技术选型理由' })],
 }

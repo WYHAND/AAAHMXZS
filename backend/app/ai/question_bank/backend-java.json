@@ -1,0 +1,176 @@
+{
+  "id": "backend-java",
+  "name": "后端(Java)",
+  "aliases": ["后端", "服务端", "java", "java开发", "java工程师", "java后端", "后端开发", "spring", "springboot", "微服务"],
+  "sources": [
+    "liyupi/mianshiya 面试鸭（Java / JVM / 并发 / Spring / MySQL / Redis 题库）",
+    "0voice/campus_recruitmen_questions（Java / MySQL / Redis 八股）",
+    "牛客网后端校招面经（阿里 / 腾讯 / 字节 / 美团 / 恒生电子等）",
+    "本项目自写考察点与参考要点"
+  ],
+  "note": "题目为社区公开的 Java 后端高频面试题（事实性引用），参考要点为本项目自写。",
+  "questions": [
+    {
+      "id": "be-tech-01",
+      "scene": "技术",
+      "level": "基础",
+      "question": "== 和 equals 有什么区别？为什么重写 equals 一定要重写 hashCode？",
+      "intent": "考察 Java 基础",
+      "reference_points": ["== 比引用/基本类型值、equals 默认也是比引用", "hashCode 契约：equals 相等则 hashCode 相等", "只重写 equals 会导致 HashMap 查找失效"],
+      "followup_hints": ["两个对象 hashCode 相等，equals 一定相等吗？"]
+    },
+    {
+      "id": "be-tech-02",
+      "scene": "技术",
+      "level": "基础",
+      "question": "String、StringBuilder、StringBuffer 有什么区别？",
+      "intent": "考察 Java 基础",
+      "reference_points": ["String 不可变", "StringBuilder 非线程安全但快", "StringBuffer 线程安全（synchronized）", "字符串常量池概念"],
+      "followup_hints": ["字符串拼接在循环里为什么建议用 StringBuilder？"]
+    },
+    {
+      "id": "be-tech-03",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "HashMap 的底层结构是什么？扩容和哈希冲突是怎么处理的？",
+      "intent": "考察集合原理",
+      "reference_points": ["数组 + 链表 + 红黑树（长度 8 转树）", "默认容量 16、负载因子 0.75", "扩容 2 倍并 rehash", "1.8 的尾插法/头插法区别"],
+      "followup_hints": ["为什么负载因子是 0.75 而不是 1？"]
+    },
+    {
+      "id": "be-tech-04",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "ConcurrentHashMap 是怎么保证线程安全的？",
+      "intent": "考察并发容器",
+      "reference_points": ["1.7 分段锁 Segment", "1.8 CAS + synchronized 锁单个桶", "读操作大多无锁（volatile）", "相比 Hashtable 全表锁的优势"],
+      "followup_hints": ["size() 在并发下怎么算得尽量准？"]
+    },
+    {
+      "id": "be-tech-05",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "synchronized 和 Lock 有什么区别？synchronized 的锁升级过程是怎样的？",
+      "intent": "考察并发基础",
+      "reference_points": ["synchronized 是关键字、自动释放；Lock 需手动（finally）", "偏向锁 → 轻量级锁 → 重量级锁", "Lock 支持可中断/超时/公平锁", "能结合场景说明"],
+      "followup_hints": ["什么时候你会优先选 Lock 而不是 synchronized？"]
+    },
+    {
+      "id": "be-tech-06",
+      "scene": "技术",
+      "level": "基础",
+      "question": "volatile 关键字有什么用？它能保证原子性吗？",
+      "intent": "考察内存模型",
+      "reference_points": ["保证可见性和有序性", "不保证原子性（i++ 例子）", "内存屏障与禁止指令重排", "与 synchronized 的分工"],
+      "followup_hints": ["怎么用 volatile 实现一个安全的单例？"]
+    },
+    {
+      "id": "be-tech-07",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "线程池的核心参数有哪些？一个任务提交后是怎么执行的？",
+      "intent": "考察线程池",
+      "reference_points": ["核心线程数/最大线程数/队列/存活时间/拒绝策略", "先核心 → 队列 → 最大 → 拒绝", "队列类型的影响", "参数怎么按业务场景定"],
+      "followup_hints": ["你项目里线程池参数是怎么设的？为什么？"]
+    },
+    {
+      "id": "be-tech-08",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "JVM 的内存区域是怎么划分的？常见垃圾回收算法有哪些？",
+      "intent": "考察 JVM",
+      "reference_points": ["堆/方法区/虚拟机栈/本地方法栈/程序计数器", "堆分新生代与老年代", "标记清除/复制/标记整理", "常见收集器（G1/CMS）"],
+      "followup_hints": ["什么对象会直接进老年代？"]
+    },
+    {
+      "id": "be-tech-09",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "类的加载过程是怎样的？什么是双亲委派？",
+      "intent": "考察类加载",
+      "reference_points": ["加载-验证-准备-解析-初始化", "三类加载器（Bootstrap/Ext/App）", "双亲委派的作用：安全与避免重复加载", "打破双亲委派的场景"],
+      "followup_hints": ["为什么自定义一个 java.lang.String 不会被加载？"]
+    },
+    {
+      "id": "be-tech-10",
+      "scene": "技术",
+      "level": "基础",
+      "question": "Spring 的 IOC 和 AOP 分别是什么？AOP 底层怎么实现的？",
+      "intent": "考察 Spring 核心",
+      "reference_points": ["IOC 控制反转与依赖注入", "AOP 面向切面、横切关注点", "动态代理：JDK Proxy 与 CGLIB", "两者区别与选择"],
+      "followup_hints": ["一个类没有接口，Spring 还能给它做代理吗？"]
+    },
+    {
+      "id": "be-tech-11",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "Spring 是怎么解决循环依赖的？什么情况下解决不了？",
+      "intent": "考察 Spring 进阶",
+      "reference_points": ["三级缓存", "提前暴露半成品对象", "构造器注入的循环依赖解决不了", "prototype 作用域也不行"],
+      "followup_hints": ["为什么需要第三级缓存而不是两级？"]
+    },
+    {
+      "id": "be-tech-12",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "Spring Boot 自动装配的原理是什么？",
+      "intent": "考察框架原理",
+      "reference_points": ["@SpringBootApplication 的组成", "@EnableAutoConfiguration 与 spring.factories / AutoConfiguration.imports", "条件注解按需生效", "starter 的作用"],
+      "followup_hints": ["怎么排除某个自动配置？"]
+    },
+    {
+      "id": "be-tech-13",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "MySQL 索引的最左前缀原则是什么？联合索引 (a,b,c) 哪些查询能用上索引？",
+      "intent": "考察数据库优化",
+      "reference_points": ["最左前缀匹配规则", "范围查询后面的列失效", "能举 where 条件具体判断", "explain 的 type/key 怎么看"],
+      "followup_hints": ["order by 会用到这个联合索引吗？"]
+    },
+    {
+      "id": "be-tech-14",
+      "scene": "技术",
+      "level": "进阶",
+      "question": "MySQL 的事务隔离级别有哪些？MVCC 是怎么实现可重复读的？",
+      "intent": "考察事务与并发",
+      "reference_points": ["四个隔离级别与各自解决的问题", "MVCC = 版本链 + ReadView", "undo log 与隐藏列", "幻读与间隙锁"],
+      "followup_hints": ["RC 和 RR 在读已提交场景下表现差在哪？"]
+    },
+    {
+      "id": "be-tech-15",
+      "scene": "技术",
+      "level": "基础",
+      "question": "Redis 有哪些常用数据类型？持久化 RDB 和 AOF 有什么区别？",
+      "intent": "考察 Redis",
+      "reference_points": ["String/List/Hash/Set/ZSet 及场景", "RDB 快照、AOF 追加日志", "RDB 恢复快可能丢数据、AOF 更全但文件大", "混合持久化"],
+      "followup_hints": ["缓存和数据库一致性你一般怎么保证？"]
+    },
+    {
+      "id": "be-proj-01",
+      "scene": "项目",
+      "level": "进阶",
+      "question": "你后端项目里接口是怎么设计的？有没有做统一的返回结构和异常处理？",
+      "intent": "考察接口设计与工程规范",
+      "reference_points": ["统一响应体（code/message/data）", "全局异常处理", "参数校验", "版本与幂等考虑"],
+      "followup_hints": ["接口重复提交你怎么防止？"]
+    },
+    {
+      "id": "be-proj-02",
+      "scene": "项目",
+      "level": "进阶",
+      "question": "你项目里数据库表是怎么设计的？有没有做过索引或慢查询优化？",
+      "intent": "考察数据库落地能力",
+      "reference_points": ["表结构与范式/反范式的取舍", "索引设计依据", "有真实慢 SQL 优化过程更好", "explain 验证"],
+      "followup_hints": ["那张表数据量涨到千万级，现在的设计还撑得住吗？"]
+    },
+    {
+      "id": "be-proj-03",
+      "scene": "项目",
+      "level": "进阶",
+      "question": "你项目里的性能瓶颈出现在过哪里？你是怎么定位和优化的？",
+      "intent": "考察性能优化实战",
+      "reference_points": ["有具体瓶颈点", "定位手段（日志/压测/监控）", "优化前后有数据对比", "能说清取舍"],
+      "followup_hints": ["优化后你用什么方式确认没有引入新问题？"]
+    }
+  ]
+}

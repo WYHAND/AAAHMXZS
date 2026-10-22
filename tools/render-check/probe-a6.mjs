@@ -182,7 +182,7 @@ async function main() {
   )
   await select.goto(BASE_URL + '/interview', { waitUntil: 'networkidle', timeout: 25000 })
   await sleep(1000)
-  await select.locator('#target_job').fill('鸿蒙客户端开发工程师')
+  await select.locator('#target_job').fill('前端开发工程师')
   await sleep(300)
   console.log('\n===== /interview（已填岗位 · 默认选中「小测试」+「HR 面」）=====')
   await run(select, json)
