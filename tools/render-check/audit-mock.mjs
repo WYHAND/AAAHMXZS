@@ -125,6 +125,7 @@ const resumeTemplate = {
     {
       key: 'basic', label: '基本信息', repeatable: false, fields: [
         rf('name', '姓名', '你叫什么名字？', '张三', true),
+        rf('gender', '性别', '你是男生还是女生？（选填）', '男'),
         rf('grade', '年级', '你现在大几？（选填）', '大三'),
         rf('major', '专业', '你学什么专业？', '软件工程', true),
         rf('school', '学校', '你在哪所学校？', 'XX 大学', true),
@@ -162,7 +163,7 @@ const resumeTemplate = {
 
 /** parsed_data 的契约结构（backend types ResumeData：basic/target/education/skills/projects/campus/self_evaluation） */
 const resumeParsedData = {
-  basic: { name: '林小满', grade: '大三', major: '软件工程', school: '华中科技大学', contact: 'lin@example.com' },
+  basic: { name: '林小满', gender: '女', grade: '大三', major: '软件工程', school: '华中科技大学', contact: 'lin@example.com' },
   target: { direction: '前端开发工程师', city: '武汉' },
   education: [{ school: '华中科技大学', major: '软件工程', period: '2023.09 - 2027.06', highlights: ['专业排名前 20%'] }],
   skills: ['Vue', 'TypeScript'],

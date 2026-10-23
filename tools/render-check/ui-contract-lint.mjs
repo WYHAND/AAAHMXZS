@@ -5,7 +5,7 @@
  * 把契约里"可机械判定"的那几条写成脚本，违规自己冒出来，迭代 2/3 才有抓手。
  *
  * 判据全部来自 docs/任务书/前端迭代-02-动画与版式契约.md：
- *   1. 字号阶：禁止 text-xs / text-sm 表达层级；禁止 text-display（主页专用）
+ *   1. 字号阶：禁止 text-xs / text-sm 表达层级；text-display 每页最多 1 处（一页一个主角数字）
  *   2. 浅底文字：页面里不出现 text-caption-foreground（浅底上 4.37–4.6，低于 4.5）
  *   3. 唯一主 CTA：variant="warm" 每页 ≤1，且必须配 size="lg"
  *   4. 不手搓：不写 animation: / @keyframes（语汇在 index.css）；不用 transition-all
@@ -60,7 +60,7 @@ for (const [label, file] of PAGES) {
   const sm = count(code, /\btext-sm\b/g)
   if (sm) issues.push(`text-sm ×${sm}`)
   const disp = count(code, /\btext-display(-xl)?\b/g)
-  if (disp) issues.push(`text-display 越界 ×${disp}`)
+  if (disp > 1) issues.push(`text-display 超过 1 处 ×${disp}`)
 
   const keyframes = count(code, /@keyframes|animation:/g)
   if (keyframes) issues.push(`手写 animation/@keyframes ×${keyframes}`)
