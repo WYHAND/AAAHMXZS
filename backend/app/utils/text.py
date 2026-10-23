@@ -1,7 +1,7 @@
 """文本处理工具。
 
-- 6.6 语境：字数控制（7.7 输出 ≤300 字）
-- 7.7：过渡语模板本地维护 30 条，随机选择
+- 6.6 语境：字数控制（7.7 输出上限，见下面 ``MAX_ASSISTANT_CHARS``）
+- 7.7：过渡语模板本地维护 30 条，随机选择（⚠️ 当前无调用方，见该常量上方说明）
 """
 
 from __future__ import annotations
@@ -11,8 +11,14 @@ import re
 import unicodedata
 from typing import Iterable, List, Optional
 
-# 7.7 输出 ≤300 字：后端兜底截断
-MAX_ASSISTANT_CHARS = 300
+# 助手回复的**硬上限**（字符）。
+#
+# ⚠️ 2026-11（勘误 9.31 / 9.32 / 9.35）：
+# - 原值 **300** → 9.32 因"讲就业情况"放开到 **1500**；
+# - 9.35 用户又反馈「说的有点多了……要提炼重点说」→ 收到 **800**。
+# 现在的口径：**默认短**（prompt 里要求一般 3-4 句、约 200 字以内），
+# 800 只是"防止跑飞"的硬闸；他明确要求「详细讲讲」时也够用。
+MAX_ASSISTANT_CHARS = 800
 
 # 7.7 对话超过 5 轮无新信息时切换挖掘维度（口径由 chat_system.txt 的规则落地，本常量仅备注）
 MAX_ROUNDS_WITHOUT_NEW_INFO = 5
@@ -47,21 +53,13 @@ def count_chinese_chars(text: str) -> int:
     return len(re.findall(r"[\u4e00-\u9fff]", text or ""))
 
 
-def looks_like_refusal(text: str) -> bool:
-    """7.6：用户拒绝回答时跳过并切换话题。"""
-    if not text:
-        return False
-    keywords = ("不想说", "不想回答", "跳过", "换个话题", "不方便", "没什么好说", "下一个")
-    return any(k in text for k in keywords)
-
-
-def looks_like_stuck(text: str) -> bool:
-    """7.6：用户答不上来时给提示思路。"""
-    if not text:
-        return True
-    keywords = ("不知道", "不清楚", "没想过", "答不上", "不会", "说不好")
-    stripped = text.strip()
-    return any(k in stripped for k in keywords) and len(stripped) <= 20
+# ⚠️ 2026-11（勘误 9.31）：这里原先还有 ``looks_like_refusal()`` / ``looks_like_stuck()``
+# 两个判据，配合 ``chat_service._shortcut_reply()`` 让"拒绝回答 / 答不上来"**不调模型**、
+# 直接回本地模板。那两个模板已删（同一句话会一字不差地重复，而且把手册规则 11
+# "答不上来就给具体台阶"变成了"换一道题再问"）—— 现在这两类输入**一律交回模型**，
+# 判据也随之删除，避免留下"看着像在用、其实没人调"的死代码。
+# （对话路径现在只在"整段回复又短又只是个问句"时做一次空转校验，
+# 那件事在 ``chat_director.looks_like_empty_turn``，与本文件无关。）
 
 
 # 过渡语模板 30 条（7.7）
@@ -69,6 +67,12 @@ def looks_like_stuck(text: str) -> bool:
 # ⚠️ 2026-10 顺语气：清掉了原先几条"教练腔/系统腔"（"谢谢你说得这么具体。"
 # "我想确认一下我的理解。" "先夸一句，这个思路不错。" "好，我们进入下一步。"），
 # 换成更像随口接话的说法；条数保持 30（手册 7.7 写的就是 30 条）。
+#
+# ⚠️ 2026-11（勘误 9.31）：**本池子当前没有任何调用方**。它原先只服务
+# ``fallbacks.refusal_reply()`` / ``stuck_reply()``（"拒绝回答 / 答不上来"的本地模板），
+# 那两个模板已删。池子按手册 7.7"本地维护 30 条"的要求**保留**，不删；
+# 但它不是"可以随手拼进 AI 回复"的素材 —— 过渡语是"接用户上一句"的反应句，
+# AI 失败时没有那一句可接，硬拼会文不对题（勘误 9.27 已实测过这个错配）。
 TRANSITION_PHRASES: List[str] = [
     "嗯，我听着呢。",
     "这个点挺关键的。",
