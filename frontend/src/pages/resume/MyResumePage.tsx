@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight,
+  FileDown,
   Gauge,
   Loader2,
   Plus,
-  Printer,
   RefreshCw,
   Save,
   Sparkles,
@@ -56,6 +56,7 @@ import {
 import { isLegacyResumeData, asText, normalizeResumeData } from '@/pages/resume/resumeShape'
 import { useProfileStore } from '@/store/profileStore'
 import { formatRelative } from '@/utils/format'
+import { canSavePdf, saveResumePdf } from '@/utils/resumeExport'
 import type { ResumeData, ResumeField, ResumeResponse, ResumeSection } from '@/types'
 
 /**
@@ -107,6 +108,8 @@ export default function MyResumePage() {
   /** 润色失败的原因（展示态里那条卡片用）：失败也不把用户从简历上赶回填写页 */
   const [polishError, setPolishError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  /** 桌面端导出 PDF 进行中（浏览器走打印窗口，是同步阻塞的，不占这个状态） */
+  const [exporting, setExporting] = useState(false)
   /** 用户手改过表单 → 再点润色要先确认（润色会覆盖这些手改） */
   const [dirty, setDirty] = useState(false)
   const [confirmPolishOpen, setConfirmPolishOpen] = useState(false)
@@ -449,6 +452,37 @@ export default function MyResumePage() {
         ? { label: '让 AI 帮我改得更像简历', run: handlePolish }
         : { label: '开始填写', run: scrollToFormStart }
 
+  /**
+   * 导出这一屏的简历。
+   *
+   * - **桌面端**：主进程 `printToPDF` + 系统「另存为」，直接拿到一个矢量 PDF 文件；
+   *   文件名默认带姓名与日期（见 utils/resumeExport.ts）。
+   * - **浏览器**：没有落盘能力，退回原来的系统打印窗口，用户在窗口里选「另存为 PDF」。
+   * - 导出的是 `previewData`（**屏幕上这一份**，含还没保存的润色结果），所见即所得；
+   *   整张纸为空时按钮是禁用的，这里再挡一次。
+   * - 用户取消保存（canceled）不是失败：什么都不提示，别把"我不想导了"说成出错。
+   */
+  const exportName = asText(previewData?.basic?.name).trim()
+  const handleExport = async () => {
+    if (!previewData || isEmptySheet || exporting) return
+    if (!canSavePdf()) {
+      window.print()
+      return
+    }
+    setExporting(true)
+    try {
+      const result = await saveResumePdf(exportName)
+      if (!result || result.canceled) return
+      if (result.error) {
+        toast.error(`导出没成功：${result.error}`)
+        return
+      }
+      toast.success('简历已导出为 PDF。', { description: result.filePath })
+    } finally {
+      if (aliveRef.current) setExporting(false)
+    }
+  }
+
   return (
     <PageShell
       title="我的简历"
@@ -462,7 +496,8 @@ export default function MyResumePage() {
       className="max-w-[820px]"
       actions={
         /*
-         * 页头右侧只放**次要**动作，且只在展示态出现：打印导出让用户把成果带走，
+         * 页头右侧只放**次要**动作，且只在展示态出现：
+         * 「导出 PDF」让用户把成果带走（桌面端直接落盘，浏览器退回打印窗口），
          * 「回到填写」与主角卡的「继续完善」同路（都回填写态）。
          * 整页唯一的实心主按钮留给主角卡（见 CompletenessHero）——主次与任务列表一致。
          */
@@ -471,11 +506,13 @@ export default function MyResumePage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => window.print()}
+              onClick={() => void handleExport()}
+              disabled={exporting || isEmptySheet}
+              title={isEmptySheet ? '简历还是空的，先写一点内容再导出' : undefined}
               className="gap-1.5"
             >
-              <Printer className="size-4" />
-              打印 / 导出
+              <FileDown className="size-4" />
+              {exporting ? '正在导出…' : canSavePdf() ? '导出 PDF' : '打印 / 导出'}
             </Button>
             <Button
               variant="ghost"
@@ -660,7 +697,7 @@ export default function MyResumePage() {
                */}
               {missing.length ? (
                 <Panel inset data-print="hide" className="gap-1.5">
-                  <p className="text-body-md text-on-surface">还可以再补一补（可选）</p>
+                  <p className="text-headline-sm text-primary">还可以再补一补（可选）</p>
                   <p className="text-body-sm text-on-surface-variant">
                     简历里还没写到：{missing.join(' / ')}。没有这些也没关系 —— 我按你写过的内容排，
                     一个字都不会替你编；面试时按岗位挑你别的经历讲也一样。
@@ -782,7 +819,7 @@ function FormView({
           <Reveal key={section.key} delay={staggerDelay(index)}>
             <Panel as="section" className="gap-4">
               <div className="flex flex-col gap-1">
-                <h2 className="flex flex-wrap items-center gap-2 text-headline-sm text-primary">
+                <h2 className="flex flex-wrap items-center gap-2 text-headline-md text-primary">
                   {section.label}
                   <span className="rounded-full bg-surface-container px-2 py-0.5 text-caption font-normal text-on-surface-variant">
                     {section.fields.length} 项
@@ -898,13 +935,14 @@ function CompletenessHero({
   return (
     <Panel data-print="hide" className="gap-5">
       <div className="flex flex-col gap-2">
-        <h2 className="flex items-center gap-2 text-headline-sm text-primary">
-          <Gauge className="size-[18px] shrink-0 text-secondary" aria-hidden />
+        {/* 栏目名退成 eyebrow；主角是下面这句结论 + 进度 + 那个百分比数字 */}
+        <span className="flex items-center gap-2 text-caption tracking-wide text-caption-foreground">
+          <Gauge className="size-4" aria-hidden />
           简历完整度
-        </h2>
-        <p className="max-w-[52ch] text-body-md text-on-surface-variant">
+        </span>
+        <h2 className="max-w-[46ch] text-headline-md text-primary">
           {completenessLine(percent, missing)}
-        </p>
+        </h2>
       </div>
 
       {/* 本页唯一的进度条（主卡规格 6px）；值上屏时从左长出来一次 */}
@@ -912,7 +950,7 @@ function CompletenessHero({
 
       {/* 琥珀只给一个数字（填充率），其余走主墨 */}
       <StatGroup columns={3}>
-        <Stat value={percent} unit="%" label="已经写好" accent />
+        <Stat value={percent} unit="%" label="已经写好" size="display" accent />
         <Stat value={filled} label="写好的项" />
         <Stat value={total - filled} label="还空着的项" />
       </StatGroup>
@@ -987,8 +1025,8 @@ function Entries({
            */
           <Panel key={index} inset className="gap-2 p-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              {/* 浅底上的小字必须用 on-surface-variant：caption-foreground 在 #f5f3f0 上只有 2.3:1 */}
-              <span className="text-caption text-on-surface-variant">
+              {/* 浅底上的小字必须用 on-surface-variant：caption-foreground 是暖棕灰，只配做装饰，不承载条目信息 */}
+              <span className="text-body-sm text-on-surface-variant">
                 {section.label} 第 {index + 1} 条
               </span>
               <div className="flex items-center gap-1">
@@ -1093,6 +1131,52 @@ function FieldList({
     const long = isLongField(section, field)
     // 必填 + 用户在这个键上写过又擦掉了 → aria-invalid（不给刚打开的页面标红）
     const invalid = field.required === true && isEmptyValue(value) && (touched[key] ?? 0) > 0
+    /*
+     * 性别：渲染成**两个并排的按钮**（男 / 女），而不是文本输入框。
+     *
+     * 它**依然是模板下发的字段**（key = basic.gender），这里只是换一种"怎么填"：
+     * 模板多问/少问一个性别字段时，这段自动跟着生效/失效，前端不留第二份字段清单。
+     * 选中判据用 includes 而不是相等：AI 或用户可能写成「男生」「女生」，逐字相等会漏。
+     */
+    if (section.key === 'basic' && field.key === 'gender') {
+      const current = asText(value)
+      return (
+        <div key={key} className="flex min-w-0 flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Label className="text-body-md font-normal text-on-surface">{question}</Label>
+            {field.required ? (
+              <span className="rounded-full bg-surface-container px-1.5 py-0.5 text-caption text-on-surface-variant">
+                必填
+              </span>
+            ) : null}
+          </div>
+          <div role="group" aria-label={question} className="flex flex-wrap items-center gap-2">
+            {(['男', '女'] as const).map((option) => {
+              const active = current.includes(option)
+              return (
+                <Button
+                  key={option}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  aria-pressed={active}
+                  onClick={() => onField(key, option)}
+                  /* 选中态走实心主色（twMerge 会正确覆盖 outline 的底色与文字色） */
+                  className={
+                    active
+                      ? 'border-primary bg-primary text-primary-foreground hover:bg-primary-hover'
+                      : undefined
+                  }
+                >
+                  {option}
+                </Button>
+              )
+            })}
+          </div>
+        </div>
+      )
+    }
     return (
       /* 字段块：问题 + 输入框，间距 4px；字段与字段之间 8px（原来是 16px） */
       <div key={key} className="flex min-w-0 flex-col gap-1">
@@ -1195,7 +1279,7 @@ function FailureCard({
 }) {
   return (
     <Panel className="items-center gap-3 text-center">
-      <p className="text-body-md text-on-surface">{title}</p>
+      <p className="text-headline-sm text-primary">{title}</p>
       <p className="max-w-md text-body-sm text-on-surface-variant">{description}</p>
       <Button variant="outline" size="sm" onClick={onRetry} className="motion-press gap-1.5">
         <RefreshCw className="size-4" />

@@ -318,6 +318,7 @@ async def polish_resume(
                 schema=ResumePolishResult,
                 default=empty_resume_polish(),
                 temperature=STRUCTURED_TEMPERATURE,
+                max_tokens=4096,
             )
         except Exception as exc:  # noqa: BLE001 - 7.6 兜底：AI 挂了也要有简历
             logger.warning("简历润色失败，退回用户原文 user_id=%s err=%s", user.id, sanitize(exc))

@@ -80,7 +80,7 @@
 - 数组长度必须与输入一致（输入空 -> 输出空）。
 
 {
-  "basic": {"name": "", "grade": "", "major": "", "school": "", "contact": ""},
+  "basic": {"name": "", "gender": "", "grade": "", "major": "", "school": "", "contact": ""},
   "target": {"direction": "", "city": ""},
   "education": [
     {"school": "", "major": "", "period": "", "highlights": []}

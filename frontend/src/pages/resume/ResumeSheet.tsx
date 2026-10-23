@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import { GraduationCap, Mail, MapPin } from 'lucide-react'
 
+import { PixelAvatar, resolveAvatarVariant } from '@/components/PixelAvatar'
 import {
   asParagraph,
   asText,
@@ -12,17 +12,16 @@ import type { ResumeData, ResumeExperienceItem, ResumeStar } from '@/types'
 /**
  * ResumeSheet —— 简历文档纸（展示态的唯一实现）。
  *
- * 2026-10 重做（原来叫 ResumePreview，是一叠"卡片"）：
- * 它现在是**一张纸上的连贯文档**，不是几个区块卡拼起来的东西 ——
- * - 纸：白底 + 1px 描边 + 12px 圆角，**没有阴影**，宽度上限 820px、居中；
- *   顶部一条 24×2 的琥珀短条作文档标识（不是通栏色带）；
- * - 抬头：姓名 24/600；同一行右侧「求职意向：xxx / 城市」13px 次要色；
- *   联系方式（学校 · 专业 · 年级 + 邮箱）13px，配 lucide 极小图标，之间用细分隔符；
- * - 模块标题 16/600（text-headline-sm）+ 一条发丝线（线只在**文档宽度内**，不横贯屏幕）+ 14px 正文；
- * - 模块顺序照真实数据：基本信息（抬头）/ 求职意向 / 教育背景 / 技能 /
- *   项目经历 / 校园与实践经历 / 自我评价。
+ * 2026-10 视觉改版（这一版）：纸从"圆角白卡"改成**一张有版面的简历纸** ——
+ * - **纸顶标题带**：左侧一块深墨斜块「个人简历」+ 右侧小字记号 + 一条赭金细线做底
+ *   （金只用于这条线、飘带上那枚小方块，不做大面积铺色）；
+ * - **模块标题**改成**直角飘带**（深墨块 + 右侧斜切 + 一枚赭金小方块），不是圆角卡片；
+ * - **右上角照片位**：直角双线框，里面是 `PixelAvatar` 画的像素人物，
+ *   男生 / 女生两套按 `basic.gender` 自动选（含「女」即女生版）；屏幕上每 4.6s 眨一次眼，
+ *   打印时由 print.css 停掉；
+ * - **全纸零圆角**：靠 2px 墨线边框 + 硬投影（`8px 8px 0`）把纸"立"起来。
  *
- * 四条硬规矩（沿用上一版的结论，一条都没放松）：
+ * 判空仍然沿用上一版的四条硬规矩（一条都没放松）：
  * 1. **空模块在文档里直接不渲染**（`analyzeSheet`）。正式简历上不会出现
  *    「这一节还没填，先空着」这种开发占位文案 —— 缺哪一段由**文档外**的导引栏来说，
  *    文档本身保持干净。整份为空时由页面给空态（`isEmpty`），不是在这里印一行占位；
@@ -31,13 +30,18 @@ import type { ResumeData, ResumeExperienceItem, ResumeStar } from '@/types'
  * 3. 空的字段不显示、不占位；
  * 4. **形状不由我们说了算**：库里可能躺着「上传 PDF → 解析」那版旧功能写下的旧结构，
  *    甚至 null / 字符串。`analyzeSheet` 第一件事就是过 `normalizeResumeData`
- *    （形状收敛层），之后所有渲染只碰收敛后的值 —— 不会再有
- *    `(data.education ?? []).every is not a function` 这种整页崩。
+ *    （形状收敛层），之后所有渲染只碰收敛后的值。
  *
  * ⚠️ 打印依赖的类名**一个字都不能改**（styles/print.css 靠它们排版）：
- * `resume-page`（铺满纸张）、`resume-sheet`（白底黑字、去边框圆角）、
- * `resume-section-title` + 里面那个 `<span class="bg-border">`（换成主色 0.6pt 细线）、
+ * `resume-page`（铺满纸张）、`resume-sheet`（去阴影描边铺满）、
+ * `resume-section-title` + 里面**唯一那个** `<span>`（打印时换成主色 0.6pt 细线；
+ * 所以飘带必须是 `<h3>`，赭金小方块只能用 CSS `::before` 画，不能加第二个 `<span>`）、
  * `resume-entry`（一段经历不许被撕成两页）。
+ * ⚠️ `data-print="card"` / 纸外的 `data-print="hide"` / `data-print="main"` 都别动。
+ *
+ * ⚠️ `article` 上**不要加 flex / flex-col / gap-***：print.css 对 `.resume-sheet` 有
+ * `gap: 12pt !important`，自带 flex gap 会在纸上凭空多一道缝。内边距放在 `.resume-body`
+ * 一层，打印时由 print.css 清零。
  */
 
 const STAR_LABELS: Array<{ key: keyof ResumeStar; label: string }> = [
@@ -91,6 +95,10 @@ const SECTION_ORDER: SheetSection[] = [
  *
  * 判空口径与渲染完全一致（同一份收敛结果），所以"分析说空"与"渲染没印"不可能对不上。
  * 不导出：它随文档一起走（`ResumeSheet` 内部用、页面要的是下面那个 `missingSections`）。
+ *
+ * ⚠️ `hasHeadline` 的口径**不许动**：它是姓名 / 学校 / 专业 / 年级 / 联系方式，
+ * **不包含 gender** —— 只选了性别时这份简历在口径上仍然是空的（页面给空态），
+ * 这是刻意的：性别一项撑不起一张纸，也不该改变"整份为空"的判断。
  */
 function analyzeSheet(data: unknown): SheetAnalysis {
   const view = normalizeResumeData(data)
@@ -168,9 +176,9 @@ export function ResumeSheet({ data, className }: ResumeSheetProps) {
 
   const { view } = sheet
   const name = asText(view.basic.name).trim()
-  const meta = [asText(view.basic.school), asText(view.basic.major), asText(view.basic.grade)]
-    .map((part) => part.trim())
-    .filter(Boolean)
+  // 性别是展示字段（决定照片位画男生还是女生）；它不进 hasHeadline，也不撑起一个模块
+  const gender = asText(view.basic.gender).trim()
+  const avatarVariant = resolveAvatarVariant(gender)
   const contact = asText(view.basic.contact).trim()
   const direction = asText(view.target.direction).trim()
   const city = asText(view.target.city).trim()
@@ -179,87 +187,82 @@ export function ResumeSheet({ data, className }: ResumeSheetProps) {
     <article
       data-print="card"
       className={[
-        // 纸：白底 / 1px 描边 / 12px 圆角 / **无阴影**；窄屏 24px、宽屏 48px 内边距
-        'resume-sheet flex w-full max-w-[820px] flex-col gap-8 rounded-xl border border-border bg-card px-6 py-8 text-on-surface sm:px-12 sm:py-10',
+        // 纸：**零圆角** —— 2px 墨线边框 + 8px 硬投影把纸"立"起来（代替原来的圆角白卡）
+        'resume-sheet w-full max-w-[820px] border-2 border-primary bg-card text-on-surface shadow-[8px_8px_0_0_var(--outline-variant)]',
         className ?? '',
       ]
         .join(' ')
         .trim()}
     >
-      {/*
-        文档标识：一小段琥珀短条（不是通栏色带）。
-        它是**屏幕上的**标识，打印时印出来就是一截悬在纸顶的棕色小杠，所以 print 变体里关掉。
-      */}
-      <span className="block h-0.5 w-6 rounded-full bg-secondary print:hidden" aria-hidden />
+      {/* 纸顶标题带：深墨斜块 + 赭金细线 */}
+      <div className="resume-titleband">
+        <h1 className="resume-titleblock">个人简历</h1>
+        <span className="resume-titleband-mark" aria-hidden>
+          RESUME
+        </span>
+      </div>
 
-      <header className="flex flex-col gap-4">
-        <h2 className="text-headline-lg text-primary">{name || '我的简历'}</h2>
-
-        {meta.length || contact || city ? (
-          /* 联系方式块：13px + 极小图标，项与项之间是细分隔符（不画整块浅底） */
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-border pt-4 text-body-sm text-on-surface-variant">
-            {meta.length ? (
-              <span className="flex min-w-0 items-center gap-1.5">
-                <GraduationCap className="size-4 shrink-0" aria-hidden />
-                <span>{meta.join(' · ')}</span>
-              </span>
-            ) : null}
-            {contact ? (
-              <>
-                {meta.length ? (
-                  <span className="text-outline-variant" aria-hidden>
-                    |
-                  </span>
-                ) : null}
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <Mail className="size-4 shrink-0" aria-hidden />
-                  <span className="break-all">{contact}</span>
-                </span>
-              </>
-            ) : null}
-            {city ? (
-              <>
-                {meta.length || contact ? (
-                  <span className="text-outline-variant" aria-hidden>
-                    |
-                  </span>
-                ) : null}
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <MapPin className="size-4 shrink-0" aria-hidden />
-                  <span>期望城市：{city}</span>
-                </span>
-              </>
-            ) : null}
-          </div>
+      {/* 纸的内容：⚠️ 内边距放在这一层，打印时由 print.css 清零 */}
+      <div className="resume-body flex flex-col gap-7 px-6 py-7 sm:px-10 sm:py-9">
+        {/*
+         * 基本信息：字段表（姓名 / 性别 / 学校 / 专业 / 年级 / 联系方式）+ 右上照片位。
+         * 整段只在抬头有实质内容时出现 —— 抬头空、只有别的模块有内容时，
+         * 这里不印一个"只有照片和标题"的空模块（空模块照旧整段不出现）。
+         */}
+        {sheet.hasHeadline ? (
+          <Section title="基本信息">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-[minmax(0,1fr)_128px]">
+              <dl className="grid grid-cols-1 gap-x-8 gap-y-2.5 sm:grid-cols-2">
+                <InfoField label="姓　名" value={name} />
+                <InfoField label="性　别" value={gender} />
+                <InfoField label="学　校" value={asText(view.basic.school)} />
+                <InfoField label="专　业" value={asText(view.basic.major)} />
+                <InfoField label="年　级" value={asText(view.basic.grade)} />
+                <InfoField label="联系方式" value={contact} wide />
+              </dl>
+              <figure
+                className={[
+                  'resume-photo',
+                  avatarVariant === 'female' ? 'resume-photo--female' : '',
+                ]
+                  .join(' ')
+                  .trim()}
+              >
+                <PixelAvatar variant={avatarVariant} className="h-full w-full" />
+              </figure>
+            </div>
+          </Section>
         ) : null}
-      </header>
 
-      {sheet.sections.map((key) => (
-        <Section key={key} title={SECTION_LABELS[key]}>
-          {key === 'target' ? <TargetLine direction={direction} /> : null}
-          {key === 'education' ? <EducationList items={view.education} /> : null}
-          {key === 'skills' ? <Skills items={view.skills} /> : null}
-          {key === 'projects' ? <ExperienceList items={view.projects} /> : null}
-          {key === 'campus' ? <ExperienceList items={view.campus} /> : null}
-          {key === 'self_evaluation' ? <Evaluation text={asParagraph(view.self_evaluation)} /> : null}
-        </Section>
-      ))}
+        {sheet.sections.map((key) => (
+          <Section key={key} title={SECTION_LABELS[key]}>
+            {key === 'target' ? <TargetLine direction={direction} city={city} /> : null}
+            {key === 'education' ? <EducationList items={view.education} /> : null}
+            {key === 'skills' ? <Skills items={view.skills} /> : null}
+            {key === 'projects' ? <ExperienceList items={view.projects} /> : null}
+            {key === 'campus' ? <ExperienceList items={view.campus} /> : null}
+            {key === 'self_evaluation' ? <Evaluation text={asParagraph(view.self_evaluation)} /> : null}
+          </Section>
+        ))}
+      </div>
     </article>
   )
 }
 
 /**
- * 模块：标题 16/600（text-headline-sm）+ 一条发丝线。
+ * 模块：直角飘带标题（`resume-ribbon`）+ 一条发丝线。
  *
- * ⚠️ `resume-section-title` 与里面那个 `<span class="bg-border">` 都不许改名/换结构：
+ * ⚠️ `resume-section-title` 与里面**唯一那个** `<span>` 都不许改名/换结构：
  * 打印样式正是靠 `.resume-section-title span` 把这条线换成主色 0.6pt。
+ * 飘带里的赭金小方块走 CSS `::before`（见 resume.css），**不能**再往这里塞第二个 `<span>`。
  */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
-      <div className="resume-section-title flex flex-col gap-1.5">
-        <h3 className="text-headline-sm text-primary">{title}</h3>
-        <span className="block h-px w-full bg-border" aria-hidden />
+      <div className="resume-section-title flex items-center gap-3">
+        <h3 className="resume-ribbon text-headline-sm">{title}</h3>
+        {/* ⚠️ 这条 <span> 是打印时的那条分隔线（print.css 靠 .resume-section-title span 选中它），不能删、不能加第二个 */}
+        <span className="block h-px flex-1 bg-border" aria-hidden />
       </div>
       {children}
     </section>
@@ -267,18 +270,36 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 /**
- * 求职意向：想投的方向（14/600，一行）。
+ * 基本信息里的一个字段：标签 + 值。
  *
- * ⚠️ 抬头那一行原来复述过一遍「求职意向：xxx / 城市」—— 打印出来同一张纸上有两处
- * 同样的信息，而模块体本身是空的（只剩一个标题 + 一条线悬在那儿）。
- * 现在：抬头只放姓名 + 联系方式（学校 · 专业 · 年级 | 邮箱 | 期望城市），
- * 求职意向模块自己带内容，方向只在这里出现一次。
+ * ⚠️ 空值直接返回 `null`（不占位、不印「未填写」）：纸上只印用户真写过的字段。
  */
-function TargetLine({ direction }: { direction: string }) {
-  return <p className="text-body-md font-semibold text-primary">{direction}</p>
+function InfoField({ label, value, wide }: { label: string; value: string; wide?: boolean }) {
+  const text = value.trim()
+  if (!text) return null
+  return (
+    <div className={['flex items-baseline gap-3', wide ? 'sm:col-span-2' : ''].join(' ').trim()}>
+      <dt className="shrink-0 text-body-md tracking-[0.34em] text-caption-foreground">{label}</dt>
+      <dd className="min-w-0 text-body-md font-semibold break-all text-primary">{text}</dd>
+    </div>
+  )
 }
 
-/** 教育背景：学校 · 专业 + 期间（等宽 12px）+ 亮点 */
+/**
+ * 求职意向：想投的方向 + 期望城市（14/600，一行）。
+ *
+ * ⚠️ 抬头那一块已经整块删掉（姓名 / 学校 / 专业 / 年级 / 联系方式都进了「基本信息」字段表），
+ * 所以城市只能在这里出现 —— 否则同一张纸上会出现两处同样的信息，或者城市干脆丢了。
+ * 两者都空时这个模块本来就不会出现（见 analyzeSheet 的 `target` 判空）。
+ */
+function TargetLine({ direction, city }: { direction: string; city: string }) {
+  const parts: string[] = []
+  if (direction) parts.push(direction)
+  if (city) parts.push(`期望城市：${city}`)
+  return <p className="text-body-md font-semibold text-primary">{parts.join(' ｜ ')}</p>
+}
+
+/** 教育背景：学校 · 专业 + 期间（等宽 14px）+ 亮点 */
 function EducationList({ items }: { items: ResumeData['education'] }) {
   return (
     <div className="flex flex-col gap-4">
@@ -292,8 +313,9 @@ function EducationList({ items }: { items: ResumeData['education'] }) {
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
               <span className="text-body-md font-semibold text-primary">{title}</span>
               {period ? (
-                /* 期间：等宽 + 12px（规范里唯一允许 12px 用 font-numeric 的地方） */
-                <span className="font-numeric text-caption text-on-surface-variant">{period}</span>
+                /* 期间：等宽数字 + body-sm。文档字号自成一套，这里比正文（15）小一档，
+                   但仍是"承载信息"的档位（方案 A 的 14 是信息最低档，不降到 13 的装饰档） */
+                <span className="font-numeric text-body-sm text-caption-foreground">{period}</span>
               ) : null}
             </div>
             <Bullets items={item.highlights} />
@@ -317,11 +339,7 @@ function Skills({ items }: { items: string[] }) {
       <ul className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {items.map((skill, index) => (
           <li key={index} className="flex items-center gap-2 text-body-md text-primary">
-            {index > 0 ? (
-              <span className="text-on-surface-variant" aria-hidden>
-                ·
-              </span>
-            ) : null}
+            {index > 0 ? <SquareDot className="mt-0" /> : null}
             <span>{skill}</span>
           </li>
         ))}
@@ -332,9 +350,7 @@ function Skills({ items }: { items: string[] }) {
     <ul className="flex flex-col gap-1.5">
       {items.map((skill, index) => (
         <li key={index} className="flex items-start gap-2 text-body-md leading-[1.7] text-primary">
-          <span className="text-on-surface-variant" aria-hidden>
-            ·
-          </span>
+          <SquareDot />
           <span className="min-w-0">{skill}</span>
         </li>
       ))}
@@ -356,7 +372,7 @@ function ExperienceList({ items }: { items: ResumeExperienceItem[] }) {
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
               <span className="text-body-md font-semibold text-primary">{title}</span>
               {period ? (
-                <span className="font-numeric text-caption text-on-surface-variant">{period}</span>
+                <span className="font-numeric text-body-sm text-caption-foreground">{period}</span>
               ) : null}
             </div>
             <div className="flex flex-col gap-1">
@@ -386,6 +402,19 @@ function Evaluation({ text }: { text: string }) {
   )
 }
 
+/**
+ * 列表符号：**直角小方块**（配合"零圆角"的版面语汇，不用圆点 `rounded-full`）。
+ * 首行文字的视觉中线约在 10px 处，方块 4px 高 → 上边距 ~10px。
+ */
+function SquareDot({ className }: { className?: string }) {
+  return (
+    <span
+      className={['h-1 w-1 shrink-0 bg-primary', className ?? 'mt-2.5'].join(' ').trim()}
+      aria-hidden
+    />
+  )
+}
+
 function Bullets({ items }: { items?: string[] }) {
   // 亮点字段混进非字符串元素时会被 asTextList 过滤掉，不会渲染出 [object Object]
   const filled = asTextList(items)
@@ -395,9 +424,9 @@ function Bullets({ items }: { items?: string[] }) {
       {filled.map((item, index) => (
         <li
           key={index}
-          className="flex items-start gap-2 text-body-md leading-[1.7] text-on-surface-variant"
+          className="flex items-start gap-2 text-body-md leading-[1.7] text-on-surface"
         >
-          <span aria-hidden>·</span>
+          <SquareDot />
           <span className="min-w-0">{item}</span>
         </li>
       ))}

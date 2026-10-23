@@ -8,6 +8,8 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { router } from '@/router'
 
 import '@/index.css'
+// 简历纸专用版面（标题带 / 飘带 / 照片位 / 像素人物）
+import '@/styles/resume.css'
 import '@/styles/print.css'
 // 注册埋点上报实现（POST /events），页面里统一调用 track()
 import '@/api/events'

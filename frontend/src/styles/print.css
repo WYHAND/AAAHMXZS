@@ -22,12 +22,13 @@
     font-size: 12pt;
   }
 
-  /* 打印时取消侧栏偏移，内容铺满纸张 */
+  /* 打印时取消侧栏偏移，内容铺满纸张；页面底色用白纸（纸面本身仍按屏幕样式） */
   [data-print='main'] {
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
     max-width: none !important;
+    background: #fff !important;
   }
 
   /* 卡片去掉阴影与描边，避免打印机拖灰 */
@@ -52,45 +53,78 @@
     animation: none !important;
   }
 
-  /* --------- 简历（/resume 展示态）：白底黑字、铺满宽度、一条主色细线做分隔 --------- */
+  /* --------- 简历（/resume 展示态）：**按屏幕上的样子导出** ---------
+   *
+   * 2026-10 用户验收后的口径：导出的 PDF 必须和屏幕上看到的一模一样 ——
+   * 深墨标题带、金色细线、直角飘带、照片位、模块之间的分隔线全部保留。
+   * 上一版是"在纸上还原成墨线标题"（去背景、去斜切、去金色），
+   * 印出来像换了另一个模板，已经废弃。
+   *
+   * 关键点：
+   * 1. 侧栏偏移由 AppLayout 的 [data-print='flush'] 清零；
+   * 2. 简历纸按**屏幕设计宽度 820px** 排版，再用 zoom 整体缩放到 A4 可打印宽度
+   *    （210mm - 2×12mm ≈ 703px；820 × 0.85 ≈ 697px，留几像素防止多印一页）。
+   *    不直接把宽度改成 703px：那会在窄一档的容器里重新折行，和屏幕对不上；
+   * 3. print-color-adjust: exact 保证深色块 / 金色线不被浏览器"省墨"抹掉。
+   */
 
-  /* 展示态的外层：铺满纸张 */
+  /* 展示态外层：铺满纸张 */
   .resume-page {
     width: 100% !important;
     max-width: none !important;
     gap: 0 !important;
   }
 
-  /* 简历卡片：印在白纸上，不是印成米黄色卡纸 */
-  .resume-sheet {
-    width: 100% !important;
-    max-width: none !important;
-    background: #fff !important;
-    color: #000 !important;
-    box-shadow: none !important;
-    border: 0 !important;
-    border-radius: 0 !important;
+  /* 侧栏偏移清零（data-print='flush' 挂在 AppLayout 的 pl-60 包装层上） */
+  [data-print='flush'] {
     padding: 0 !important;
-    gap: 12pt !important;
+    margin: 0 !important;
   }
 
-  .resume-sheet h2,
-  .resume-sheet h3,
-  .resume-sheet p,
-  .resume-sheet span,
-  .resume-sheet li {
-    color: #000 !important;
+  /*
+   * 应用外壳的米色底（bg-surface）不印到纸上：整页铺一层米色既费墨，
+   * 也不像一份文档。简历纸自己是白的，边框 / 深色块 / 金色线才是要还原的部分。
+   */
+  [data-print='surface'] {
+    background: #fff !important;
   }
 
-  /* 章节标题下那条线：全篇唯一的颜色 */
-  .resume-section-title span {
-    height: 0.6pt !important;
-    background: var(--primary) !important;
+  /* 简历纸：按屏幕宽度排版，再整体缩放到纸张宽度 */
+  .resume-sheet {
+    width: 820px !important;
+    max-width: 820px !important;
+    zoom: 0.85;
+    margin: 0 auto !important;
+    /* 屏幕上那层 8px 硬投影是"纸立起来"的屏幕语汇，纸上会被页边裁掉，故去掉；
+       边框 / 纸底色 / 深色块原样保留 */
+    box-shadow: none !important;
+    /* 长简历必须能翻页：整张纸不能作为不可分割的一块 */
+    break-inside: auto !important;
+  }
+
+  /* 通用 [data-print='card'] 会给卡片加 1px 灰框；简历纸的边框是屏幕上的 2px 主色 */
+  .resume-sheet[data-print='card'] {
+    border: 2px solid var(--primary) !important;
+  }
+
+  /* 深色块、金色线、照片底色必须原样印出来 */
+  .resume-sheet,
+  .resume-sheet *,
+  .resume-sheet *::before,
+  .resume-sheet *::after {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
   /* 一段经历别被撕成两页 */
   .resume-entry {
     break-inside: avoid;
+  }
+
+  /* 像素人物在纸上定格：不眨眼、不呼吸（印到纸上不能是一张闭着眼的图） */
+  .resume-sheet .px-eye,
+  .resume-sheet .px-fig {
+    animation: none !important;
   }
 
   @page {

@@ -208,6 +208,7 @@ function normalizeEducation(value: unknown): ResumeEducationItem[] {
  *
  * 旧结构尽力映射（选 (a) 而不是「忽略旧数据」）：
  * - `basics.name → basic.name`；
+ * - `basics.gender` / `basics.sex → basic.gender`；
  * - `basics.phone` / `basics.email → basic.contact`（" · " 拼起来）；
  * - `education` **对象 → 单条数组**；`education.detail → highlights`；
  * - `projects` / `skills` **字符串 → 各一条 / 一项**；
@@ -228,6 +229,7 @@ export function normalizeResumeData(raw: unknown): ResumeData {
   return {
     basic: {
       name: asText(basic.name) || asText(legacy.name),
+      gender: asText(basic.gender) || asText(legacy.gender) || asText(legacy.sex),
       grade: asText(basic.grade) || asText(legacy.grade),
       major: asText(basic.major) || asText(legacy.major),
       school: asText(basic.school) || asText(legacy.school),

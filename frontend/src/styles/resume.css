@@ -1,0 +1,146 @@
+/*
+ * 简历纸专用样式（构建于 index.css 的 token 之上，只服务 /resume 展示态的「简历纸」）。
+ *
+ * 为什么单开一个文件而不是塞进 index.css：
+ * 这一整套是**改版后的版面语汇**（标题带 / 直角飘带 / 照片位 / 像素人物动画），只在简历纸上用；
+ * 全站共用的 index.css 不该为它长出一堆只被一处引用的类。
+ *
+ * 加载顺序（见 main.tsx）：index.css → resume.css → print.css。
+ * **print.css 必须在最后**：它靠同优先级 + !important 把这些深色块在纸上还原成墨线标题。
+ *
+ * ⚠️ 本文件所有类名都带 `resume-` / `px-` 前缀，避免撞全站；也不要在这里改既有全局样式。
+ */
+
+/* ------------------------------ 纸顶标题带 ------------------------------ */
+
+/* 标题带：左侧深墨斜块 + 右侧小字 + 一条通栏赭金细线做底
+   （2026-10-22 方案 A：线色从 --medal-gold 换成全站强调色 --secondary。
+     奖章金是"已获得的奖牌"专用色，文档的强调线属于页面语汇，应该跟强调色走） */
+.resume-titleband {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  border-bottom: 3px solid var(--secondary);
+}
+
+/* 深墨斜块：右侧斜切（直角，不用圆角） */
+.resume-titleblock {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  height: 60px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  padding: 0 34px 0 22px;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 26px) 100%, 0 100%);
+}
+
+/* 标题带右侧那行小字（屏幕上是个记号，打印时 print.css 关掉它）。
+   12px 是文档自己的字号体系（不是页面字号阶）：它是一个装饰记号，不承载信息；
+   颜色走 --caption-foreground（暖棕灰），在白纸上不发冷。 */
+.resume-titleband-mark {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  color: var(--caption-foreground);
+  text-transform: uppercase;
+}
+
+/* -------------------------------- 飘带 -------------------------------- */
+
+/* 模块标题：深墨直角飘带，右侧斜切 + 一枚赭金小方块；不用圆角卡片 */
+.resume-ribbon {
+  position: relative;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  padding: 6px 26px;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
+}
+
+/* 飘带上的赭金小方块：只能用 ::before 画 —— .resume-section-title 里那个 <span> 是
+   打印时的分隔线，被 print.css 精确选中，绝不能再往里加第二个 <span> */
+.resume-ribbon::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 5px;
+  height: 12px;
+  background: var(--secondary);
+}
+
+/* ------------------------------- 照片位 ------------------------------- */
+
+/* 直角双线框（外框 2px 主色 + 内层 padding，读起来就是"双线"）。
+   ⚠️ 两处底色是这份文档里**唯一**不来自 token 的颜色（原注释如此，本轮保留）：
+   它是"照片"的相纸底，与 PixelAvatar 那件冷蓝上衣（components/PixelAvatar.tsx，
+   本轮只读、不许改）配套。方案 A 的"禁蓝"管的是界面配色，照片内容不算色板；
+   只换底色不换人物，冷蓝上衣会悬在一块暖米色上，比现在更脏 —— 所以不动。 */
+.resume-photo {
+  --resume-photo-bg: #e8eff8;
+  flex: none;
+  width: 128px;
+  height: 162px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border: 2px solid var(--primary);
+  background: var(--resume-photo-bg);
+}
+
+/* 女生版：暖调底 */
+.resume-photo--female {
+  --resume-photo-bg: #f7ece3;
+}
+
+/* ---------------------------- 像素人物动画 ---------------------------- */
+
+/* 眨眼：每 4.6s 眨一次（末尾 3% 时间闭眼）；呼吸：整体轻微上下 1.5% */
+@keyframes px-blink {
+  0%,
+  91%,
+  100% {
+    opacity: 1;
+  }
+  93%,
+  96% {
+    opacity: 0;
+  }
+}
+
+@keyframes px-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1.5%);
+  }
+}
+
+.px-eye {
+  animation: px-blink 4.6s infinite;
+}
+
+.px-fig {
+  animation: px-bob 3.4s ease-in-out infinite;
+}
+
+/* 用户明确要求减少动态效果时，两个动画都停 */
+@media (prefers-reduced-motion: reduce) {
+  .px-eye,
+  .px-fig {
+    animation: none;
+  }
+}

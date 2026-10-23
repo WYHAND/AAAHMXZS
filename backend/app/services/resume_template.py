@@ -115,6 +115,7 @@ RESUME_TEMPLATE: Dict[str, Any] = {
             "repeatable": False,
             "fields": [
                 _field("name", "姓名", "你叫什么名字？", "张三", required=True),
+                _field("gender", "性别", "你是男生还是女生？（选填）", "男"),
                 _field("grade", "年级", "你现在大几？（选填）", "大三"),
                 _field("major", "专业", "你学什么专业？", "软件工程", required=True),
                 _field("school", "学校", "你在哪所学校？", "XX 大学", required=True),

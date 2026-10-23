@@ -82,6 +82,7 @@ export function formKey(section: ResumeSection, index: number, field: ResumeFiel
 const WIRE_PATHS: Record<string, Record<string, string[]>> = {
   basic: {
     name: ['name'],
+    gender: ['gender'],
     grade: ['grade'],
     major: ['major'],
     school: ['school'],
