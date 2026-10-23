@@ -13,6 +13,7 @@
  * （缺项目/拖延/表达差/迷茫、高/中/低、清晰/模糊/偏差）。
  * 用"整类出局"当规则，而不是维护一张会过期的负面词黑名单。
  */
+import { PROFILE_DIMENSIONS } from '@/utils/profileEvidence'
 import type { ProfileTag } from '@/types'
 
 /** 三个分组：口语化组名 → 对应的后端维度。数组顺序就是展示顺序。 */
@@ -50,13 +51,54 @@ export const JUDGMENT_MARKERS = [
 export const GROUP_LIMIT = 3
 
 /**
- * 少于这么多条可见标签就**不画球**，只给下方那三行。
+ * 可见标签达到这么多条时，球上**只剩真实标签**，不再补维度骨架。
  *
- * 为什么：球体的好看来自"密"——十几个标签在球面上才读得出形状，
- * 5–8 条时它只是一把散点，比列表更难看（实测截图确认）。
- * 新用户就是那个"只有几条"的阶段，所以这条阈值是给他们的。
+ * ⚠️ 这个常量以前叫 `SPHERE_MIN_TAGS`，是"少于 12 条就整颗球不画"的**显示阈值**。
+ * 2026-10-22 用户验收后改口径：球体是这个功能的展示，**新用户也必须第一眼看到**
+ * （标签少就藏起来等于告诉用户"功能还没做"）。所以它不再是"画不画球"的开关，
+ * 而是"还要不要补六维幽灵字"的分界：真实标签够多了，骨架自然退场。
  */
-export const SPHERE_MIN_TAGS = 12
+export const SPHERE_FULL_TAGS = 12
+
+/**
+ * 球体上的一个字。
+ *
+ * - `ghost: false`：用户真的有的标签，实心、加粗；
+ * - `ghost: true`：**还没聊到的维度名**（兴趣 / 能力 / 技能 / 痛点 / 焦虑 / 认知），
+ *   浅色、细字，只负责把球的形状撑起来，告诉用户"这里以后会长出东西"。
+ *
+ * ⚠️ 幽灵字**只存在于渲染层**：不写回 `tags`、不算标签数、不进画像统计、
+ * 不进 AI 输入、不影响奖章。它和右侧雷达里 weight=0 的轴是同一件事 —— 骨架，不是数据。
+ */
+export interface SphereLabel {
+  text: string
+  ghost: boolean
+}
+
+/**
+ * 球体要显示的条目：真实标签 + （不足 12 条时）还没聊到的维度名。
+ *
+ * 为什么补维度而不是补"示例标签"：示例标签会被误当成自己的数据，也违反项目
+ * "不编造"的纪律；维度名是这套画像本来就有的六个方面（与雷达同一套口径），
+ * 补上去既不造假，又能让球在 0 条标签时也有稳定的形状。
+ */
+export function sphereLabels(tags: ProfileTag[]): SphereLabel[] {
+  const visible = visibleTags(tags)
+  const real: SphereLabel[] = visible.map((tag) => ({ text: tag.label, ghost: false }))
+
+  if (visible.length >= SPHERE_FULL_TAGS) return real
+
+  const used = new Set(visible.map((tag) => tag.dimension))
+  const ghosts: SphereLabel[] = PROFILE_DIMENSIONS.filter((dimension) => !used.has(dimension)).map(
+    (dimension) => ({ text: dimension, ghost: true }),
+  )
+
+  /*
+   * 真实标签在前、幽灵字在后：TagCloud 按 index 在球面上均匀布点，
+   * 顺序不影响分布，但让真实标签拿到前面的位置，重排时更稳定。
+   */
+  return [...real, ...ghosts]
+}
 
 /**
  * 稳定性信号：这个标签在**多少个不同的日子**被提到过。

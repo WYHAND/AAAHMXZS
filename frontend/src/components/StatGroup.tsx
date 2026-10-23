@@ -82,9 +82,9 @@ export function Stat({
     >
       <span className={cn(size === 'display' ? 'text-display' : 'text-headline-lg font-bold', 'tabular-nums')}>
         <span className={valueClass}>{value}</span>
-        {unit ? <span className="text-caption font-normal text-on-surface-variant">{unit}</span> : null}
+        {unit ? <span className="text-body-sm font-normal text-on-surface-variant">{unit}</span> : null}
       </span>
-      <span className="text-caption text-on-surface-variant">{label}</span>
+      <span className="text-body-sm text-on-surface-variant">{label}</span>
     </div>
   )
 }

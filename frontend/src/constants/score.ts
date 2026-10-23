@@ -61,10 +61,10 @@ export function formatScoreDelta(value: number): string {
   return '±0'
 }
 
-/** 变化值的语义色：涨=success、跌=destructive、没变=中性灰（0 不用绿色） */
+/** 变化值的语义色：涨=settled（绿）、跌=attention（红）、没变=中性（0 不用绿色） */
 export function scoreDeltaTone(value: number): string {
   const rounded = Math.round(value)
-  if (rounded > 0) return 'text-success'
-  if (rounded < 0) return 'text-destructive'
+  if (rounded > 0) return 'text-settled'
+  if (rounded < 0) return 'text-attention'
   return 'text-muted-foreground'
 }

@@ -46,7 +46,7 @@ export function Panel({
         inset
           ? 'gap-2 rounded-lg bg-surface-inset'
           : 'bg-card shadow-card',
-        padded && (inset ? 'p-3.5' : 'p-5'),
+        padded && (inset ? 'p-4' : 'p-6'),
         className,
       )}
       {...rest}

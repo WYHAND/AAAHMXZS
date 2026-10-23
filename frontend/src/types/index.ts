@@ -211,6 +211,69 @@ export interface ChatResponse {
   conclusion_ready: boolean
 }
 
+/* ------------------------- 对话 SSE（POST .../stream） -------------------------
+ *
+ * 后端事件契约见 backend/app/api/v1/chat.py 的 `_to_sse_payload`：
+ * 每帧 `event: <type>` + `data:` 恒为 ApiEnvelope，内部 `data.type` 与事件名一致。
+ * 事件：start / status / delta / tag / pending / done / error。
+ * status 只描述"当前在干什么"（读资料 / 思考 / 写回复），**不含**模型思维链原文。
+ * 解析与消费在 api/chat.ts（streamMessage），这里只放事件负载的形状。
+ */
+
+export interface ChatStreamStartEvent {
+  type: 'start'
+  conversation_id: string
+}
+
+/** 回复正文的一个片段 */
+export interface ChatStreamDeltaEvent {
+  type: 'delta'
+  content: string
+  conversation_id?: string
+}
+
+/** 画像标签回流（现有逻辑） */
+export interface ChatStreamTagEvent {
+  type: 'tag'
+  data?: { tags?: Record<string, unknown>[] }
+}
+
+/**
+ * 生成阶段（只给用户看"在干什么"，不含思维链正文）。
+ * - reading：开场一次，正在翻资料
+ * - thinking：每 2 秒心跳一次，elapsed_ms 是服务端的已用时间
+ * - writing：正文开始前一次
+ */
+export type ChatStreamStage = 'reading' | 'thinking' | 'writing'
+
+export interface ChatStreamStatusEvent {
+  type: 'status'
+  stage: ChatStreamStage
+  text: string
+  elapsed_ms: number
+}
+
+export interface ChatStreamDoneEvent {
+  type: 'done'
+  message_id: string
+  conversation_id: string
+  conclusion_ready: boolean
+}
+
+/**
+ * 幂等命中（重复的 client_msg_id）：后端不会重复生成。
+ * - 上一轮**已完成** → 带 `replay_message_id`（去消息列表能拿到那条回复）
+ * - 上一轮**还在生成** → 只有 `pending: true`
+ * 前端按现有非流式路径处理：回退到 POST /messages（它同样会回放/拒绝重复）。
+ */
+export interface ChatStreamPendingEvent {
+  type: 'pending'
+  client_msg_id?: string
+  user_message_id?: string
+  replay_message_id?: string
+  pending?: boolean
+}
+
 /** 后端 schemas/chat.ChatConclusionCard（11.11） */
 export interface ChatConclusionCard {
   conversation_id: string
@@ -421,6 +484,7 @@ export interface ResumeTemplateData {
 
 export interface ResumeBasic {
   name: string
+  gender: string
   grade: string
   major: string
   school: string
@@ -514,6 +578,22 @@ export interface InterviewSession {
   created_at: string
   updated_at: string
   report?: Record<string, unknown> | null
+}
+
+/** 后端 schemas/interview.InterviewHistoryItem：已完成面试的列表项 */
+export interface InterviewHistoryItem {
+  id: string
+  /** 小测试 / 全真 */
+  mode: string
+  /** HR / 项目 / 技术 */
+  scene: string
+  status: string
+  created_at: string
+  updated_at: string
+  /** 有 AI 评分时才有值；兜底复盘为 null */
+  overall_score?: number | null
+  /** 是否已经有复盘报告 */
+  has_review: boolean
 }
 
 /** 后端 schemas/interview：追问问答记录元素 [{"round":1,"q":"追问句","a":"学生的回答"}] */

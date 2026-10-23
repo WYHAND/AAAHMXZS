@@ -36,7 +36,7 @@ export function StageBadge({
           data-stage={stage}
           className={cn(
             'gap-1.5 rounded-full font-medium',
-            size === 'sm' ? 'h-5 px-2 text-xs' : 'h-6 px-2.5 text-xs',
+            size === 'sm' ? 'h-5 px-2 text-caption' : 'h-6 px-2.5 text-caption',
             tone.chip,
             className,
           )}

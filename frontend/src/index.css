@@ -128,22 +128,22 @@
     min-height: 100svh;
     background-color: var(--color-background);
     color: var(--color-foreground);
-    /* 6.4 字体与字号：正文 14 / 行高 1.6 */
+    /* 6.4 字体与字号：正文 15 / 行高 1.65（2026-10-22 方案 A 抬高） */
     font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC',
       'Microsoft YaHei', 'Segoe UI', Roboto, sans-serif;
-    font-size: 14px;
-    line-height: 1.6;
+    font-size: 15px;
+    line-height: 1.65;
   }
 
   h1 {
-    font-size: 20px;
-    line-height: 1.4;
-    font-weight: 600;
+    font-size: 30px;
+    line-height: 1.27;
+    font-weight: 700;
   }
 
   h2 {
-    font-size: 16px;
-    line-height: 1.5;
+    font-size: 20px;
+    line-height: 1.4;
     font-weight: 600;
   }
 
@@ -231,18 +231,18 @@
 
 :root {
   /* ---- 画布与表面（DESIGN.md：Level 0 画布 / Level 1 卡片）---- */
-  --background: #fbf9f6;
-  --foreground: #1b1c1a;
+  --background: #f2ebe1;
+  --foreground: #0b1526;
   --card: #ffffff;
-  --card-foreground: #1b1c1a;
+  --card-foreground: #0b1526;
   --popover: #ffffff;
-  --popover-foreground: #1b1c1a;
+  --popover-foreground: #0b1526;
 
   /* ---- 行动 / 强调 ---- */
-  --primary: #091426;
+  --primary: #0b1526;
   --primary-foreground: #ffffff;
-  --primary-hover: #1e293b;
-  --primary-soft: #eceef1;
+  --primary-hover: #1e2c42;
+  --primary-soft: #e8dfd2;
   /*
    * ⚠️ 2026-10 收口（踩过的坑，别再改回来）：
    * `--secondary` 是**琥珀强调色** #9b4500，`text-secondary` / `bg-secondary` 都按它解析。
@@ -257,17 +257,21 @@
    * `bg-surface-container text-on-surface`。
    */
   /*
-   * 2026-10-15 用户要求：全站切黑白 —— 原来的琥珀强调色 / 浅桃底一律换成中性灰。
-   * 下面 `--secondary*` / `--accent*` / `--ai-accent` / `--stage-explore` 都按这个来，
-   * 所以 `text-secondary` / `bg-secondary` / `bg-secondary-fixed` 全站自动变灰，不用逐个组件改。
-   * （上面那段"琥珀/浅桃"的老描述仅在讲历史，实际值以本处为准。）
+   * 2026-10-22「方案 A」：恢复暖纸 + 赭金强调（撤销 2026-10-15 的全站黑白）。
+   * 那次把 --secondary / --accent-ink / --ai-accent / --stage-explore 全部改成中性灰，
+   * 结果全站只剩"一片米色 + 一块墨"，用户反馈"分不清色块、找不到重点"。
+   * 现在的分工（改色只改这一处）：
+   *   --secondary      → 赭金 #b4551f：强调文字、关键数字、进度填充、可点文字
+   *   --accent         → 中性悬停底（#ece2d5），**不再是赭金**
+   *   --secondary-fixed→ 浅赭底，只给小面积 chip / 标记
+   * 纪律：赭金**一屏最多一处实心底**，其余只做细线/文字/图形。
    */
-  --secondary: #45474c;
+  --secondary: #b4551f;
   --secondary-foreground: #ffffff;
-  --muted: #f5f3f0;
-  --muted-foreground: #64748b;
-  --accent: #efeeeb;
-  --accent-foreground: #1b1c1a;
+  --muted: #ece2d5;
+  --muted-foreground: #5f6470;
+  --accent: #ece2d5;
+  --accent-foreground: #0b1526;
 
   /* ---- 状态 ---- */
   --destructive: #ba1a1a;
@@ -281,75 +285,62 @@
    */
   --success: #3f6b45;
   --warning: #8a5a1c;
-  --info: #4a6fa5;
+  --info: #8a5a1c;
   /* 更轻的描边：卡片以"极轻环境扩散"分层，不再靠 1px 灰线（宽度仍是 1px，避免全局位移） */
-  --border: rgba(226, 232, 240, 0.45);
-  --input: rgba(226, 232, 240, 0.8);
-  --ring: #2c3e50;
+  --border: rgba(120, 96, 70, 0.16);
+  --input: rgba(120, 96, 70, 0.24);
+  --ring: #b4551f;
 
   /* ---- 新稿新增的语义色（供 bg-surface-container-* / text-caption-foreground 等使用）---- */
   /* 页面画布：与 --background 分开，控件/弹窗仍可用 --background */
-  --canvas: #fbf9f6;
-  --surface: #fbf9f6;
+  --canvas: #f2ebe1;
+  --surface: #f2ebe1;
   --surface-container-lowest: #ffffff;
-  --surface-container-low: #f5f3f0;
+  --surface-container-low: #ece2d5;
   /*
    * 卡内浅底块专用（2026-10-18）：比 --surface-container-low 再压深一档。
    * 原来卡内块与侧栏共用 #f5f3f0，卡(#fff)与块之间只有 1.11:1 的差，块几乎读不出来；
    * 单独给它一档，让"卡里的区域"是一块真的区域，而不是一张更小的卡。
    */
-  --surface-inset: #f3f0ec;
-  --surface-container: #efeeeb;
-  --surface-container-high: #eae8e5;
-  --surface-container-highest: #e4e2df;
-  --on-surface: #1b1c1a;
-  --on-surface-variant: #45474c;
+  --surface-inset: #f5efe6;
+  --surface-container: #e7dccc;
+  --surface-container-high: #e1d5c4;
+  --surface-container-highest: #d9cbb8;
+  --on-surface: #0b1526;
+  --on-surface-variant: #5f6470;
   /*
    * caption 文字色：原来是 #94a3b8，在白底/浅底上对比度只有 2.44–2.56 —— 达不到
    * WCAG 小字 4.5:1，实测里"已完成"标签、底部弱化按钮这类文字已经在"看不清"的边缘。
    * 收到 #6b7280（白底 4.83:1、画布 4.5:1、浅底 4.5:1），仍然明显比正文浅，
    * 但读得清。**承载信息的文字优先用 text-on-surface-variant，caption 只作装饰**。
    */
-  --caption-foreground: #6b7280;
-  --outline: #75777d;
-  --outline-variant: #c5c6cd;
-  --primary-container: #1e293b;
-  --secondary-fixed: #efeeeb;
-  --on-secondary-fixed: #1b1c1a;
-  --accent-amber: #45474c;
-  /* 琥珀"文字色"的**别名校验**：等价于 text-secondary（#9b4500）。
+  --caption-foreground: #6b6154;
+  --outline: #8a7a68;
+  --outline-variant: #d8cbb8;
+  --primary-container: #1e2c42;
+  --secondary-fixed: #faede3;
+  --on-secondary-fixed: #7a3a14;
+  --accent-amber: #b4551f;
+  /* 赭金"文字色"的**别名校验**：等价于 text-secondary（#b4551f）。
      只有 text-secondary 会生成工具类，--accent-ink 是给需要 var() 的地方（SVG/内联样式）用的。 */
-  --accent-ink: #45474c;
+  --accent-ink: #b4551f;
 
   /*
-   * ---- 状态色（2026-10-11 用户要求：给首页两个面板加"克制的状态色"）----
-   * 为什么另起一套而不复用 `--success` / `--info`：那两个 token 已经被
-   * `text-success`（评分档 score.ts）、`text-warning`（连续天数）、
-   * `bg-success`（面试准备选中态）在用，语义是"绿=好/完成"。首页要的绿是
-   * **"累积到手的东西"**，跟"好"不是一回事，改 --success 会顺手改掉那三处。
-   * 所以这组只服务首页「AI 发现 / 成长节律」两个面板，别的地方要用再单独议。
-   *
-   * 用量纪律（沿用全站"一屏最多一处琥珀"）：
-   *   signal    淡蓝 #4a6fa5 / 深 #33507a（文字级） → 数据/证据/进行中的量
-   *   settled   克制绿 #3f6b45（白卡 6.0:1 / 浅底 5.7:1）→ 已经累积到手的东西
-   *   attention 克制红 #b04a3a（白卡 6.0:1）        → 停滞/需要注意，一屏最多一处
-   *   amber     沿用 --secondary / --accent-ink      → 仍然只给"今天/当前这一步"
-   * 三条状态色一律只落在**图形与小圆点**上，正文文字保持主墨/副墨，不出现彩色正文。
-   *
-   * ⚠️ 实拍踩过的两条（2026-10-11）：
-   *   1. 绿字落在绿底上（chip）会"发虚"——浅底 + 同色相文字在 12px 上读不清；
-   *      状态色**要么是底、要么是字**，不要同时是两者。
-   *   2. 拿浅绿当图表底会把同色系的蓝柱子糊进去——图表底一律中性
-   *      （bg-surface-container-low），别用 --signal-soft / --settled-soft。
-   *      --settled-soft 目前只用于"只有这一件在做"那种「正向许可」提示块。
+   * ---- 状态色（2026-10-22 方案 A 收口：蓝色退场）----
+   * 预览图里只有三个颜色在说话：墨、赭金、绿。所以：
+   *   accent/赭金  → 一切"现在要看的 / 可以点的 / 数据图形"
+   *   settled/绿   → 只给"已经到手"的数字和完成勾
+   *   attention/红 → 只给真正的错误与停滞，一屏最多一处
+   * `--signal` 保留名字但**已并入赭金**：老代码里 tone="signal" 不会再把蓝带回来。
+   * 禁止：冷蓝、紫、青；暖纸底上放冷色 = 色温断裂（实测被用户指出的那版）。
    */
-  --signal: #4a6fa5;
-  --signal-ink: #33507a;
+  --signal: #b4551f;
+  --signal-ink: #b4551f;
   --settled: #3f6b45;
   --attention: #b04a3a;
-  /* 内嵌浅底：极低饱和的冷调 / 绿调（只给"提示块"用，不给图表用） */
-  --signal-soft: #f2f5fa;
-  --settled-soft: #f1f6f2;
+  /* 内嵌浅底：暖画布上也保持低饱和，只给"提示块"用，不给图表用 */
+  --signal-soft: #f5efe6;
+  --settled-soft: #eef4ee;
 
   /*
    * ---- 奖章配色（「我的奖章」专用语义 token）----
@@ -369,35 +360,29 @@
   --medal-sheen: #fdf6e8;
   --medal-shadow: 0 2px 6px rgba(28, 25, 23, 0.16);
 
-  /* 阶段 / AI：统一成稿子里的琥珀棕（旧的 ai-accent 是偏黄的赭黄） */
-  --ai-accent: #45474c;
-  --stage-explore: #45474c;
+  /* 阶段 / AI：统一成方案 A 的赭金（不再用中性灰——灰等于没有强调） */
+  --ai-accent: #b4551f;
+  --stage-explore: #b4551f;
+  --stage-prepare: #0b1526;
+  --stage-sprint: #3f6b45;
 
   /* ---- 阴影：极轻的环境扩散（DESIGN.md Elevation）----
      2026-10-18：原来 0.03/0.02 的强度在白卡压 #fbf9f6 画布上几乎算不出来
      （实测卡片与背景只有 4–9 级色差），整页因此"平"。这里只提一档，仍然看不见"投影"，
      目标是让白卡**边缘**有一线落下感；再重就变成拟物。 */
-  --shadow-card: 0 1px 3px 0 rgba(28, 25, 23, 0.07), 0 1px 2px -1px rgba(28, 25, 23, 0.05);
-  --shadow-pop: 0 8px 24px -4px rgba(15, 23, 42, 0.06), 0 4px 8px -2px rgba(15, 23, 42, 0.03);
+  --shadow-card: 0 1px 3px 0 rgba(40, 30, 20, 0.07), 0 1px 2px -1px rgba(40, 30, 20, 0.05);
+  --shadow-pop: 0 8px 24px -8px rgba(40, 30, 20, 0.14), 0 4px 8px -4px rgba(40, 30, 20, 0.08);
 
-  /* ---- 圆角：三档就够，档位太密等于没有档位（2026-10-18 收口）----
-     2026-10 那轮把全站圆角整体前移 +10px，结果是 14/16/18/22/26/34 六档相邻只差 2–4px，
-     视觉上读不出从属关系；而且 44px 高的主按钮配 22px 圆角**必然**变成药丸
-     （圆角 = 半高），卡片和按钮就用了同一种轮廓，层级反而更糊。
-     现在只留三档 + 全圆：
-       · 外容器（卡片 / 焦点卡）：xl = 22px
-       · 控件（按钮 / 输入框）：md = 14px
-       · 卡内浅底块：lg = 12px（必须**明显小于**外卡，否则"卡里还有一张卡"）
-       · chip / 头像 / 圆点：rounded-full
-     ⚠️ 这里（文件末尾的 :root）是工具类**实际生效**的值；
-     上面的 @theme inline 用 calc(var(--radius)) 派生，两边结果要一致。 */
+  /* ---- 圆角：三档 + 全圆（2026-10-22 方案 A：卡片 18 / 控件 12 / 卡内块 10）----
+     卡内浅底块必须**明显小于**外卡，否则"卡里还有一张卡"；
+     44px 高的主按钮配 18px 圆角会变成药丸，所以控件档单独定在 12px。 */
   --radius: 1.125rem;
-  --radius-sm: 0.75rem;
-  --radius-md: 0.875rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1.375rem;
-  --radius-2xl: 1.625rem;
-  --radius-3xl: 2.125rem;
+  --radius-sm: 0.625rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.5rem;
 }
 
 /* Tailwind v4：把新 token 映射成工具类，并补上稿子的字号阶（text-headline-xl 等） */
@@ -406,33 +391,33 @@
     'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei',
     'Segoe UI', Roboto, sans-serif;
 
-  --color-surface: #fbf9f6;
-  --color-canvas: #fbf9f6;
-  --color-surface-container-lowest: #ffffff;
-  --color-surface-container-low: #f5f3f0;
+  --color-surface: var(--surface);
+  --color-canvas: var(--canvas);
+  --color-surface-container-lowest: var(--surface-container-lowest);
+  --color-surface-container-low: var(--surface-container-low);
   --color-surface-inset: var(--surface-inset);
-  --color-surface-container: #efeeeb;
-  --color-surface-container-high: #eae8e5;
-  --color-surface-container-highest: #e4e2df;
-  --color-on-surface: #1b1c1a;
-  --color-on-surface-variant: #45474c;
+  --color-surface-container: var(--surface-container);
+  --color-surface-container-high: var(--surface-container-high);
+  --color-surface-container-highest: var(--surface-container-highest);
+  --color-on-surface: var(--on-surface);
+  --color-on-surface-variant: var(--on-surface-variant);
   /*
    * ⚠️ 必须用 var() 引用上面 :root 的定义，**不要**再写一遍字面色值：
    * 这一块里的字面值会被 Tailwind 内联进工具类，改 :root 时工具类不会跟着变
    * （实测 --caption-foreground 改成 #6b7280 后 text-caption-foreground 仍是 #94a3b8）。
    */
   --color-caption-foreground: var(--caption-foreground);
-  --color-outline: #75777d;
-  --color-outline-variant: #c5c6cd;
-  --color-primary-container: #1e293b;
-  --color-secondary-fixed: #efeeeb;
-  --color-on-secondary-fixed: #1b1c1a;
+  --color-outline: var(--outline);
+  --color-outline-variant: var(--outline-variant);
+  --color-primary-container: var(--primary-container);
+  --color-secondary-fixed: var(--secondary-fixed);
+  --color-on-secondary-fixed: var(--on-secondary-fixed);
   --color-on-primary: #ffffff;
   --color-on-secondary: #ffffff;
   --color-error: #ba1a1a;
   --color-on-error: #ffffff;
-  --color-accent-amber: #45474c;
-  --color-accent-ink: #45474c;
+  --color-accent-amber: var(--accent-amber);
+  --color-accent-ink: var(--accent-ink);
   /*
    * 状态色（首页两个面板）—— 必须写成 var() 引用上面 :root 的定义，
    * 写死字面值会被 Tailwind 内联进工具类（见上面 --caption-foreground 的坑），
@@ -466,7 +451,9 @@
    * 移动端固定底部 Tab 栏高度（AppLayout 里是 h-16）。
    * 页面里凡是要"一屏铺满 + 底部有输入框/主按钮"的（如 /chat），移动端必须再扣掉它，
    * 否则内容会被 Tab 栏压住（实测 390×844 下输入框底边比 Tab 栏顶边低 3px）。
-   * 用法：`max-md:h-[calc(100svh-var(--spacing-shell)-var(--spacing-tabbar))]`
+   * 用法：`max-md:h-[calc(100svh-var(--spacing-shell-total)-var(--spacing-tabbar))]`
+   *   —— 注意是 shell-**total**(108 = 76 + 32 底部留白)，不是 shell(76)：
+   *   AppLayout 移动端的 pb-24 = tabbar(64) + margin(32)，少扣那 32 就是「页面恒多 32px 可滚」。
    */
   --spacing-tabbar: 64px;
   --spacing-gutter: 1.25rem;
@@ -476,42 +463,54 @@
   --spacing-space-lg: 1.5rem;
   --spacing-space-xl: 2rem;
 
-  /* 字号阶（DESIGN.md 的 typography，全部带上行高/字重/字距） */
-  --text-headline-xl: 26px;
-  --text-headline-xl--line-height: 34px;
+  /* 字号阶（2026-10-22 方案 A：正文从 12–13 抬到 14–15，模块标题 20，页面标题 30）
+     用法纪律（页面里照这个选，不要再用 text-xs / text-sm 表达层级）：
+       display-xl 46 → 首页问候
+       display    34 → 焦点卡主句 / 报告里的主角数字
+       headline-xl 30 → 页面 h1（PageHeader）
+       headline-lg 24 → 分节标题（今日一问、报告章节）
+       headline-md 20 → **卡内标题 / 结论句**
+       headline-sm 17 → 卡内小标题（列表项、子区块）
+       body-lg    16 → 页面导语
+       body-md    15 → 正文
+       body-sm    14 → 次要说明（**承载信息的文字最低到这一档**）
+       label-md   14 → 按钮 / 导航 / 表单标签
+       caption    13 → 只做装饰：日期、计数、角标、分组小标题 */
+  --text-headline-xl: 30px;
+  --text-headline-xl--line-height: 38px;
   --text-headline-xl--font-weight: 700;
-  --text-headline-xl--letter-spacing: -0.015em;
-  /* 首页专用展示字号（其它页面不用）：问候大标题 44px / 主角卡标题 32px */
-  --text-display-xl: 44px;
-  --text-display-xl--line-height: 52px;
+  --text-headline-xl--letter-spacing: -0.018em;
+  /* 首页专用展示字号（其它页面不用）：问候大标题 46px / 主角卡标题 34px */
+  --text-display-xl: 46px;
+  --text-display-xl--line-height: 56px;
   --text-display-xl--font-weight: 700;
-  --text-display-xl--letter-spacing: -0.03em;
-  --text-display: 32px;
-  --text-display--line-height: 40px;
+  --text-display-xl--letter-spacing: -0.022em;
+  --text-display: 34px;
+  --text-display--line-height: 44px;
   --text-display--font-weight: 700;
   --text-display--letter-spacing: -0.02em;
   --text-headline-lg: 24px;
   --text-headline-lg--line-height: 32px;
   --text-headline-lg--font-weight: 600;
-  --text-headline-lg--letter-spacing: -0.01em;
-  --text-headline-md: 18px;
-  --text-headline-md--line-height: 26px;
+  --text-headline-lg--letter-spacing: -0.012em;
+  --text-headline-md: 20px;
+  --text-headline-md--line-height: 28px;
   --text-headline-md--font-weight: 600;
-  --text-headline-md--letter-spacing: -0.005em;
-  --text-headline-sm: 16px;
-  --text-headline-sm--line-height: 24px;
+  --text-headline-md--letter-spacing: -0.01em;
+  --text-headline-sm: 17px;
+  --text-headline-sm--line-height: 25px;
   --text-headline-sm--font-weight: 600;
-  --text-body-lg: 15px;
-  --text-body-lg--line-height: 24px;
-  --text-body-md: 14px;
-  --text-body-md--line-height: 22px;
-  --text-body-sm: 13px;
-  --text-body-sm--line-height: 20px;
-  --text-label-md: 13px;
-  --text-label-md--line-height: 18px;
+  --text-body-lg: 16px;
+  --text-body-lg--line-height: 26px;
+  --text-body-md: 15px;
+  --text-body-md--line-height: 25px;
+  --text-body-sm: 14px;
+  --text-body-sm--line-height: 22px;
+  --text-label-md: 14px;
+  --text-label-md--line-height: 20px;
   --text-label-md--font-weight: 500;
-  --text-caption: 12px;
-  --text-caption--line-height: 16px;
+  --text-caption: 13px;
+  --text-caption--line-height: 19px;
   --text-caption--letter-spacing: 0.01em;
 }
 
@@ -582,6 +581,29 @@
     .bubble-pop {
       animation: none;
     }
+  }
+
+  /*
+   * 对话区顶部的滚出渐隐（/chat）。
+   *
+   * 缘由：消息滚到视口上沿之外时，会只剩一条用户气泡的底部（深墨 + 圆角、没有文字），
+   * 紧贴页头下沿看起来像一条悬空的黑条。ScrollArea 的裁剪没坏，坏的是"硬切"的观感。
+   *
+   * 做法：**滚动过之后**（`.chat-scroll-faded`，由 ChatPage 监听 scrollTop 挂上），
+   * 视口顶部 18px 完全透明、到 48px 才完全显现：
+   * - 18px 足以吃掉实测 17px 的气泡残片（残片直接看不见）；
+   * - 更长的 30px 过渡让正常滚动时消息从顶部柔和淡入，而不是被刀切；
+   * - 停在顶部时**不戴**渐隐 —— 那时内容没有被裁，戴了反而会把第一条消息的上沿擦掉。
+   * 只挂在 /chat 的 `.chat-scroll` 上，不动其它 ScrollArea（侧栏/历史列表不吃这层渐隐）。
+   */
+  .chat-scroll-faded [data-slot='scroll-area-viewport'] {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 18px,
+      #000 48px
+    );
+    mask-image: linear-gradient(to bottom, transparent 0, transparent 18px, #000 48px);
   }
 
   /* AI 等待占位的三个点：循环起伏（错开 150ms 由调用方用 animation-delay 给出） */

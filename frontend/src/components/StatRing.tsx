@@ -26,7 +26,7 @@ import { cn } from '@/lib/utils'
 /** 缓动：和首页一致 */
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
-export type StatRingTone = 'ink' | 'wait' | 'signal' | 'settled'
+export type StatRingTone = 'ink' | 'wait' | 'signal' | 'settled' | 'accent'
 
 /**
  * 环与数字共用的 CSS 变量名。这里写 `var(--x)` 而不是 Tailwind 工具类：
@@ -38,6 +38,7 @@ const TONE_TOKEN: Record<StatRingTone, string> = {
   wait: 'var(--attention)',
   signal: 'var(--signal)',
   settled: 'var(--settled)',
+  accent: 'var(--secondary)',
 }
 
 const TONE_TEXT: Record<StatRingTone, string> = {
@@ -45,6 +46,7 @@ const TONE_TEXT: Record<StatRingTone, string> = {
   wait: 'text-attention',
   signal: 'text-signal-ink',
   settled: 'text-settled',
+  accent: 'text-secondary',
 }
 
 export interface StatRingProps {

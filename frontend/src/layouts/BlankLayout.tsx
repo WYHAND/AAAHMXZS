@@ -1,5 +1,7 @@
 import { Outlet, useLocation } from 'react-router-dom'
 
+import { DesktopTitleBar } from '@/components/DesktopTitleBar'
+
 /**
  * 空布局（设计说明书 8）
  * 用于登录 / 注册 / 面试进行中：全屏沉浸，不带侧栏与顶栏。
@@ -22,6 +24,8 @@ export function BlankLayout({ narrow }: { narrow?: boolean }) {
 
   return (
     <div className="flex min-h-svh flex-col bg-canvas">
+      {/* 无边框窗口：这一条负责拖拽 + 最小化/最大化/关闭（浏览器里不渲染） */}
+      <DesktopTitleBar />
       <main className="flex flex-1 items-center justify-center px-4 py-10">
         <div className={isNarrow ? 'w-full max-w-md' : 'w-full'} data-blank-width={isNarrow ? 'md' : 'full'}>
           <Outlet />

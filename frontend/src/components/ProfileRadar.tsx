@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   PolarAngleAxis,
   PolarGrid,
@@ -79,6 +79,12 @@ function formatEvidence(value: number): string {
   return value < 10 ? value.toFixed(2) : value.toFixed(1)
 }
 
+/**
+ * 进场动画时长（ms），与 recharts Radar 默认 animationDuration 一致。
+ * 只放这一次，之后关掉动画（原因见组件内注释）。
+ */
+const ENTRANCE_ANIMATION_MS = 1500
+
 export function ProfileRadar({
   tags,
   empty = null,
@@ -98,7 +104,7 @@ export function ProfileRadar({
    * 多边形配色：缺省 `ink`（主墨，与旧版一致）；`signal` 用语义蓝，
    * 只给首页（那里右列已经有琥珀/绿/红三种状态色，雷达再用墨色会糊在一起）。
    */
-  tone?: 'ink' | 'signal'
+  tone?: 'ink' | 'signal' | 'accent'
   /**
    * 撑满父容器（个人中心用）。父卡是 grid 里的一员，会被拉高到与左卡等高，
    * 于是图下面是 120~145px 的死白（实测 1100~1920px 都这样）。
@@ -109,8 +115,29 @@ export function ProfileRadar({
   fill?: boolean
 }) {
   const axes = profileAxes(tags)
+  const hasAxes = axes.some((axis) => axis.weight > 0)
+
+  /*
+   * 进场动画只放一次。
+   *
+   * recharts 的 Radar 默认 `isAnimationActive: 'auto'`，而 AnimatedItems 用
+   * `useAnimationId(props)` **按引用**比较：只要 props（含 points）引用一变就换 key、
+   * 重放一次默认 1500ms 的补间。窗口缩放恰好会改 points 引用 → 网格（PolarGrid 与
+   * axisLine）即时重排，数据多边形却从旧几何慢慢「漂」过去（实测缩放后滞后 ≈78px、
+   * 约 1.5s 才归位）—— 就是「色块随窗口缩放乱飘」的全部原因。
+   *
+   * 所以这里让它**只在有数据可画时放一次进场**，随后关掉。之后无论窗口怎么缩放，
+   * 多边形都和外框一起即时落位（口径也符合全站动效纪律：进场一次 + 交互反馈，不重复）。
+   */
+  const [animate, setAnimate] = useState(true)
+  useEffect(() => {
+    if (!hasAxes) return
+    const timer = window.setTimeout(() => setAnimate(false), ENTRANCE_ANIMATION_MS)
+    return () => window.clearTimeout(timer)
+  }, [hasAxes])
+
   // 最大值 ≤ 0：没有证据可画，走空态
-  if (!axes.some((axis) => axis.weight > 0)) {
+  if (!hasAxes) {
     // 空态在撑满模式下居中，否则整卡又只剩顶部一小块 + 下面一整片白
     return fill ? (
       <div className="flex flex-1 items-center justify-center">{empty}</div>
@@ -119,8 +146,10 @@ export function ProfileRadar({
     )
   }
 
-  const strokeColor = tone === 'signal' ? 'var(--signal-ink)' : 'var(--primary)'
-  const fillColor = tone === 'signal' ? 'var(--signal)' : 'var(--primary)'
+  const strokeColor =
+    tone === 'signal' ? 'var(--signal-ink)' : tone === 'accent' ? 'var(--secondary)' : 'var(--primary)'
+  const fillColor =
+    tone === 'signal' ? 'var(--signal)' : tone === 'accent' ? 'var(--secondary)' : 'var(--primary)'
 
   const hasEmptyAxis = axes.some((axis) => axis.weight === 0)
   const spoken = axes
@@ -166,6 +195,8 @@ export function ProfileRadar({
             fill={fillColor}
             fillOpacity={0.2}
             strokeWidth={1.75}
+            // 只在首次进场时补间；之后恒为 false，避免窗口缩放重放动画导致多边形漂移
+            isAnimationActive={animate}
           />
         </RadarChart>
       </ResponsiveContainer>

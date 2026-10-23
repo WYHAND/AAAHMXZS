@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>三套方案总览</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 2136px; background: #141414; color: #fff;
+    font-family: 'Jakarta', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+  .head { display: flex; align-items: baseline; gap: 16px; padding: 18px 24px 14px; }
+  .head b { font-size: 15px; letter-spacing: .02em; }
+  .head span { font-size: 12px; color: rgba(255,255,255,.5); }
+  .row { display: flex; gap: 8px; padding: 0 8px 12px; }
+  .col { width: 700px; flex: 0 0 700px; }
+  .label { display: flex; align-items: baseline; justify-content: space-between; padding: 8px 10px; background: #1e1e1e; border-radius: 8px 8px 0 0; }
+  .label b { font-size: 13px; }
+  .label span { font-size: 11px; color: rgba(255,255,255,.45); }
+  img { display: block; width: 700px; border-radius: 0 0 8px 8px; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <b>同一版式 × 三套配色与字号</b>
+    <span>1440 宽桌面首页等比缩到 700；原文见 theme-a / theme-b / theme-c.png</span>
+  </div>
+  <div class="row">
+    <div class="col">
+      <div class="label"><b>A · 暖纸墨蓝</b><span>#F2EBE1 / #B4551F / 46·30·20·15</span></div>
+      <img src="theme-a.png" alt="方案 A" />
+    </div>
+    <div class="col">
+      <div class="label"><b>B · 雾蓝石板</b><span>#EDF1F7 / #2F5BFF / 44·28·19·15</span></div>
+      <img src="theme-b.png" alt="方案 B" />
+    </div>
+    <div class="col">
+      <div class="label"><b>C · 奶油活力</b><span>#FFF4EC / #F0562D / 48·31·21·16</span></div>
+      <img src="theme-c.png" alt="方案 C" />
+    </div>
+  </div>
+</body>
+</html>

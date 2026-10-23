@@ -119,7 +119,14 @@ export function RequireProfile({ children }: { children?: ReactNode }) {
 
   // ③ 只有"确实拿到了画像、且后端说没测过"才跳测评
   if (!tested && !location.pathname.startsWith(TEST_PREFIX)) {
-    return <Navigate to="/test/intro" replace />
+    /*
+     * `from` 只用来让 /test/intro **说清"你为什么被带到这里"**（2026-10-19）：
+     * 实测新账号点「模拟面试」会直接看到整页「先做一次职业测评」，没有任何一句话
+     * 解释"我点的是面试，怎么给我一个测评"。带着来源过去，那边就能补一句
+     * 「模拟面试要按你的画像出题，先花 5 分钟做个测评」。
+     * 这只是**提示**，不改任何跳转逻辑（守卫该拦还是拦）。
+     */
+    return <Navigate to={`/test/intro?from=${encodeURIComponent(location.pathname)}`} replace />
   }
 
   return children ? <>{children}</> : <Outlet />

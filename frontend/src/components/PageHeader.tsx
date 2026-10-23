@@ -54,7 +54,7 @@ export function PageHeader({
           {badge}
         </div>
         {description ? (
-          <p className="max-w-[60ch] text-body-md text-on-surface-variant">{description}</p>
+          <p className="max-w-[60ch] text-body-lg text-on-surface-variant">{description}</p>
         ) : null}
       </div>
       {actions ? (

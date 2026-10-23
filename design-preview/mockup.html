@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="a">
+<head>
+<meta charset="utf-8" />
+<title>配色与字号方案对比</title>
+<style>
+  @font-face { font-family: 'Jakarta'; src: url('../frontend/public/fonts/PlusJakartaSans-400.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+  @font-face { font-family: 'Jakarta'; src: url('../frontend/public/fonts/PlusJakartaSans-500.woff2') format('woff2'); font-weight: 500; font-display: swap; }
+  @font-face { font-family: 'Jakarta'; src: url('../frontend/public/fonts/PlusJakartaSans-600.woff2') format('woff2'); font-weight: 600; font-display: swap; }
+  @font-face { font-family: 'Jakarta'; src: url('../frontend/public/fonts/PlusJakartaSans-700.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+
+  /* ============ 主题变量：三套方案只换这一段 ============ */
+  :root {
+    --canvas: #f2ebe1; --card: #ffffff; --sidebar: #ece2d5;
+    --ink: #0b1526; --muted: #5f6470; --line: #e3d8c8;
+    --accent: #b4551f; --accent-soft: #faede3;
+    --positive: #3f6b45; --positive-soft: #eef4ee;
+    --hero: linear-gradient(135deg, #0b1526 0%, #16283f 100%);
+    --hero-glow: rgba(180, 85, 31, .26);
+    --hero-fg: #ffffff; --hero-dim: rgba(255,255,255,.62);
+    --radius-card: 18px; --radius-control: 12px;
+    --fs-hero: 46px; --lh-hero: 54px;
+    --fs-section: 30px; --lh-section: 38px;
+    --fs-module: 20px; --lh-module: 28px;
+    --fs-body: 15px; --lh-body: 25px;
+    --fs-small: 13px; --lh-small: 20px;
+    --fs-micro: 12px; --lh-micro: 17px;
+    --tracking-hero: -.02em;
+    --shadow: 0 1px 2px rgba(40,30,20,.05), 0 8px 24px -12px rgba(40,30,20,.18);
+    --name: '方案 A · 暖纸墨蓝';
+    --tagline: '温暖、克制、有杂志感 —— 保住现在的气质，只把对比和字号拉起来';
+  }
+  html[data-theme="b"] {
+    --canvas: #edf1f7; --card: #ffffff; --sidebar: #e6ecf6;
+    --ink: #0f172a; --muted: #5b6472; --line: #dbe3ef;
+    --accent: #2f5bff; --accent-soft: #ecf0ff;
+    --positive: #0e8f7e; --positive-soft: #e9f6f3;
+    --hero: linear-gradient(140deg, #0f172a 0%, #1b2b4b 100%);
+    --hero-glow: rgba(47, 91, 255, .30);
+    --hero-fg: #ffffff; --hero-dim: rgba(255,255,255,.62);
+    --radius-card: 14px; --radius-control: 10px;
+    --fs-hero: 44px; --lh-hero: 52px;
+    --fs-section: 28px; --lh-section: 36px;
+    --fs-module: 19px; --lh-module: 27px;
+    --fs-body: 15px; --lh-body: 24px;
+    --fs-small: 13px; --lh-small: 19px;
+    --fs-micro: 12px; --lh-micro: 16px;
+    --tracking-hero: -.025em;
+    --shadow: 0 1px 2px rgba(15,23,42,.06), 0 10px 28px -16px rgba(15,23,42,.28);
+    --name: '方案 B · 雾蓝石板';
+    --tagline: '冷静、专业、可信 —— 一眼像“求职工具”，蓝只做行动色';
+  }
+  html[data-theme="c"] {
+    --canvas: #fff4ec; --card: #ffffff; --sidebar: #ffeadc;
+    --ink: #241a15; --muted: #6b5b52; --line: #f0dfd2;
+    --accent: #f0562d; --accent-soft: #ffe9e0;
+    --positive: #12a08c; --positive-soft: #e6f7f4;
+    --hero: linear-gradient(135deg, #1f1612 0%, #33221a 100%);
+    --hero-glow: rgba(240, 86, 45, .16);
+    --hero-fg: #ffffff; --hero-dim: rgba(255,255,255,.66);
+    --radius-card: 22px; --radius-control: 14px;
+    --fs-hero: 48px; --lh-hero: 56px;
+    --fs-section: 31px; --lh-section: 40px;
+    --fs-module: 21px; --lh-module: 29px;
+    --fs-body: 16px; --lh-body: 26px;
+    --fs-small: 13.5px; --lh-small: 21px;
+    --fs-micro: 12.5px; --lh-micro: 17px;
+    --tracking-hero: -.018em;
+    --shadow: 0 2px 4px rgba(80,40,20,.05), 0 14px 34px -18px rgba(80,40,20,.30);
+    --name: '方案 C · 奶油活力';
+    --tagline: '年轻、有温度、抓眼 —— 珊瑚色负责“叫你看这里”，薄荷色负责“你做到了”';
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--canvas); }
+  body {
+    font-family: 'Jakarta', 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
+    color: var(--ink);
+    font-size: var(--fs-body);
+    line-height: var(--lh-body);
+    -webkit-font-smoothing: antialiased;
+    width: 1440px;
+  }
+
+  /* ============ 方案标签条 ============ */
+  .spec-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 24px; height: 44px; padding: 0 24px;
+    background: var(--ink); color: #fff;
+  }
+  .spec-bar b { font-size: 13px; font-weight: 600; letter-spacing: .02em; }
+  .spec-bar span { font-size: 12px; color: rgba(255,255,255,.62); }
+
+  /* ============ 顶栏 ============ */
+  .topbar {
+    height: 56px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; background: var(--card); border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .logo {
+    width: 26px; height: 26px; border-radius: 8px; background: var(--accent);
+    display: grid; place-items: center; color: #fff; font-size: 13px; font-weight: 700;
+  }
+  .brand h1 { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+  .chip {
+    font-size: 11px; padding: 2px 7px; border-radius: 6px;
+    background: var(--accent-soft); color: var(--accent); font-weight: 500;
+  }
+  .top-right { display: flex; align-items: center; gap: 14px; }
+  .stage {
+    display: flex; align-items: center; gap: 7px; padding: 5px 12px; border-radius: 999px;
+    background: var(--canvas); font-size: var(--fs-small); font-weight: 500;
+  }
+  .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--positive); }
+  .icon { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--muted); }
+  .icon svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .avatar {
+    width: 30px; height: 30px; border-radius: 999px; background: var(--ink); color: #fff;
+    display: grid; place-items: center; font-size: 12px; font-weight: 500;
+  }
+
+  /* ============ 侧栏 ============ */
+  .shell { display: flex; align-items: stretch; min-height: 880px; }
+  .sidebar { width: 232px; flex: 0 0 232px; background: var(--sidebar); padding: 22px 12px; }
+  .group-title {
+    font-size: 11px; letter-spacing: .12em; color: var(--muted); opacity: .8;
+    padding: 0 12px 8px; text-transform: uppercase;
+  }
+  .group + .group { margin-top: 18px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: var(--radius-control);
+    font-size: 13.5px; color: var(--muted); font-weight: 500;
+  }
+  .nav-item svg { width: 16px; height: 16px; flex: 0 0 16px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: .9; }
+  .nav-item.active { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+  .nav-item.active svg { color: var(--accent); stroke-width: 1.9; }
+
+  /* ============ 内容 ============ */
+  .main { flex: 1; min-width: 0; padding: 34px 44px 40px; }
+  .content { max-width: 1040px; margin: 0 auto; }
+
+  .date { font-size: var(--fs-micro); letter-spacing: .08em; color: var(--muted); }
+  .hero-title {
+    font-size: var(--fs-hero); line-height: var(--lh-hero); font-weight: 700;
+    letter-spacing: var(--tracking-hero); margin-top: 10px;
+  }
+  .hero-sub { font-size: var(--fs-body); color: var(--muted); margin-top: 10px; max-width: 560px; }
+
+  /* 焦点卡 */
+  .focus {
+    position: relative; overflow: hidden; margin-top: 26px;
+    border-radius: var(--radius-card); background: var(--hero); color: var(--hero-fg);
+    padding: 28px 32px 26px; box-shadow: var(--shadow);
+  }
+  .focus::after {
+    content: ''; position: absolute; right: -90px; top: -130px; width: 340px; height: 340px;
+    border-radius: 999px; background: var(--hero-glow); filter: blur(70px);
+  }
+  .focus-top { display: flex; align-items: center; justify-content: space-between; position: relative; z-index: 1; }
+  .focus-label { display: flex; align-items: center; gap: 8px; font-size: var(--fs-micro); font-weight: 600; letter-spacing: .08em; color: var(--hero-dim); }
+  .focus-label i { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); display: block; }
+  .focus-meta { font-size: var(--fs-micro); color: var(--hero-dim); }
+  .focus h2 {
+    position: relative; z-index: 1; margin-top: 18px;
+    font-size: 34px; line-height: 44px; font-weight: 700; letter-spacing: -.015em; max-width: 720px;
+  }
+  .focus-bottom { position: relative; z-index: 1; display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; margin-top: 26px; }
+  .steps { flex: 1; max-width: 520px; }
+  .step-row { position: relative; display: flex; align-items: center; justify-content: space-between; }
+  .rail { position: absolute; left: 12px; right: 12px; top: 50%; height: 2px; background: rgba(255,255,255,.18); }
+  .rail-fill { position: absolute; left: 12px; top: 50%; height: 2px; width: 33%; background: var(--accent); }
+  .step {
+    position: relative; width: 26px; height: 26px; border-radius: 999px; display: grid; place-items: center;
+    font-size: 11px; font-weight: 600; z-index: 1;
+  }
+  .step.done { background: var(--accent); color: #fff; }
+  .step.now { background: #fff; color: var(--ink); box-shadow: 0 0 0 6px rgba(255,255,255,.12); }
+  .step.todo { background: rgba(255,255,255,.10); color: rgba(255,255,255,.55); box-shadow: inset 0 0 0 1px rgba(255,255,255,.22); }
+  .step-note { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; font-size: var(--fs-micro); color: var(--hero-dim); }
+  .cta-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .cta {
+    display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 22px;
+    border-radius: 999px; background: #fff; color: var(--ink); font-size: 14px; font-weight: 600;
+  }
+  .cta em { font-style: normal; font-size: 15px; }
+  .cta-note { font-size: var(--fs-micro); color: var(--hero-dim); }
+  /* C 方案：主行动按钮直接用主色实心 —— 一屏唯一的"叫你看这里" */
+  html[data-theme="c"] .cta {
+    background: var(--accent); color: #fff;
+    box-shadow: 0 10px 22px -10px rgba(240, 86, 45, .65);
+  }
+
+  /* 今日一问 */
+  .daily { margin-top: 34px; padding-top: 24px; border-top: 1px solid var(--line); }
+  .daily-top { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-micro); color: var(--muted); }
+  .daily h3 { font-size: var(--fs-section); line-height: var(--lh-section); font-weight: 700; letter-spacing: -.012em; margin-top: 14px; max-width: 720px; }
+  .ghost-btn {
+    display: inline-flex; align-items: center; gap: 7px; margin-top: 16px;
+    height: 34px; padding: 0 14px; border-radius: var(--radius-control);
+    border: 1px solid var(--line); background: var(--card); font-size: var(--fs-small); font-weight: 500;
+  }
+
+  /* 两列卡 */
+  .grid { display: grid; grid-template-columns: 7fr 5fr; gap: 22px; margin-top: 30px; align-items: stretch; }
+  .panel {
+    background: var(--card); border-radius: var(--radius-card); padding: 24px;
+    box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 18px;
+  }
+  .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .panel-head h4 { font-size: var(--fs-module); line-height: var(--lh-module); font-weight: 700; letter-spacing: -.01em; }
+  .panel-link { font-size: var(--fs-micro); color: var(--muted); }
+  .inset { background: var(--canvas); border-radius: var(--radius-control); padding: 14px; }
+
+  .radar-wrap { display: grid; place-items: center; }
+  .signal { margin-top: 14px; }
+  .signal-top { display: flex; justify-content: space-between; font-size: var(--fs-small); font-weight: 600; }
+  .signal-top span:last-child { color: var(--muted); font-weight: 500; font-size: var(--fs-micro); }
+  .bar { height: 6px; border-radius: 999px; background: var(--line); margin-top: 7px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 62%; border-radius: 999px; background: var(--accent); }
+  .signal-note { font-size: var(--fs-micro); color: var(--muted); margin-top: 7px; }
+  .chat-row {
+    margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--accent-soft); border-radius: var(--radius-control); padding: 12px 14px;
+    font-size: var(--fs-small); color: var(--ink);
+  }
+  .chat-row b { color: var(--accent); font-weight: 600; font-size: var(--fs-micro); }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .stat { padding: 2px 0; }
+  .stat + .stat { border-left: 1px solid var(--line); padding-left: 18px; }
+  .stat b { display: block; font-size: 34px; line-height: 40px; font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .stat.pos b { color: var(--positive); }
+  .stat small { font-size: var(--fs-micro); color: var(--muted); }
+  .bars { display: flex; align-items: flex-end; gap: 5px; height: 56px; }
+  .bars i { flex: 1; border-radius: 3px 3px 2px 2px; background: var(--line); }
+  .bars i.hot { background: var(--accent); }
+  .task-row { display: flex; align-items: center; gap: 12px; }
+  .ring {
+    width: 46px; height: 46px; border-radius: 999px; flex: 0 0 46px; display: grid; place-items: center;
+    font-size: 11px; font-weight: 600; color: var(--accent);
+    background: conic-gradient(var(--accent) 0 62%, var(--line) 62% 100%);
+  }
+  .ring span { width: 36px; height: 36px; border-radius: 999px; background: var(--card); display: grid; place-items: center; }
+  .task-row h5 { font-size: var(--fs-small); font-weight: 600; }
+  .task-row p { font-size: var(--fs-micro); color: var(--muted); }
+  .permission {
+    margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 7px;
+    background: var(--positive-soft); border-radius: var(--radius-control); padding: 11px 12px;
+    font-size: var(--fs-micro); color: var(--positive);
+  }
+
+  /* ============ 字号样张 ============ */
+  .specimen { margin-top: 28px; background: var(--card); border-radius: var(--radius-card); padding: 22px 24px; box-shadow: var(--shadow); }
+  .specimen-title { font-size: var(--fs-micro); letter-spacing: .1em; color: var(--muted); margin-bottom: 14px; }
+  .spec-row { display: flex; align-items: baseline; gap: 16px; padding: 7px 0; border-top: 1px dashed var(--line); }
+  .spec-row:first-of-type { border-top: 0; }
+  .spec-tag { flex: 0 0 92px; font-size: 11px; color: var(--muted); letter-spacing: .06em; }
+  .spec-sample { flex: 1; }
+  .spec-num { flex: 0 0 54px; text-align: right; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .s-hero { font-size: var(--fs-hero); line-height: var(--lh-hero); font-weight: 700; letter-spacing: var(--tracking-hero); }
+  .s-section { font-size: var(--fs-section); line-height: var(--lh-section); font-weight: 700; letter-spacing: -.012em; }
+  .s-module { font-size: var(--fs-module); line-height: var(--lh-module); font-weight: 700; }
+  .s-body { font-size: var(--fs-body); line-height: var(--lh-body); }
+  .s-small { font-size: var(--fs-small); line-height: var(--lh-small); color: var(--muted); }
+
+  .foot { display: flex; justify-content: space-between; margin-top: 18px; font-size: var(--fs-micro); color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="spec-bar">
+  <b id="spec-name"></b>
+  <span id="spec-tagline"></span>
+</div>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="logo">✦</div>
+    <h1>AI 就业助手</h1>
+    <span class="chip">桌面版</span>
+  </div>
+  <div class="top-right">
+    <div class="stage"><i class="dot"></i>求职准备期 ⌄</div>
+    <div class="icon"><svg viewBox="0 0 20 20"><path d="M6 8.5a4 4 0 0 1 8 0c0 2.4-2 3-2 4.6h-4c0-1.6-2-2.2-2-4.6z"/><path d="M8.4 15.4a1.7 1.7 0 0 0 3.2 0"/></svg></div>
+    <div class="avatar">林</div>
+  </div>
+</div>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="group">
+      <div class="group-title">核心导航</div>
+      <div class="nav-item active"><svg viewBox="0 0 20 20"><path d="M3.5 8.2 10 3l6.5 5.2V16a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/><path d="M8 17v-4.5h4V17"/></svg>首页</div>
+      <div class="nav-item"><svg viewBox="0 0 20 20"><path d="M6.5 6.5h9M6.5 10h9M6.5 13.5h6"/><circle cx="3.7" cy="6.5" r=".8"/><circle cx="3.7" cy="10" r=".8"/><circle cx="3.7" cy="13.5" r=".8"/></svg>成长任务</div>
+      <div class="nav-item"><svg viewBox="0 0 20 20"><path d="M3 6.2A2.2 2.2 0 0 1 5.2 4h9.6A2.2 2.2 0 0 1 17 6.2v6.1a2.2 2.2 0 0 1-2.2 2.2H9l-4 2.4v-2.4h-.2A2.2 2.2 0 0 1 3 12.3z"/></svg>AI 对话</div>
+      <div class="nav-item"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M8.2 8.2a1.9 1.9 0 1 1 2.6 1.8c-.5.2-.8.8-.8 1.3"/><circle cx="10" cy="13.8" r=".7"/></svg>每日一问</div>
+    </div>
+    <div class="group">
+      <div class="group-title">就业求职</div>
+      <div class="nav-item"><svg viewBox="0 0 20 20"><path d="M5 3h6l4 4v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M11 3v4h4M6.8 11h6M6.8 14h4"/></svg>简历</div>
+      <div class="nav-item"><svg viewBox="0 0 20 20"><rect x="7.3" y="3" width="5.4" height="9" rx="2.7"/><path d="M5 9.6a5 5 0 0 0 10 0M10 14.6V17"/></svg>模拟面试</div>
+    </div>
+    <div class="group">
+      <div class="group-title">我的</div>
+      <div class="nav-item"><svg viewBox="0 0 20 20"><circle cx="10" cy="7" r="3.1"/><path d="M4.2 16.5a5.8 5.8 0 0 1 11.6 0"/></svg>个人中心</div>
+      <div class="nav-item"><svg viewBox="0 0 20 20"><path d="M3.6 16.4V9.6M8.2 16.4V5M12.8 16.4v-8M17 16.4V3.6"/></svg>成长报告</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="content">
+      <div class="date">10月17日 星期六</div>
+      <div class="hero-title">今天，做一件小事就够了</div>
+      <p class="hero-sub">当前阶段：求职准备期。我会跟着你的心理舒适度与日常节奏调整建议</p>
+
+      <section class="focus">
+        <div class="focus-top">
+          <div class="focus-label"><i></i>今日焦点</div>
+          <div class="focus-meta">◷ 预计 14 天</div>
+        </div>
+        <h2>先把这个鸿蒙小项目的删除交互补完</h2>
+        <div class="focus-bottom">
+          <div class="steps">
+            <div class="step-row">
+              <div class="rail"></div>
+              <div class="rail-fill"></div>
+              <div class="step done">✓</div>
+              <div class="step now">2</div>
+              <div class="step todo">3</div>
+              <div class="step todo">4</div>
+            </div>
+            <div class="step-note">
+              <span>当前停在：实现待办列表页与本地存储</span>
+              <span>已完成 1/4 步</span>
+            </div>
+          </div>
+          <div class="cta-wrap">
+            <div class="cta">继续任务 <em>→</em></div>
+            <div class="cta-note">支持随时暂存，无打卡压力</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="daily">
+        <div class="daily-top">
+          <span>今日一问 · 每天一题</span>
+          <span>◇ 你的回答只进你的私有画像，不做对错评判</span>
+        </div>
+        <h3>「最近一次投递没回音，你觉得卡在哪个环节？」</h3>
+        <div class="ghost-btn"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 3.6a1.9 1.9 0 0 1 2.7 2.7L7 15.4l-3.6.9.9-3.6z"/></svg>随手写一句</div>
+      </section>
+
+      <div class="grid">
+        <section class="panel">
+          <div class="panel-head">
+            <h4>你最近卡在「缺项目经验」</h4>
+            <span class="panel-link">探索轨迹全览 ›</span>
+          </div>
+
+          <div class="inset radar-wrap">
+            <svg width="300" height="188" viewBox="0 0 300 188" fill="none">
+              <g stroke="var(--line)" stroke-width="1">
+                <polygon points="150,14 214,51 214,125 150,162 86,125 86,51" />
+                <polygon points="150,38 194,63 194,113 150,138 106,113 106,63" />
+                <polygon points="150,62 174,76 174,100 150,114 126,100 126,76" />
+                <path d="M150 14V162M86 51L214 125M214 51L86 125" />
+              </g>
+              <polygon points="150,34 206,56 190,112 150,148 92,120 112,60"
+                fill="var(--accent)" fill-opacity=".14" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" />
+              <g fill="var(--accent)">
+                <circle cx="150" cy="34" r="3" /><circle cx="206" cy="56" r="3" />
+                <circle cx="190" cy="112" r="3" /><circle cx="150" cy="148" r="3" />
+                <circle cx="92" cy="120" r="3" /><circle cx="112" cy="60" r="3" />
+              </g>
+              <g fill="var(--muted)" font-size="11" font-family="'PingFang SC','Microsoft YaHei',sans-serif">
+                <text x="150" y="8" text-anchor="middle">兴趣</text>
+                <text x="236" y="50" text-anchor="middle">能力</text>
+                <text x="236" y="136" text-anchor="middle">技能</text>
+                <text x="150" y="180" text-anchor="middle">痛点</text>
+                <text x="64" y="136" text-anchor="middle">焦虑</text>
+                <text x="64" y="50" text-anchor="middle">认知</text>
+              </g>
+            </svg>
+          </div>
+
+          <div class="signal">
+            <div class="signal-top"><span>缺项目经验</span><span>来自对话</span></div>
+            <div class="bar"><i></i></div>
+            <div class="signal-note">三轮对话里都提到没有能写进简历的项目。</div>
+          </div>
+
+          <div class="chat-row">
+            <span>想对上面的分析提出修正或聊聊困惑吗？</span>
+            <b>聊一句 →</b>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h4>你已经走了 12 天</h4>
+            <span class="panel-link">按微步前进中</span>
+          </div>
+
+          <div class="stats">
+            <div class="stat"><b>1</b><small>完成小探索</small></div>
+            <div class="stat pos"><b>7</b><small>累计微步</small></div>
+            <div class="stat pos"><b>12<small style="font-size:15px"> 天</small></b><small>活跃天数</small></div>
+          </div>
+
+          <div class="inset">
+            <div class="bars">
+              <i style="height:22%"></i><i style="height:38%"></i><i style="height:16%"></i><i style="height:52%"></i>
+              <i style="height:30%"></i><i style="height:64%"></i><i style="height:44%"></i><i style="height:26%"></i>
+              <i style="height:58%"></i><i style="height:36%"></i><i style="height:72%"></i><i style="height:48%"></i>
+              <i style="height:34%"></i><i class="hot" style="height:88%"></i>
+            </div>
+            <div class="signal-note" style="margin-top:8px">近 14 天微步 · 今天</div>
+          </div>
+
+          <div class="task-row">
+            <div class="ring"><span>62%</span></div>
+            <div>
+              <h5>鸿蒙待办清单 · 补删除交互</h5>
+              <p>当前：实现待办列表页</p>
+            </div>
+          </div>
+
+          <div class="permission">✦ 不用急着做完，今天的探索随时可以停</div>
+        </section>
+      </div>
+
+      <section class="specimen">
+        <div class="specimen-title">字号层级</div>
+        <div class="spec-row"><span class="spec-tag">展示 · 页面主句</span><span class="spec-sample s-hero">做一件小事就够了</span><span class="spec-num" id="n1"></span></div>
+        <div class="spec-row"><span class="spec-tag">分节 · 一段标题</span><span class="spec-sample s-section">最近一次投递没回音</span><span class="spec-num" id="n2"></span></div>
+        <div class="spec-row"><span class="spec-tag">模块 · 卡内结论</span><span class="spec-sample s-module">你最近卡在「缺项目经验」</span><span class="spec-num" id="n3"></span></div>
+        <div class="spec-row"><span class="spec-tag">正文 · 说明文字</span><span class="spec-sample s-body">我会跟着你的心理舒适度与日常节奏调整建议，不催你，也不打分。</span><span class="spec-num" id="n4"></span></div>
+        <div class="spec-row"><span class="spec-tag">注释 · 次要信息</span><span class="spec-sample s-small">支持随时暂存，无打卡压力</span><span class="spec-num" id="n5"></span></div>
+      </section>
+
+      <div class="foot">
+        <span id="foot-left"></span>
+        <span>1440 × 900 · 桌面端首页同一版式，仅换配色与字号</span>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  const theme = new URLSearchParams(location.search).get('theme') || 'a'
+  document.documentElement.dataset.theme = theme
+  const css = getComputedStyle(document.documentElement)
+  const v = (k) => css.getPropertyValue(k).trim()
+  document.getElementById('spec-name').textContent = v('--name')
+  document.getElementById('spec-tagline').textContent = v('--tagline')
+  const num = (k) => parseInt(v(k), 10)
+  document.getElementById('n1').textContent = num('--fs-hero')
+  document.getElementById('n2').textContent = num('--fs-section')
+  document.getElementById('n3').textContent = num('--fs-module')
+  document.getElementById('n4').textContent = num('--fs-body')
+  document.getElementById('n5').textContent = num('--fs-small')
+  const tokens = theme === 'a'
+    ? '画布 #F2EBE1 · 卡 #FFF · 墨 #0B1526 · 主色 #B4551F · 正 #3F6B45'
+    : theme === 'b'
+    ? '画布 #EDF1F7 · 卡 #FFF · 墨 #0F172A · 主色 #2F5BFF · 正 #0E8F7E'
+    : '画布 #FFF4EC · 卡 #FFF · 墨 #241A15 · 主色 #F0562D · 正 #12A08C'
+  document.getElementById('foot-left').textContent = tokens
+  document.fonts.ready.then(() => document.body.classList.add('fonts-ready'))
+</script>
+</body>
+</html>

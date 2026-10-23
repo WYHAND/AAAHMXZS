@@ -88,7 +88,7 @@ export function AppLayout() {
     items.filter((item) => keys.includes(item.key))
 
   return (
-    <div className="min-h-svh bg-surface text-on-surface">
+    <div data-print="surface" className="min-h-svh bg-surface text-on-surface">
       {/* ---------------------------- 顶部 44px 窗口头 ---------------------------- */}
       <header
         data-print="hide"
@@ -211,7 +211,12 @@ export function AppLayout() {
       ) : null}
 
       {/* -------------------------------- 内容区 -------------------------------- */}
-      <div className={cn(!isMobile && 'pl-60')}>
+      {/*
+       * data-print='flush'：打印时清掉左侧 240px 侧栏留出的 pl-60。
+       * 侧栏本身由 [data-print='hide'] 隐藏，但**偏移还在**；不清的话整张简历纸会被推到右边
+       * （实测打印出来的简历右边被裁、左边一大片空白）。
+       */}
+      <div data-print="flush" className={cn(!isMobile && 'pl-60')}>
         <main
           data-print="main"
           className={cn(
@@ -287,7 +292,7 @@ function SideNavItem({ item }: { item: NavItem }) {
           {isActive ? (
             <motion.span
               layoutId="sidebar-active"
-              className="absolute inset-0 rounded-lg bg-surface-container-highest"
+              className="absolute inset-0 rounded-lg bg-card shadow-[0_1px_2px_rgba(40,30,20,0.08)]"
               transition={{ type: 'spring', stiffness: 520, damping: 42 }}
             />
           ) : null}

@@ -32,7 +32,17 @@ export default defineConfig(({ mode }) => ({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        /*
+         * ⚠️ 这里必须写 IP **127.0.0.1**，不能写 `localhost`。
+         *
+         * 后端是用 `--host 127.0.0.1` 启动的（见根目录 dev-backend.ps1），**只监听 IPv4**；
+         * 而 Node 18+ 的 DNS 解析默认 `verbatim`，`localhost` 可能先解析成 IPv6 的 `::1`。
+         * 一旦代理先连 `::1` 就直接 ECONNREFUSED → vite 把 **502 Bad Gateway** 甩给浏览器，
+         * 表现为「后端明明健康（/api/v1/health 返回 200），页面却偶发提示『服务器开小差了』」
+         * （2026-10-18 实测碰到过 2 次，当场复查后端进程与健康检查都正常）。
+         * 写死 127.0.0.1 就没有这个歧义了。
+         */
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
       },
     },
