@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 from sqlmodel import Session, select
 
 from app.ai import deepseek_client
+from app.ai.fallbacks import FALLBACK_CHAT_REPLY
 from app.ai.schemas import ProfileTagItem  # noqa: F401 - 类型提示用
 from app.core.errors import BusinessException, ErrorCode
 from app.models.daily_question import DailyAnswer, DailyQuestion
@@ -335,6 +336,11 @@ async def generate_daily_question_for_user(db: Session, user: User, stage: str =
         )
     except Exception as exc:  # noqa: BLE001 - 7.6 兜底
         logger.warning("每日一问生成失败，本轮跳过 user_id=%s err=%s", user.id, sanitize(exc))
+        return None
+
+    if (text or "").strip() == FALLBACK_CHAT_REPLY:
+        # AI 挂了：别把兜底话术当题干写进 daily_questions（宁可不生成）
+        logger.warning("每日一问命中 AI 兜底话术，本轮跳过 user_id=%s", user.id)
         return None
 
     content = (text or "").strip().splitlines()[0][:200] if text else ""

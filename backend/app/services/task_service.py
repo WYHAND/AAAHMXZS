@@ -604,6 +604,25 @@ async def complete_step(
     if step is None or step.task_id != task.id:
         raise BusinessException(ErrorCode.NOT_FOUND, "任务步骤不存在")
 
+    # 幂等短路：该步骤已经打过卡 -> 直接返回当前任务状态，不再重复产生任何副作用。
+    # 为什么必须在这里整体短路（而不是"判断后只跳过赋值"）：重复打卡对用户是三件
+    # 真实可感知的坏事 ——
+    #   ① ``step.feedback`` 被**静默覆盖**成最后一次提交的内容（前端重试/用户连点
+    #      会把第一次认真写的反馈弄丢，且没有任何提示）；
+    #   ② 再次进入 ``_extract_task_tags``，把**同一段反馈**重新喂给 AI 抽标签
+    #      （实测多花约 3.7s，而且 ``apply_tags`` 的融合是 ``0.6*旧 + 0.4*新``，
+    #      同一条证据重复回流会把权重越堆越高，是脏数据来源）；
+    #   ③ 再触发一次 ``badge_service.check_and_award``（本就无需重复评估）。
+    # 出参刻意与成功路径**完全一致**（同样走 ``get_task_detail``）：前端不必区分
+    # "首次打卡"与"重复打卡"，保持既有响应契约不变。
+    if step.completed:
+        logger.info(
+            "打卡幂等返回（该步骤已完成：不覆盖 feedback / 不调 AI / 不触发奖章）："
+            "user_id=%s task_id=%s step_id=%s",
+            user.id, task.id, step.id,
+        )
+        return get_task_detail(db, user, task.id)
+
     step.completed = True
     step.feedback = payload.feedback
     step.completed_at = utcnow()
@@ -765,6 +784,7 @@ async def _generate_once(
         schema=TaskGenerateResult,
         default=empty_task_generate(pain_point),
         temperature=STRUCTURED_TEMPERATURE,
+        max_tokens=2048,
     )
 
 

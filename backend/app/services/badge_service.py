@@ -27,6 +27,12 @@
    顺带把"任务完成/标签攒够"的条件一起评估了）；
 3. ``check_all_users``（12.2 每小时兜底）就是同一套逻辑跑全量用户。
 
+**当前的触发点**（``event`` 只是日志）：
+- ``profile_service.apply_tags`` -> ``_check_and_award_silently``（``tags_collected``）：
+  画像标签**数量变化**时立刻评估 —— 对话/面试复盘/每日一问/测评写的标签都经这条
+  唯一漏斗，所以「方向初现」不再依赖下一次打卡或整点兜底；
+- ``task_service.complete_step``（``steps_completed``）：打卡路径（覆盖任务/步骤/标签）。
+
 ## 可扩展性（"后续可以添加"）
 
 新增一枚奖章：在 ``BADGE_RULES`` 加一条 → 跑一次 ``python -m app.db.init_db``
@@ -241,8 +247,9 @@ def check_and_award(db: Session, user: User, event: Optional[str] = None) -> Lis
 def check_all_users(db: Session) -> int:
     """12.2 奖章结算定时任务用：遍历**全部用户 × 全部条件**，返回新发放数量。
 
-    不带 event（全量语义）—— 它是真正的"追认兜底"：任何绕过打卡/任务路径产生的
-    证据（例如标签由别的链路写入）都会在一小时内被认领。
+    不带 event（全量语义）—— 它是真正的"追认兜底"：正常情况下标签/打卡一发生
+    就已经由 ``apply_tags`` 或 ``complete_step`` 即时发放了，这里只兜住任何**绕过
+    那些入口**产生的证据（例如历史数据、脚本直接写库），所以它仍是必要的第二道。
     """
     users = db.exec(select(User).where(User.deleted_at.is_(None))).all()  # type: ignore[union-attr]
     count = 0

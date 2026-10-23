@@ -31,6 +31,10 @@ from app.models.test import TestQuestion, TestResult
 from app.models.user import User, utcnow
 from app.schemas.profile import ProfileFeedbackRequest, ProfileResponse, ProfileTagResponse
 from app.schemas.test import TestOption, TestQuestionResponse, TestResultResponse, TestSubmitRequest
+# 11.12 奖章即时评估用（见 _check_and_award_silently）。
+# 安全的模块级导入：badge_service 只 import models/schemas/utils，**不** import 本模块，
+# 所以不存在循环（与 task_service 里 `from app.services import badge_service` 同一做法）。
+from app.services import badge_service
 from app.utils.logger import get_logger, sanitize
 from app.utils.stage import (
     STAGE_EXPLORE,
@@ -335,6 +339,11 @@ async def submit_test(db: Session, user: User, payload: TestSubmitRequest) -> Te
     db.refresh(result)
     response = TestResultResponse.model_validate(result)
 
+    # 11.12：本次测评写的标签走的是 commit=False 的原子事务（apply_tags 里的钩子刻意
+    # 不在未提交时触发，见那里的说明），所以提交**之后**在这里补一次奖章评估 ——
+    # 否则"测评把标签数推到 6 条"的用户要等 badge_job 的整点兜底才点亮「方向初现」。
+    _check_and_award_silently(db, user.id)
+
     # 11.2 第 4 步：文字补充交给 DeepSeek 抽标签（7.8 画像回流，source="test"）。
     # 放在 commit 之后 = 与上面那个事务解耦：抽标签失败绝不能让"已经提交成功的测评"变成失败。
     if payload.free_text and payload.free_text.strip():
@@ -510,6 +519,43 @@ def list_tags_response(db: Session, user_id, dimension: Optional[str] = None) ->
     return [ProfileTagResponse.model_validate(t) for t in list_tags(db, user_id, dimension)]
 
 
+def _check_and_award_silently(db: Session, user_id) -> None:
+    """11.12 奖章即时评估：画像标签**数量发生变化**时的触发器（失败绝不打断主流程）。
+
+    为什么挂在这里：:func:`apply_tags` 是画像标签写入的**唯一漏斗**（7.8 回流统一
+    走它，全仓没有第二处 ``ProfileTag(...)`` / ``db.add(ProfileTag)``），所以在这
+    挂钩就同时覆盖了对话（chat_service）、面试复盘（interview_service）、每日一问
+    （daily_question_service）、测评与打卡反馈这几条会产生标签的链路。
+
+    修掉的用户可见 bug：上述链路原先**都不调** ``check_and_award``（只有
+    ``task_service.complete_step`` 调），而 ``GET /badge`` 的 ``obtained`` 取自
+    ``user_badges`` 发放记录、``progress`` 又是实时算的 —— 于是出现
+    "``profile_shape.progress`` 已是 6/6、``obtained`` 仍为 false、UI 写着还差 0 个
+    步骤" 的自相矛盾。现在标签一攒够就立刻评估，不必等下一次打卡，也不必等
+    ``badge_job.settle_badges`` 的整点兜底。
+
+    为什么包 try/except：奖章是**附加奖励**，绝不能因为评估自身出错（例如 ``badges``
+    种子没跑、库写锁）把"标签已经成功落库"的业务整体带崩（7.6 兜底风格）。失败只记
+    一条 warning，失败也不撤销任何已发奖章。
+
+    为什么回查 ``User``：``check_and_award(db, user, ...)`` 的签名要 user 实体（条件
+    计数都按 ``user.id``），而 ``apply_tags`` 只拿到 ``user_id``。
+
+    ⚠️ 不给 ``event`` 加"只评估某一枚奖章"的分支：``check_and_award`` 的设计就是
+    一次触发评估**全部**条件（badge_service 模块文档「事件只是触发器」），这里保持不动。
+    """
+    try:
+        user = db.get(User, user_id)
+        if user is None:
+            return
+        badge_service.check_and_award(db, user, event="tags_collected")
+    except Exception as exc:  # noqa: BLE001 - 兜底：奖章评估失败不影响标签写入
+        logger.warning(
+            "奖章即时评估失败（已忽略，不影响画像写入）user_id=%s err=%s", user_id, sanitize(exc)
+        )
+        db.rollback()
+
+
 def apply_tags(
     db: Session,
     user_id,
@@ -528,8 +574,12 @@ def apply_tags(
     - 已有标签：``new_weight = 0.6 * old + 0.4 * incoming``（新证据多则逐步抬高）
     - 新标签：直接写入
     - extra 合并保存 evidence，便于追溯来源
+
+    11.12 奖章：本函数末尾会在**新增了标签行**（= 标签数量真的变了）时立刻评估奖章，
+    见 :func:`_check_and_award_silently`。单纯融合已有标签（数量不变）不重复触发。
     """
     results: List[ProfileTag] = []
+    created = 0  # 本次真正新增的行数 —— 只有数量变化才需要重新评估奖章
     for raw in tags or []:
         label = str(raw.get("label") or "").strip()
         if not label:
@@ -557,6 +607,7 @@ def apply_tags(
                 extra=_merge_extra(None, evidence),
             )
             db.add(existing)
+            created += 1
         else:
             existing.weight = clamp01(0.6 * existing.weight + 0.4 * weight)
             existing.source = tag_source
@@ -575,6 +626,16 @@ def apply_tags(
 
     if results and recompute:
         recompute_stage(db, user_id, commit=commit)
+
+    # 11.12：标签**数量**变了（本次真的插入了新行）就立刻评估奖章。
+    # ⚠️ 只在 commit=True 时挂钩：commit=False 是"跨多步原子事务"的调用方
+    # （submit_test：写 test_results + profiles + profile_tags 必须同一个事务），
+    # 这里一旦调用 check_and_award，它内部的 award_badge 会自行 commit，
+    # 等于把还没写完的半成品事务提前落库。这类调用方在**自己提交之后**补一次评估
+    # （见 submit_test 末尾），语义一致。
+    if created and commit:
+        _check_and_award_silently(db, user_id)
+
     return results
 
 
@@ -796,6 +857,7 @@ async def extract_tags_from_text(
             variables={"history": extract_input, "last_user_message": extract_input[-200:]},
             schema=ProfileExtractResult,
             default=empty_profile_extract(),
+            max_tokens=2048,
         )
     except Exception as exc:  # noqa: BLE001 - 兜底：画像抽取失败不影响主流程
         logger.warning("画像抽取失败 user_id=%s err=%s", user_id, sanitize(exc))
