@@ -25,11 +25,19 @@ import { formatDate } from '@/utils/format'
  *
  * 2026-10 迭代 02：本页在 router/index.tsx 里是 **BlankLayout 的窄栏页**（448px 居中小列），
  *   所以**不套 PageShell 的 1040px 壳、不做两列**，整页是一列纵向卡片：
- *   1. 主角卡 = 阶段徽章 + 一句人话结论（你现在处在……，最该先做的是……）+ AI 解读 + 唯一主 CTA；
- *   2. 支撑卡 = 三项分数翻译成人话（每个维度一句判断 + 一根会从左长出来的进度条），不再堆数字表格；
- *   3. 弱化的「重新测评」退到页面底部一行 ghost。
+ *   1. 主角卡 = 阶段徽章 + 一句人话结论（你现在处在……，最该先做的是……）
+ *      + **一个放大到 display(34) 的分数** + 唯一主 CTA；
+ *   2. 支撑卡 = 另外两项分数（数字退到 headline-lg + 一句判断）；
+ *   3. 日期与「重新测评」收在支撑卡底部的同一行。
  *   页头由主角卡的 h1（text-headline-xl）承担，宽度交给布局窄栏，页面里不再自己收窄。
- * AI 解读沿用 ai-inset（左 3px 琥珀竖条 + 浅底 + 正文色）。
+ *
+ * 2026-10-22 方案 A（一个主角 = 一个数字）：
+ *   - 三个分数并列就没有主角，所以取**三项里最低的那一项**（= 这次先看的一块）
+ *     放到 text-display，其余两项退到支撑卡用 headline-lg；
+ *   - 赭金只落在这一个主角数字上，按钮保持墨色实心（与首页同一套行动色）；
+ *   - 删掉与主 CTA 语义重复的「接下来我会先给你一件小事做」解读块：屏幕只留一个结论；
+ *   - 高度账（390×844，BlankLayout 的 py-10 + 底部系统名约 120）：主角卡约 380 +
+ *     间隙 20 + 支撑卡约 270 = 670，可用约 724 —— 一屏放得下，主 CTA 不会被推出屏幕。
  * 数据来源与跳转目标与改前一致：结果仍取 GET /test/result，主 CTA 仍回工作台。
  */
 
@@ -55,7 +63,7 @@ type VerdictKey = Exclude<ScoreKey, 'total_score'>
 
 /**
  * 分数翻译成人话：每个维度只按低 / 中 / 高三档给一句判断，不展示成报表。
- * 数值本身仍在右侧以小字诚实保留（它来自后端，不是编的）。
+ * 数值本身仍然诚实保留（它来自后端，不是编的）。
  */
 const SCORE_VERDICT: Record<VerdictKey, [string, string, string]> = {
   clarity_score: [
@@ -211,23 +219,44 @@ export default function TestResultPage() {
     value: Math.round(result[item.key] ?? 0),
   }))
 
+  /*
+   * 主角数字：取三项里**最低**的那一项 —— 这一屏的结论是"最该先做什么"，
+   * 所以把最该补的一块放大，而不是把三个数字并列（并列等于没有主角）。
+   * 三项同分时取 SCORE_ITEMS 的第一项，结果是确定的，不随渲染顺序抖动。
+   */
+  const weakest = metrics.reduce((low, item) => (item.value < low.value ? item : low), metrics[0])
+  const others = metrics.filter((metric) => metric.key !== weakest.key)
+
   return (
-    <div data-print="main" className="flex w-full flex-col gap-6">
-      {/* 主角卡：阶段徽章 + 一句人话结论 + AI 解读 + 唯一主 CTA（页面的 h1 也在这里） */}
+    <div data-print="main" className="flex w-full flex-col gap-5">
+      {/* 主角卡：阶段 + 一句人话结论 + 一个放大的分数 + 唯一主 CTA */}
       <Reveal lg>
-        <Panel className="gap-5">
+        <Panel className="gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <StageBadge stage={stage} showStepper />
             <span className="text-caption text-caption-foreground">这次测评算出来的</span>
           </div>
 
           <h1 className="text-headline-xl font-bold tracking-tight text-primary">
-            你现在处在「{label}」，最该先做的是：{STAGE_FOCUS[stage]}
+            你现在处在「{label}」
           </h1>
+          <p className="text-body-lg text-on-surface-variant">最该先做的是：{STAGE_FOCUS[stage]}</p>
 
-          {/* AI 解读沿用 ai-inset（左 3px 琥珀竖条）+ 卡内浅底 + 正文色 */}
-          <div className="ai-inset rounded-lg bg-surface-container-low px-4 py-3 text-body-md text-on-surface">
-            接下来我会先给你一件小事做，做完这一件，方向会比现在清楚一点。
+          {/* 全屏唯一的主角：这一项分数用 display(34)，赭金只给它一处 */}
+          <div className="flex flex-col gap-2 border-t pt-4">
+            <div className="flex items-end justify-between gap-3">
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="text-caption text-caption-foreground">这次先看这一项</span>
+                <span className="text-headline-sm text-primary">{weakest.label}</span>
+              </div>
+              <div className="flex shrink-0 items-baseline gap-1">
+                <span className="text-display tabular-nums text-secondary">{weakest.value}</span>
+                <span className="text-body-sm text-on-surface-variant">/100</span>
+              </div>
+            </div>
+            <p className="text-body-sm text-on-surface-variant">
+              {verdictOf(weakest.key, weakest.value)}
+            </p>
           </div>
 
           <Button
@@ -241,33 +270,17 @@ export default function TestResultPage() {
         </Panel>
       </Reveal>
 
-      {/* 支撑卡：三项分数翻译成人话（一句判断 + 一根进度条） */}
+      {/* 支撑卡：另外两项（数字退到 headline-lg），日期与重测收在底边同一行 */}
       <Reveal delay={160}>
-        <Panel className="gap-5">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-headline-sm text-primary">这三项分数说明了什么</h2>
-            <p className="text-body-sm text-on-surface-variant">
-              分数只说明你现在站的位置，不评判你能走到哪。
-            </p>
-          </div>
+        <Panel className="gap-3">
+          <h2 className="text-headline-md text-primary">另外两项，一起看更准</h2>
 
           <ul className="flex flex-col gap-4">
-            {metrics.map((metric, index) => (
-              <li key={metric.label} className="flex flex-col gap-2">
+            {others.map((metric) => (
+              <li key={metric.label} className="flex flex-col gap-1">
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="text-body-md font-medium text-primary">{metric.label}</span>
-                  <span className="text-body-sm tabular-nums text-on-surface-variant">
-                    {metric.value}
-                  </span>
-                </div>
-                {/* 进度条规范：容器 bg-surface-container，指示条 bg-secondary，高 6px。
-                    它是"会从左长出来"的值条，用 grow-x；延迟到支撑卡基本就位（约 580ms）
-                    之后再逐条长，避免卡片淡入和三条生长同拍挤在一起。 */}
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-container">
-                  <div
-                    className="grow-x h-full rounded-full bg-secondary"
-                    style={{ width: metric.value + '%', animationDelay: `${580 + index * 160}ms` }}
-                  />
+                  <span className="text-headline-lg tabular-nums text-primary">{metric.value}</span>
                 </div>
                 <p className="text-body-sm text-on-surface-variant">
                   {verdictOf(metric.key, metric.value)}
@@ -276,15 +289,15 @@ export default function TestResultPage() {
             ))}
           </ul>
 
-          <p className="text-caption text-caption-foreground">测评时间：{formatDate(result.created_at)}</p>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+            <span className="text-caption text-caption-foreground">
+              测评时间：{formatDate(result.created_at)}
+            </span>
+            <Button variant="ghost" size="sm" className="motion-press" asChild>
+              <Link to={toTestIntroRetest()}>重新测评</Link>
+            </Button>
+          </div>
         </Panel>
-      </Reveal>
-
-      {/* 次要动作退到页面底部一行 */}
-      <Reveal delay={290} className="flex justify-center">
-        <Button variant="ghost" size="sm" className="motion-press" asChild>
-          <Link to={toTestIntroRetest()}>重新测评</Link>
-        </Button>
       </Reveal>
     </div>
   )

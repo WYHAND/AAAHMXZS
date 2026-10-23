@@ -29,12 +29,11 @@ const loginSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>
 
 /**
- * 字段样式（与全站表单同一套）：44px 高、白底、1px 描边、14px 圆角。
- * 旧版是「无边框 + 浅底 + 大圆角」，视觉上更像搜索框，已废弃。
+ * 字段样式（与全站表单同一套，方案 A）：44px 高、白底、1px 暖棕描边、12px 圆角（控件档）。
  * 聚焦：ring 2px primary/15 + 描边转 primary/30，只换色不改尺寸（不抖动）。
  */
 const FIELD_INPUT =
-  'h-11 rounded-[14px] border border-border bg-card px-3 text-body-md shadow-none placeholder:text-caption-foreground focus-visible:border-primary/30 focus-visible:ring-2 focus-visible:ring-primary/15'
+  'h-11 rounded-md border border-border bg-card px-3 text-body-md shadow-none placeholder:text-caption-foreground focus-visible:border-primary/30 focus-visible:ring-2 focus-visible:ring-primary/15'
 
 /** 出错态：描边转 destructive、聚焦 ring 同步转红；错误消失即移除 */
 const FIELD_INPUT_ERROR =
@@ -43,10 +42,12 @@ const FIELD_INPUT_ERROR =
 /**
  * 登录页（设计说明书 2.1、3.1 P0）；对接 POST /auth/login
  *
- * 版式（2026-10 收口，与首页同一套规格）：
+ * 版式（2026-10 收口，与首页同一套规格；2026-10-22 方案 A 抬字号）：
  * 这一页挂在 `BlankLayout` 的 448px 窄栏里，整屏就一张居中的主卡（Panel）：
- * 卡顶是产品名 + 一句人话（先回答「这是个什么产品」），下面才是表单。
+ * 卡顶是产品名（headline-xl 30）+ 一句人话（body-lg 16），下面才是表单。
+ * 表单是这一屏唯一的主角：标签 label-md、字段 44px、错误行 body-sm；
  * 整屏唯一的实心按钮是表单里的「登录」（warm/lg），切换注册的动作退到 ghost。
+ * 390×844 高度账：卡片约 400 + BlankLayout 的 py-10 与系统名约 120 = 520，放得下。
  *
  * 居中与画布色都归 BlankLayout（见 layouts/BlankLayout.tsx），页面里不再自己写
  * min-h-svh / justify-center —— 再包一层只会撑出多余滚动（TestIntroPage 同一口径）。
@@ -82,19 +83,19 @@ export default function LoginPage() {
   const reason = error ? (error === ERROR_TEXT[1001] ? '账号或密码不对，再检查一下' : error) : null
 
   return (
-    <Panel className="mx-auto w-full gap-6">
+    <Panel className="mx-auto w-full gap-4">
       {/* 身份头：卡片内先说清「这是什么产品」*/}
-      <header className="flex flex-col gap-2">
-        <span className="flex size-9 items-center justify-center rounded-lg bg-secondary-fixed text-on-secondary-fixed">
+      <header className="flex flex-col gap-1.5">
+        <span className="flex size-8 items-center justify-center rounded-lg bg-secondary-fixed text-on-secondary-fixed">
           <Sparkles className="size-4" aria-hidden />
         </span>
         <h1 className="text-headline-xl font-bold tracking-tight text-primary">AI 就业助手</h1>
-        <p className="text-body-md text-on-surface-variant">陪你找到下一步该做什么。</p>
+        <p className="text-body-lg text-on-surface-variant">陪你找到下一步该做什么。</p>
       </header>
 
-      <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="username" className="text-body-sm text-on-surface-variant">
+      <form className="flex flex-col gap-3" onSubmit={onSubmit} noValidate>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="username" className="text-label-md text-on-surface-variant">
             用户名
           </Label>
           <Input
@@ -106,12 +107,12 @@ export default function LoginPage() {
             {...register('username')}
           />
           {errors.username ? (
-            <p className="text-caption text-destructive">{errors.username.message}</p>
+            <p className="text-body-sm text-attention">{errors.username.message}</p>
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="password" className="text-body-sm text-on-surface-variant">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="password" className="text-label-md text-on-surface-variant">
             密码
           </Label>
           <Input
@@ -124,7 +125,7 @@ export default function LoginPage() {
             {...register('password')}
           />
           {errors.password ? (
-            <p className="text-caption text-destructive">{errors.password.message}</p>
+            <p className="text-body-sm text-attention">{errors.password.message}</p>
           ) : null}
         </div>
 
@@ -132,7 +133,7 @@ export default function LoginPage() {
         {reason ? (
           <p
             role="alert"
-            className="rounded-lg bg-surface-container-low px-3 py-2 text-body-sm text-destructive"
+            className="rounded-lg bg-surface-container-low px-3 py-2 text-body-sm text-attention"
           >
             {reason}
           </p>

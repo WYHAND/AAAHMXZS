@@ -83,7 +83,7 @@ export default function HomePage() {
   const [summary, setSummary] = useState<HomeSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
-  /** 「让 AI 先开口」请求在途：空态共用一个状态，防止连点建出多个空会话 */
+  /** 首页进对话的入口共用这一个在途状态（空态两个按钮 + 「聊一句」），防止连点建出多个空会话 */
   const [opening, setOpening] = useState(false)
   /** 同步重入闸：state 要等下一次渲染才生效，同一拍内的第二次点击靠它拦住 */
   const openingRef = useRef(false)
@@ -109,8 +109,19 @@ export default function HomePage() {
     void load()
   }, [load, version])
 
-  /** 空态统一的主动入口：先让 AI 开口，再带用户进对话页 */
-  const handleLetAiSpeak = useCallback(async () => {
+  /**
+   * 首页**所有**进 AI 对话的入口都走这里：先建一个**新会话**，再跳过去。
+   *
+   * 为什么不直接 `<Link to="/chat">`：那样落进的是"上一次那个会话"。用户是从首页
+   * 某条发现（或某个空态）点进来的，心里想的是"就这件事聊聊" —— 接着几天前那段
+   * 不相干的话往下说，等于没接住他这句话。
+   * 先建会话还顺手解决了跳转后闪一下的问题：进对话页时 activeId 已经就位，
+   * 不会先显示旧会话、再被换成新的。
+   *
+   * newConversation 失败时返回 null（接口层已经统一 toast 过），那时**不跳** ——
+   * 绝不切到一个并不存在的会话上。
+   */
+  const handleStartChat = useCallback(async () => {
     if (openingRef.current) return
     openingRef.current = true
     setOpening(true)
@@ -190,7 +201,12 @@ export default function HomePage() {
         {summary ? (
           <>
             <Reveal delay={0.3}>
-              <FocusStage action={action} ctaLabel={ctaLabel} focusedTask={focusedTask} />
+              <FocusStage
+                action={action}
+                ctaLabel={ctaLabel}
+                focusedTask={focusedTask}
+                onStartChat={() => void handleStartChat()}
+              />
             </Reveal>
 
             <Reveal delay={0.42}>
@@ -205,14 +221,14 @@ export default function HomePage() {
               />
             </Reveal>
 
-            <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-12">
+            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
               <Reveal delay={0.52} className="flex min-w-0 flex-col lg:col-span-7">
                 <FindingsPanel
                   findings={findings.slice(0, 2)}
                   tags={tags}
                   tested={tested}
                   opening={opening}
-                  onLetAiSpeak={() => void handleLetAiSpeak()}
+                  onStartChat={() => void handleStartChat()}
                 />
               </Reveal>
 
@@ -224,7 +240,7 @@ export default function HomePage() {
                   activity={summary.activity ?? []}
                   tasks={tasks}
                   otherTasks={otherTasks}
-                  onLetAiSpeak={() => void handleLetAiSpeak()}
+                  onStartChat={() => void handleStartChat()}
                 />
               </Reveal>
             </div>
@@ -287,10 +303,12 @@ function FocusStage({
   action,
   ctaLabel,
   focusedTask,
+  onStartChat,
 }: {
   action: FocusAction
   ctaLabel: string
   focusedTask: HomeOngoingTask | null
+  onStartChat: () => void
 }) {
   const reduce = useReducedMotion()
   const [hovering, setHovering] = useState(false)
@@ -324,7 +342,7 @@ function FocusStage({
     >
       <motion.div
         aria-hidden
-        className="pointer-events-none absolute -right-24 -top-28 size-80 rounded-full bg-secondary-fixed/25 blur-3xl"
+        className="pointer-events-none absolute -right-24 -top-28 size-80 rounded-full bg-secondary/15 blur-3xl"
         animate={{ x: [0, -28, 0], y: [0, 22, 0] }}
         transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
       />
@@ -339,7 +357,7 @@ function FocusStage({
       <div className="relative z-10 flex flex-col gap-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="inline-flex items-center gap-2 text-caption font-semibold tracking-wide text-on-primary/80">
-            <span className="size-1.5 rounded-full bg-secondary-fixed" aria-hidden />
+            <span className="size-1.5 rounded-full bg-secondary" aria-hidden />
             今日焦点
           </span>
           <span className="inline-flex items-center gap-1 text-caption text-on-primary/60">
@@ -362,17 +380,34 @@ function FocusStage({
           )}
 
           <div className="flex shrink-0 flex-col gap-2 md:items-end">
-            <Button
-              asChild
-              variant="warm"
-              size="lg"
-              className="group bg-on-primary text-primary transition-transform hover:bg-surface-container active:scale-[0.98]"
-            >
-              <Link to={action.route}>
+            {/*
+              去向是 AI 对话时，这一下也走「先建新会话再过去」—— 和页面上另外两个
+              对话入口是同一条规矩：焦点任务跟着用户**现在**的困惑走，接着旧会话聊接不上。
+              其它去向仍然是普通跳转（`asChild + Link`）。
+            */}
+            {action.route.startsWith('/chat') ? (
+              <Button
+                variant="warm"
+                size="lg"
+                onClick={onStartChat}
+                className="group bg-on-primary text-primary transition-transform hover:bg-surface-container active:scale-[0.98]"
+              >
                 {ctaLabel}
                 <ArrowRight className="transition-transform duration-300 group-hover:translate-x-1" />
-              </Link>
-            </Button>
+              </Button>
+            ) : (
+              <Button
+                asChild
+                variant="warm"
+                size="lg"
+                className="group bg-on-primary text-primary transition-transform hover:bg-surface-container active:scale-[0.98]"
+              >
+                <Link to={action.route}>
+                  {ctaLabel}
+                  <ArrowRight className="transition-transform duration-300 group-hover:translate-x-1" />
+                </Link>
+              </Button>
+            )}
             <span className="text-caption text-on-primary/60">支持随时暂存，无打卡压力</span>
           </div>
         </div>
@@ -410,7 +445,7 @@ function StepPath({
         <span aria-hidden className="absolute inset-x-3.5 top-1/2 h-px -translate-y-1/2 bg-on-primary/15" />
         <motion.span
           aria-hidden
-          className="absolute inset-x-3.5 top-1/2 h-px -translate-y-1/2 origin-left bg-secondary-fixed"
+          className="absolute inset-x-3.5 top-1/2 h-px -translate-y-1/2 origin-left bg-secondary"
           initial={{ scaleX: 0 }}
           animate={{ scaleX: fill }}
           transition={{ duration: 0.9, delay: 0.5, ease: EASE }}
@@ -431,7 +466,7 @@ function StepPath({
               <motion.span
                 className={cn(
                   'relative flex size-7 items-center justify-center rounded-full text-caption font-semibold tabular-nums',
-                  status === 'done' && 'bg-secondary-fixed text-on-secondary-fixed',
+                  status === 'done' && 'bg-secondary text-white',
                   status === 'current' && 'bg-on-primary text-primary',
                   status === 'todo' && 'bg-primary text-on-primary/55 ring-1 ring-inset ring-on-primary/25',
                 )}
@@ -515,7 +550,7 @@ function DailyBand({
       </div>
 
       {question ? (
-        <h2 className="max-w-3xl text-headline-lg font-semibold tracking-tight text-primary">「{question}」</h2>
+        <h2 className="max-w-3xl text-headline-xl font-bold tracking-tight text-primary">「{question}」</h2>
       ) : (
         <p className="text-body-md text-on-surface-variant">今天的问题还在生成，先去和我说说最近在忙什么也行。</p>
       )}
@@ -600,13 +635,13 @@ function FindingsPanel({
   tags,
   tested,
   opening,
-  onLetAiSpeak,
+  onStartChat,
 }: {
   findings: HomeAiFinding[]
   tags: HomeTag[]
   tested: boolean
   opening: boolean
-  onLetAiSpeak: () => void
+  onStartChat: () => void
 }) {
   // 信号条的归一化基准：取这批发现里最大的证据强度（至少 1，避免除零）
   const maxWeight = Math.max(1, ...findings.map((finding) => Number(finding.weight) || 0))
@@ -617,8 +652,10 @@ function FindingsPanel({
     <Panel className="flex-1 gap-6 p-6">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-primary">
-          <Sparkles className="size-[18px]" aria-hidden />
-          <span className="text-headline-sm">AI 发现与画像动态</span>
+          <Sparkles className="size-[18px] text-secondary" aria-hidden />
+          <span className="text-headline-md">
+            {findings.length ? `你最近卡在「${findings[0].label}」` : 'AI 发现与画像动态'}
+          </span>
         </div>
         <Link
           to="/profile"
@@ -630,8 +667,8 @@ function FindingsPanel({
       </div>
 
       {hasWeights ? (
-        <div className="rounded-lg bg-signal-soft p-3">
-          <ProfileRadar tags={tags} compact tone="signal" />
+        <div className="rounded-lg bg-surface-inset p-3">
+          <ProfileRadar tags={tags} compact tone="accent" />
         </div>
       ) : null}
 
@@ -654,11 +691,11 @@ function FindingsPanel({
                   label={finding.label}
                   value={finding.weight}
                   max={maxWeight}
-                  tone="signal"
+                  tone="accent"
                   meta={sourceLabel ?? undefined}
                 />
                 {finding.reason ? (
-                  <p className="line-clamp-1 text-caption text-on-surface-variant">
+                  <p className="line-clamp-1 text-body-sm text-on-surface-variant">
                     {stripNoticePrefix(finding.reason)}
                   </p>
                 ) : null}
@@ -672,11 +709,11 @@ function FindingsPanel({
           description="让我先问你一句，你的回答会变成这里的第一条发现。"
           action={
             <div className="flex flex-wrap items-center justify-center gap-2">
-              <Button variant="outline" size="sm" disabled={opening} onClick={onLetAiSpeak}>
+              <Button variant="outline" size="sm" disabled={opening} onClick={onStartChat}>
                 {opening ? '正在让 AI 开口…' : '让 AI 先开口'}
               </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link to="/chat">和 AI 聊聊</Link>
+              <Button variant="ghost" size="sm" disabled={opening} onClick={onStartChat}>
+                和 AI 聊聊
               </Button>
             </div>
           }
@@ -684,16 +721,24 @@ function FindingsPanel({
       )}
 
       <div className="mt-auto flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3 rounded-lg bg-signal-soft px-4 py-3">
+        <div className="flex items-center justify-between gap-3 rounded-lg bg-secondary-fixed px-4 py-3">
           <div className="flex min-w-0 items-center gap-2.5 text-on-surface-variant">
-            <MessageSquare className="size-[18px] shrink-0 text-signal" aria-hidden />
+            <MessageSquare className="size-[18px] shrink-0 text-secondary" aria-hidden />
             <span className="text-body-sm text-on-surface">想对上面的分析提出修正或聊聊困惑吗？</span>
           </div>
-          <Button asChild variant="ghost" size="sm" className="shrink-0 text-primary">
-            <Link to="/chat">
-              聊一句
-              <ArrowRight className="size-3.5" aria-hidden />
-            </Link>
+          {/*
+            「聊一句」= 开一个新会话再过去，不是跳回上一段对话：
+            他指着上面某条发现说"这个不对/我不太懂"，那是一句新的开场白。
+          */}
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={opening}
+            onClick={onStartChat}
+            className="shrink-0 text-secondary"
+          >
+            {opening ? '正在打开…' : '聊一句'}
+            <ArrowRight className="size-3.5" aria-hidden />
           </Button>
         </div>
         {!tested ? (
@@ -712,7 +757,7 @@ function ProgressPanel({
   activity,
   tasks,
   otherTasks,
-  onLetAiSpeak,
+  onStartChat,
 }: {
   completedTasks: number
   completedSteps: number
@@ -720,13 +765,13 @@ function ProgressPanel({
   activity: HomeActivityPoint[]
   tasks: HomeOngoingTask[]
   otherTasks: HomeOngoingTask[]
-  onLetAiSpeak: () => void
+  onStartChat: () => void
 }) {
   return (
     <Panel className="flex-1 gap-6 p-6">
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <span className="text-headline-sm text-primary">成长节律</span>
+          <span className="text-headline-md text-primary">你已经走了 {activeDays} 天</span>
           <span className="text-caption text-on-surface-variant">按微步前进中</span>
         </div>
 
@@ -770,7 +815,7 @@ function ProgressPanel({
       <div className="flex flex-1 flex-col gap-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-headline-sm text-primary">其它任务</span>
+            <span className="text-headline-md text-primary">其它任务</span>
             {otherTasks.length ? (
               /* 绿底绿字第一版实拍发虚（浅绿底 + 绿字，"1"几乎看不出来）：底回到中性浅灰，
                  绿只落在数字上——状态色要么是底要么是字，不要同时是两者。 */
@@ -789,7 +834,7 @@ function ProgressPanel({
             title="现在没有进行中的任务"
             description="任务要有对话结论才能生成，我先问你第一个问题。"
             action={
-              <Button variant="outline" size="sm" onClick={onLetAiSpeak}>
+              <Button variant="outline" size="sm" onClick={onStartChat}>
                 让 AI 先开口
               </Button>
             }
@@ -850,9 +895,9 @@ function TaskRow({ task, index }: { task: HomeOngoingTask; index: number }) {
           label={`${percent}%`}
           size={60}
           stroke={6}
-          /* 状态色：一步都没走的任务给克制红（一屏最多一处，这里靠 0/4 天然互斥），
-             已经在走的给语义蓝；不等于"好/坏"，只是让"停着的那个"先被看见。 */
-          tone={task.done_steps > 0 ? 'signal' : 'wait'}
+          tone="accent"
+          /* 赭金一律表示"正在走的那个"；一步没走的任务**不额外上红**—— */
+          /* 预览图里没有红色，靠"0/4"和文案本身已经说清楚。 */
           className="shrink-0"
         />
         <div className="min-w-0 flex-1 space-y-1">

@@ -75,15 +75,16 @@ function ChoiceRow({
 /**
  * 任务详情与打卡（设计说明书 3.2 ③）
  *
- * 版式（2026-10 前端迭代 02）：
- * - 页头走 PageShell，**任务名只在页头出现一次**（页面标题）；主角卡不再重复整句任务名，
- *   改成一句进度人话（"刚好开头 / 已经过半 / 就差最后一步"）——标题已经说过"做什么"，
- *   卡上该回答的是"走到哪了、下一步干嘛"。
- * - 主角卡承担这一页唯一的进度条（＋「已完成 n/m 步」这一处读数）：进度人话
- *   + 关联痛点 chip（与列表页同一写法）+ 当前步指引 + 主按钮「完成这一步」；
- * - 步骤列表**放在主角卡下方**（左 7 列），右侧 5 列只放「为什么值得做」，
- *   没有这句价值说明时步骤列表自己铺满，不留一个空列；
- * - 放弃 / 删除退到页面最下方一行，用 destructive 文字色、与主内容拉开距离；
+ * 版式（2026-10 前端迭代 02，2026-10-22 方案 A 收口）：
+ * - 页头走 PageShell，**任务名只在页头出现一次**（页面标题）；主角卡不再重复整句任务名。
+ * - 主角卡 = 这一屏的主角「当前这一步 + 主按钮」：步骤名 24px 立起来，说明 15px，
+ *   唯一的实心 CTA「完成这一步」贴在同一块右侧；进度条（全页唯一的赭金）退到下面，
+ *   和「已完成 n/m 步」＋一句进度人话并排成一行 14px 读数；
+ * - 步骤列表**放在主角卡下方**（左 7 列），右侧 5 列只放「为什么值得做」＋「关联痛点」，
+ *   没有这句价值说明时步骤列表自己铺满，不留一个空列；两列等高（grid 默认 stretch），
+ *   两卡的标题都只留一个 h2（24px）：左卡「还剩 n 步没走」是结论句，右卡「为什么值得做」
+ *   本身就是栏目名 —— 比"一边 eyebrow 一边 h2"少一层、两卡标题基线自然对齐；
+ * - 放弃 / 删除退到页面最下方一行，平时中性字、悬停才泛红，与主内容拉开距离；
  *   二次确认仍走 TaskAbandonDialog / TaskDeleteDialog（与列表页共用，逻辑一个字没改）。
  *
  * 动效（统一语汇，只增不改）：主角卡 / 两列 / 页脚分三段上浮进场；
@@ -198,7 +199,7 @@ export default function TaskDetailPage() {
     <PageShell
       title={task.title}
       badge={
-        <Badge variant="outline" className="rounded-full font-normal">
+        <Badge variant="outline" className="rounded-full font-normal text-caption">
           {task.status}
         </Badge>
       }
@@ -214,13 +215,15 @@ export default function TaskDetailPage() {
       }
     >
       {/* 主角卡：这一页唯一的进度条与唯一的实心 CTA 都在这里，首屏就能看到。
-          任务名已经在页头当过标题，这里不再重复，改成一句进度人话 + 唯一的进度条。 */}
+          一屏一个主角 = 「当前这一步 + 主按钮」：步骤名抬到 24px 立起来，
+          进度条（全页唯一的赭金）退到它下面当读数。
+          内边距比普通卡大一档（p-6 / p-8）：靠留白把它从下面的步骤清单里托起来。 */}
       <Reveal lg>
-        <Panel data-print="card" className="gap-5">
-          {/* 顶部一行：身份标签（状态点）+ 成本读数；步数读数贴到进度条下面，别拆成两件事 */}
+        <Panel data-print="card" className="gap-6 p-6 md:p-8">
+          {/* 顶部一行：身份标签（墨点，不进赭金）+ 成本读数 */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="inline-flex items-center gap-2 text-caption tracking-wide text-caption-foreground">
-              <span className="size-1.5 rounded-full bg-secondary" aria-hidden />
+              <span className="size-1.5 rounded-full bg-primary" aria-hidden />
               你正在做的这一件
             </span>
             {task.difficulty || task.estimated_days ? (
@@ -240,51 +243,21 @@ export default function TaskDetailPage() {
             ) : null}
           </div>
 
-          {/* 一句人话：标题说了"做什么"，这里只回答"走到哪了" */}
-          <p className="max-w-[42ch] text-headline-sm text-primary">
-            {heroLine(doneSteps, total)}
-          </p>
-
-          {/* 关联痛点：与列表页同一写法的小 chip（浅桃 + 图标 + rounded-full），
-              不再铺成整条浅底横条 —— 一条横条会读成"这一块的内容" */}
-          {task.pain_point ? (
-            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-secondary-fixed px-3 py-1 text-body-sm text-on-secondary-fixed">
-              <Tag className="size-3.5" aria-hidden />
-              关联痛点：{task.pain_point}
-            </span>
-          ) : null}
-
-          {/* 唯一的进度条：grow-x 从左长出来（值更新时组件自己的 transition 接管）；
-              步数读数就贴在条下面，读"量"不跑第二处 */}
-          <div className="flex flex-col gap-2">
-            <Progress
-              value={percent}
-              aria-label={'已完成 ' + percent + '%'}
-              className="grow-x h-1.5 bg-surface-container [&>[data-slot=progress-indicator]]:bg-secondary"
-            />
-            <span className="text-body-sm tabular-nums text-on-surface-variant">
-              {total ? (
-                <>
-                  已完成 <span className="font-medium text-primary">{doneSteps}</span>/{total} 步
-                </>
-              ) : (
-                '步骤还在拆解，很快就能开始'
-              )}
-            </span>
-          </div>
-
-          {/* 当前步与主 CTA：点主按钮走打卡弹窗（步骤组件的现有行为，一个字没改） */}
-          <div className="flex flex-col gap-3 border-t border-outline-variant/40 pt-4 md:flex-row md:items-start md:justify-between">
-            <div className="flex min-w-0 flex-col gap-1.5">
+          {/* 当前步与主 CTA：这一屏的主角。步骤名是卡内的结论句（20 → 24 抬一档，
+              压过下面的进度读数），说明留在 15px，按钮是唯一的实心块；
+              点主按钮走打卡弹窗（行为一个字没改） */}
+          <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between md:gap-8">
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
               {activeStep ? (
                 <>
-                  <span className="text-body-sm text-on-surface-variant">
-                    现在做：第 {activeStep.step_order} 步 · {activeStep.title}
+                  <span className="text-caption tracking-wide text-caption-foreground">
+                    现在做 · 第 {activeStep.step_order} 步
                   </span>
+                  <h2 className="text-headline-lg text-balance text-primary">{activeStep.title}</h2>
                   {activeStep.action ? (
-                    <p className="text-body-md text-on-surface">{activeStep.action}</p>
+                    <p className="max-w-[52ch] text-body-md text-on-surface">{activeStep.action}</p>
                   ) : (
-                    <p className="text-body-md text-on-surface-variant">
+                    <p className="max-w-[52ch] text-body-md text-on-surface-variant">
                       这一步没有额外说明，按标题做就行，做完打个卡。
                     </p>
                   )}
@@ -293,17 +266,17 @@ export default function TaskDetailPage() {
                       href={resourceLink.href}
                       target="_blank"
                       rel="noreferrer"
-                      className="motion-press inline-flex w-fit items-center gap-1.5 rounded-full bg-surface-container px-3 py-1 text-body-sm text-primary hover:bg-surface-container-high"
+                      className="motion-press mt-0.5 inline-flex w-fit max-w-full items-center gap-1.5 rounded-full bg-surface-container px-3 py-1 text-body-sm text-primary hover:bg-surface-container-high"
                     >
-                      {resourceLink.label}
-                      <ExternalLink className="size-3.5" />
+                      <span className="min-w-0 break-words">{resourceLink.label}</span>
+                      <ExternalLink className="size-3.5 shrink-0" />
                     </a>
                   ) : null}
                 </>
               ) : (
-                <span className="text-body-sm text-on-surface-variant">
+                <p className="text-body-md text-on-surface-variant">
                   步骤还在生成中，先看看上面的任务说明。
-                </span>
+                </p>
               )}
             </div>
 
@@ -318,24 +291,61 @@ export default function TaskDetailPage() {
                 >
                   {activeStep.completed ? '这一步已完成' : '完成这一步'}
                 </Button>
-                {/* 只在"这一步已完成"时才需要一句指路；原来那句"点两下就好，不用写小作文。"已删 */}
+                {/* 只在"这一步已完成"时才需要一句指路；这句是承载信息的，不能落到 13px */}
                 {activeStep.completed ? (
-                  <span className="text-caption text-caption-foreground">
+                  <span className="max-w-[30ch] text-body-sm text-on-surface-variant">
                     在下面点一个还没开始的步骤，就能继续。
                   </span>
                 ) : null}
               </div>
             ) : null}
           </div>
+
+          {/* 进度：全页唯一的一处赭金（细条）。步数读数与那句人话并排，都在 14px 这一档 */}
+          <div className="flex flex-col gap-2 border-t border-outline-variant/40 pt-5">
+            <Progress
+              value={percent}
+              aria-label={'已完成 ' + percent + '%'}
+              className="grow-x h-1.5 bg-surface-container [&>[data-slot=progress-indicator]]:bg-secondary"
+            />
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-body-sm text-on-surface-variant">
+              <span className="tabular-nums">
+                {total ? (
+                  <>
+                    已完成 <span className="font-medium text-primary">{doneSteps}</span>/{total} 步
+                  </>
+                ) : (
+                  '步骤还在拆解，很快就能开始'
+                )}
+              </span>
+              {total ? <span className="min-w-0">{heroLine(doneSteps, total)}</span> : null}
+            </div>
+          </div>
+
+          {/* 「关联痛点」不在这里：它解释的是"为什么值得做"，已随价值说明移到右卡，
+              主角卡底部只留进度这一行，不额外撑高 */}
         </Panel>
       </Reveal>
 
-      {/* 步骤列表（左 7）与「为什么值得做」（右 5）；没有价值说明时步骤铺满，不留空列 */}
+      {/* 步骤列表（左 7）与「为什么值得做」（右 5）；没有价值说明时步骤铺满，不留空列。
+          这里不用 items-start：默认 stretch 让两卡等高、底边齐平 */}
       <Reveal delay={290}>
-        <div className={cn('grid items-start gap-6', task.value_note ? 'lg:grid-cols-12' : undefined)}>
+        <div className={cn('grid gap-6', task.value_note ? 'lg:grid-cols-12' : undefined)}>
           <Panel data-print="card" className={cn('gap-4', task.value_note ? 'lg:col-span-7' : undefined)}>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-headline-sm text-primary">任务步骤</span>
+            {/* 标题只留一个 h2（与右卡同一档 24px）；"任务步骤"这个栏目名不再单占一行 eyebrow */}
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <h2 className="min-w-0 text-headline-md text-primary">
+                {total
+                  ? doneSteps >= total
+                    ? '这一步一步都走完了'
+                    : `还剩 ${total - doneSteps} 步没走`
+                  : '步骤还在拆解'}
+              </h2>
+              {total ? (
+                <span className="shrink-0 text-body-sm tabular-nums text-on-surface-variant">
+                  共 {total} 步
+                </span>
+              ) : null}
             </div>
 
             {total ? (
@@ -352,23 +362,38 @@ export default function TaskDetailPage() {
           </Panel>
 
           {task.value_note ? (
-            <Panel data-print="card" className="gap-3 lg:col-span-5">
-              <h2 className="text-headline-sm text-primary">这个任务为什么值得做</h2>
-              <p className="text-body-md text-on-surface">{task.value_note}</p>
+            /* 与左卡等高（gap-6 是最小间距）：
+               - h2「为什么值得做」是栏目名本身，和左卡结论句同一档，两卡首行基线对齐；
+               - 价值说明与「关联痛点」chip 用 justify-between 把剩余空白**均分**，
+                 短文案时不会把两百多像素全堆在卡底。
+               痛点从主角卡搬来：它回答的是"为什么值得做"，不是当前进度。 */
+            <Panel data-print="card" className="h-full justify-between gap-6 lg:col-span-5">
+              <h2 className="text-headline-md text-primary">为什么值得做</h2>
+              <p className="text-body-lg text-on-surface">{task.value_note}</p>
+              {task.pain_point ? (
+                <div>
+                  {/* 中性浅底 chip（与列表页同一写法），赭金留给主角卡的进度条 */}
+                  <span className="inline-flex w-fit max-w-full items-center gap-1.5 rounded-full bg-surface-inset px-3 py-1 text-body-sm text-on-surface-variant">
+                    <Tag className="size-3.5 shrink-0" aria-hidden />
+                    关联痛点：{task.pain_point}
+                  </span>
+                </div>
+              ) : null}
             </Panel>
           ) : null}
         </div>
       </Reveal>
 
-      {/* 放弃 / 删除：破坏性动作统一用 destructive 文字色，并退到页面最下方、与主内容拉开距离
-          （mt-6 叠在 PageShell 的 24px 节奏之上 = 48px），二次确认仍与列表页共用同一套弹窗 */}
+      {/* 放弃 / 删除：破坏性动作退到页面最下方、与主内容拉开距离；平时是中性字，
+          只在悬停时泛红（attention 是"真正的错误/危险"色，不做常驻的红字）。
+          二次确认仍与列表页共用同一套弹窗 */}
       <Reveal delay={650} className="mt-6">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
           {canAbandon ? (
             <Button
               variant="ghost"
               size="sm"
-              className="motion-press px-0 text-body-sm text-destructive hover:bg-transparent hover:text-destructive/75"
+              className="motion-press px-0 text-body-sm text-on-surface-variant hover:bg-transparent hover:text-attention"
               onClick={() => setAbandonOpen(true)}
             >
               放弃这个任务
@@ -377,7 +402,7 @@ export default function TaskDetailPage() {
           <Button
             variant="ghost"
             size="sm"
-            className="motion-press gap-1 px-0 text-body-sm text-destructive hover:bg-transparent hover:text-destructive/75"
+            className="motion-press gap-1 px-0 text-body-sm text-on-surface-variant hover:bg-transparent hover:text-attention"
             onClick={() => setDeleteOpen(true)}
           >
             <Trash2 className="size-3.5" />

@@ -26,6 +26,11 @@ import { cn } from '@/lib/utils'
  *
  * 文案分工（2026-10）：placeholder = 怎么写（示例），helper 行 = 规则/说明，
  * 错误行 = 具体哪里没对。三者不复用同一句话。
+ *
+ * 2026-10-22 方案 A：表单是这屏唯一的主角 —— 标签 label-md、字段 44px、
+ * 规则行与错误行都抬到 body-sm(14)（承载信息的最低档，caption 不承载信息）。
+ * 高度账（390×844，BlankLayout 的 py-10 + 系统名约 120）：卡片约 700，总高约 820，
+ * 因此把卡内 gap 从 24 收到 16、字段组 gap 从 8 收到 6，保证按钮不被推出屏幕。
  */
 const registerSchema = z
   .object({
@@ -49,9 +54,9 @@ const registerSchema = z
 
 type RegisterForm = z.infer<typeof registerSchema>
 
-/** 字段样式与登录页同一份：44px 高、白底、1px 描边、14px 圆角 */
+/** 字段样式与登录页同一份：44px 高、白底、1px 暖棕描边、12px 圆角（控件档） */
 const FIELD_INPUT =
-  'h-11 rounded-[14px] border border-border bg-card px-3 text-body-md shadow-none placeholder:text-caption-foreground focus-visible:border-primary/30 focus-visible:ring-2 focus-visible:ring-primary/15'
+  'h-11 rounded-md border border-border bg-card px-3 text-body-md shadow-none placeholder:text-caption-foreground focus-visible:border-primary/30 focus-visible:ring-2 focus-visible:ring-primary/15'
 
 /** 出错态：描边转 destructive、聚焦 ring 同步转红；错误消失即移除 */
 const FIELD_INPUT_ERROR =
@@ -96,19 +101,19 @@ export default function RegisterPage() {
     : null
 
   return (
-    <Panel className="mx-auto w-full gap-6">
+    <Panel className="mx-auto w-full gap-4">
       {/* 身份头：与登录页同构，卡片内先说清「这是什么产品」*/}
-      <header className="flex flex-col gap-2">
-        <span className="flex size-9 items-center justify-center rounded-lg bg-secondary-fixed text-on-secondary-fixed">
+      <header className="flex flex-col gap-1.5">
+        <span className="flex size-8 items-center justify-center rounded-lg bg-secondary-fixed text-on-secondary-fixed">
           <Sparkles className="size-4" aria-hidden />
         </span>
         <h1 className="text-headline-xl font-bold tracking-tight text-primary">AI 就业助手</h1>
-        <p className="text-body-md text-on-surface-variant">陪你找到下一步该做什么。</p>
+        <p className="text-body-lg text-on-surface-variant">陪你找到下一步该做什么。</p>
       </header>
 
-      <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="username" className="text-body-sm text-on-surface-variant">
+      <form className="flex flex-col gap-3" onSubmit={onSubmit} noValidate>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="username" className="text-label-md text-on-surface-variant">
             用户名
           </Label>
           <Input
@@ -122,14 +127,14 @@ export default function RegisterPage() {
           />
           {/* 规则不再塞进 placeholder：占位符只给示例，规则固定在字段下方 */}
           {errors.username ? (
-            <p className="text-caption text-destructive">{errors.username.message}</p>
+            <p className="text-body-sm text-attention">{errors.username.message}</p>
           ) : (
-            <p className="text-caption text-caption-foreground">登录用，3 个字符以上</p>
+            <p className="text-body-sm text-on-surface-variant">登录用，3 个字符以上</p>
           )}
         </div>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="school" className="text-body-sm text-on-surface-variant">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="school" className="text-label-md text-on-surface-variant">
             学校（可选）
           </Label>
           <Input
@@ -141,14 +146,14 @@ export default function RegisterPage() {
             {...register('school')}
           />
           {errors.school ? (
-            <p className="text-caption text-destructive">{errors.school.message}</p>
+            <p className="text-body-sm text-attention">{errors.school.message}</p>
           ) : (
-            <p className="text-caption text-caption-foreground">填了方便后面给针对性建议</p>
+            <p className="text-body-sm text-on-surface-variant">填了方便后面给针对性建议</p>
           )}
         </div>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="password" className="text-body-sm text-on-surface-variant">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="password" className="text-label-md text-on-surface-variant">
             密码
           </Label>
           <Input
@@ -161,14 +166,14 @@ export default function RegisterPage() {
             {...register('password')}
           />
           {errors.password ? (
-            <p className="text-caption text-destructive">{errors.password.message}</p>
+            <p className="text-body-sm text-attention">{errors.password.message}</p>
           ) : (
-            <p className="text-caption text-caption-foreground">至少 6 位</p>
+            <p className="text-body-sm text-on-surface-variant">至少 6 位</p>
           )}
         </div>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="confirm" className="text-body-sm text-on-surface-variant">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="confirm" className="text-label-md text-on-surface-variant">
             确认密码
           </Label>
           <Input
@@ -181,9 +186,9 @@ export default function RegisterPage() {
             {...register('confirm')}
           />
           {errors.confirm ? (
-            <p className="text-caption text-destructive">{errors.confirm.message}</p>
+            <p className="text-body-sm text-attention">{errors.confirm.message}</p>
           ) : (
-            <p className="text-caption text-caption-foreground">和上面一致就行</p>
+            <p className="text-body-sm text-on-surface-variant">和上面一致就行</p>
           )}
         </div>
 
@@ -191,7 +196,7 @@ export default function RegisterPage() {
         {reason ? (
           <p
             role="alert"
-            className="rounded-lg bg-surface-container-low px-3 py-2 text-body-sm text-destructive"
+            className="rounded-lg bg-surface-container-low px-3 py-2 text-body-sm text-attention"
           >
             {reason}
           </p>

@@ -112,21 +112,25 @@ function optionTexts(raw: TodayQuestion['question']['options']): string[] {
  * 历史是**只读列表**：顺序完全沿用后端（倒序），前端不排序、不翻页；
  * 拿不到历史只影响历史区（降级成空态），不影响上面那道今日问题。
  *
- * 版式（前端迭代 02，对齐首页 / 设计系统-页面规范.md）：
- * - 一屏一个主角：今天这一道是唯一带实心 CTA 的大卡，卡内左右两栏 ——
- *   左边是**那句人话**（题干 + 状态 + 连着写了几天），右边是唯一的行为区
+ * 版式（前端迭代 02，2026-10-22 方案 A 收口）：
+ * - 一屏一个主角 = **今天的问题**：30px 题干 + 卡左侧那道 3px 赭金竖条（全屏唯一一处赭金），
+ *   卡内左右两栏 —— 左边是题干 + 状态 + 连着写了几天，右边是唯一的行为区
  *   （提示 chip / 输入区 / 提交）。这样 1040px 的卡不再是一整行空白。
- * - 其余内容两列 7/5 支撑（左历史、右节奏），**不做**等高卡片一路堆下去。
+ * - 其余内容两列 7/5 支撑（左历史、右节奏），两列**顶边与下沿都对齐**：
+ *   grid 默认 stretch，较矮的一侧用 `flex-1` 吃满行高（空态只有一张右卡时也一样），
+ *   空白留在卡内（`justify-between` 分配），不留在卡片外部的右下方。
  * - 两个状态分清：**未答**只给输入区与提交按钮；**已答**只回显自己写下的那句
  *   加**一句**人话反馈（同义的话只说一次），不再出现输入框与提交按钮。
- * - 字号按语义阶（页头由 PageShell / PageHeader 出；题目沿用首页今日一问的
- *   headline-lg、区块标题 headline-sm、正文 body-md、说明 body-sm、装饰 caption）。
+ * - 字号按语义阶（页头由 PageShell / PageHeader 出；题干 headline-xl、卡内标题
+ *   headline-md、正文 body-md、说明 body-sm、装饰 caption）。
  * - 历史默认只铺最近几条，其余用 ghost 的「看全部」**就地展开**（同样的条目，只是不再折起来）；
  *   卡底那一行同时收着「想接着聊聊」的真链接（不再孤悬在整页最底部居中）。
  *
  * 动效（统一动效语汇，只增不改）：
  * - 主角卡 `<Reveal lg>`（640ms）先上浮；两列支撑与历史行**错开起点**跟上
  *   （250 / 360 + staggerDelay(i) / 430ms），同一刻最多三处在动；
+ *   两列支撑**统一用 `fade`**（纯淡入、不上浮）：rise-in 的 10px 位移会让两列
+ *   在进场那一秒里看起来上下错位，左右错开只靠 delay 表达；
  *   历史行用 `<Reveal as="li">`，错峰只在开头几项上体现（staggerDelay 封顶）。
  * - 可点的 chip 加 `motion-lift` + `motion-press`，按钮加 `motion-press`。
  * - 这一页没有会变的数值条，所以不用 `grow-x`（不为动效而造一个）。
@@ -221,6 +225,8 @@ export default function DailyPage() {
   }
 
   const items = history?.items ?? []
+  /** 历史总数：只在真拿到数据时用于卡内标题（结论句），不拿 0 冒充 */
+  const historyCount = historyStatus === 'ready' ? (history?.total ?? 0) : null
   /** 展开后顺序不变，只是把折起来的那几条一并铺出来 */
   const visibleItems = historyOpen ? items : items.slice(0, HISTORY_PREVIEW)
   const hiddenCount = items.length - visibleItems.length
@@ -253,7 +259,7 @@ export default function DailyPage() {
     <PageShell
       title="每日一问"
       badge={
-        <Badge variant="secondary" className="rounded-full font-normal">
+        <Badge variant="secondary" className="rounded-full font-normal text-caption">
           轻量记录
         </Badge>
       }
@@ -263,39 +269,53 @@ export default function DailyPage() {
       {loading ? (
         <AIThinking text="正在取今天的问题…" lines={2} />
       ) : today?.question ? (
-        /* ① 今天这一道：整页唯一的实心 CTA 就在这张卡里，左问题 / 右作答 */
+        /* ① 今天这一道：整页唯一的实心 CTA 就在这张卡里，左问题 / 右作答。
+           赭金全屏只花一处：卡左侧那道 3px 竖条（ai-inset），标记"读这里" */
         <Reveal lg>
-          <Panel data-print="card" className="ai-inset gap-6 lg:flex-row lg:gap-8">
+          <Panel data-print="card" className="ai-inset gap-6 p-6 md:p-8 lg:flex-row lg:gap-10">
             {/* 左栏：那句人话本身（题干 / 状态 / 连着写了几天）。
-                题干贴顶、连续记录贴底，让左右两栏的下沿齐平，卡片里不留半块空白 */}
-            <div className="flex min-w-0 flex-col gap-4 lg:w-[42%] lg:shrink-0">
+                上组（状态 + 题干）贴顶，下组（提示语 + 连续记录）用 `mt-auto` 贴底，
+                让左右两栏的下沿齐平 —— 没有 streak 时提示语自己落到左下角，
+                不会所有内容挤在顶部、下面空出一大截 */}
+            <div className="flex min-w-0 flex-col gap-4 lg:w-[46%] lg:shrink-0">
               <div className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-2 text-caption font-semibold tracking-wide text-caption-foreground">
-                    <span className="size-1.5 rounded-full bg-ai-accent" aria-hidden />
+                  <span className="text-caption font-semibold tracking-wide text-caption-foreground">
                     今日一问
                   </span>
-                  <Badge variant="outline" className="rounded-full font-normal">
+                  <Badge variant="outline" className="rounded-full font-normal text-caption">
                     {today.answered ? '今天答过了' : '今天还没答'}
                   </Badge>
                 </div>
 
-                <p className="text-headline-lg text-primary">「{today.question.content}」</p>
-
-                {/* 已答态**不再补一句**：右栏已经说了"它会一直留在这里"，
-                    同义的话只说一句，左侧把位置让给题干本身（也不会留下空行） */}
-                {today.answered ? null : (
-                  <p className="text-body-sm text-on-surface-variant">
-                    答不上来也没关系，写半句都行；它只进你自己的画像。
-                  </p>
-                )}
+                {/* 这一屏的主角：今天的问题。桌面 30px（与首页「今日一问」同档），
+                    390px 降一档到 24px，免得一屏只剩题干 */}
+                <p className="text-headline-lg text-balance text-primary sm:text-headline-xl">
+                  「{today.question.content}」
+                </p>
               </div>
 
-              {today.streak > 0 ? (
-                <span className="inline-flex items-center gap-1.5 text-body-sm text-on-surface-variant lg:mt-auto">
-                  <Flame className="size-3.5 text-warning" aria-hidden />
-                  已经连着写了 {today.streak} 天
-                </span>
+              {/* 下组：未答时是那句「答不上来也没关系」，有 streak 时是连续记录。
+                  两者都用 `lg:mt-auto` 压到左栏底部：空出来的高度回到题干上下，
+                  而不是堆在卡片里没人用的下半截；已答且没有 streak 时整组不渲染，
+                  不凭空多出内容或空行 */}
+              {!today.answered || today.streak > 0 ? (
+                <div className="flex flex-col gap-4 lg:mt-auto">
+                  {/* 已答态**不再补一句**：右栏已经说了"它会一直留在这里"，
+                      同义的话只说一句，左侧把位置让给题干本身（也不会留下空行） */}
+                  {today.answered ? null : (
+                    <p className="text-body-sm text-on-surface-variant">
+                      答不上来也没关系，写半句都行；它只进你自己的画像。
+                    </p>
+                  )}
+
+                  {today.streak > 0 ? (
+                    <span className="inline-flex items-center gap-1.5 text-body-sm text-on-surface-variant">
+                      <Flame className="size-3.5 text-settled" aria-hidden />
+                      已经连着写了 {today.streak} 天
+                    </span>
+                  ) : null}
+                </div>
               ) : null}
             </div>
 
@@ -358,7 +378,7 @@ export default function DailyPage() {
                       size="lg"
                       onClick={() => void submit()}
                       disabled={submitting || !answer.trim()}
-                      className="motion-press gap-1.5"
+                      className="motion-press w-full gap-1.5 sm:w-auto"
                     >
                       <Send className="size-4" />
                       {submitting ? '记下中…' : '记下这一句'}
@@ -383,21 +403,22 @@ export default function DailyPage() {
       )}
 
       {/* ② 两列 7/5 支撑：左历史（读的地方要宽），右节奏（一眼扫过的数字）。
-          进场与主角卡错开起点（250 / 430ms），免得一屏同时四五处都在动 */}
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          进场与主角卡错开起点（250 / 430ms），**两列都用 fade**（纯淡入），
+          免得 rise-in 的 10px 位移在加载后的一秒里看起来上下错位。
+          不加 items-start：grid 默认 stretch，两列顶边、下沿都对齐 */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <Reveal fade delay={250} className="flex min-w-0 flex-col lg:col-span-7">
-          <Panel data-print="card" className="gap-4">
+          {/* flex-1：这一列比右边矮时由历史卡吃满行高，下沿和右列齐平 */}
+          <Panel data-print="card" className="flex-1 gap-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="flex flex-wrap items-center gap-2 text-headline-sm text-primary">
-                <History className="size-4 text-on-surface-variant" aria-hidden />
-                你答过的题
+              {/* 卡内标题改成结论句（真总数）；"回望与复盘"退成 13px 角标 */}
+              <h2 className="flex flex-wrap items-center gap-2 text-headline-md text-primary">
+                <History className="size-4 shrink-0 text-on-surface-variant" aria-hidden />
+                {historyCount && historyCount > 0 ? `你已经答过 ${historyCount} 道` : '你答过的题'}
                 <span className="rounded-full bg-surface-container px-2 py-0.5 text-caption font-normal text-on-surface-variant">
                   回望与复盘
                 </span>
               </h2>
-              {items.length ? (
-                <span className="text-body-sm text-on-surface-variant">共 {history?.total} 条</span>
-              ) : null}
             </div>
 
             {historyStatus === 'loading' ? (
@@ -501,11 +522,16 @@ export default function DailyPage() {
           </Panel>
         </Reveal>
 
-        <Reveal delay={430} className="flex min-w-0 flex-col gap-6 lg:col-span-5">
-          <Panel data-print="card" className="gap-5">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-headline-sm text-primary">你的记录节奏</span>
-              <span className="text-caption text-on-surface-variant">不用天天写</span>
+        <Reveal fade delay={430} className="flex min-w-0 flex-col gap-6 lg:col-span-5">
+          {/* 只有这一张卡（空态）时，它自己 flex-1 吃满行高，卡内用 justify-between
+              分配余量：标题仍贴顶、说明落到卡底，空白不再堆在右下角的卡外 */}
+          <Panel data-print="card" className={cn('gap-5', !dimensionRows.length && 'flex-1 justify-between')}>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              {/* 数据卡：栏目名退成 eyebrow，让两个数字自己当主角 */}
+              <span className="text-caption font-semibold tracking-wide text-caption-foreground">
+                记录节奏
+              </span>
+              <span className="text-body-sm text-on-surface-variant">不用天天写</span>
             </div>
 
             {historyStatus === 'ready' && history && history.total > 0 ? (
@@ -525,7 +551,7 @@ export default function DailyPage() {
             )}
 
             <p className="flex items-start gap-2 text-body-sm text-on-surface-variant">
-              <Sparkles className="mt-0.5 size-3.5 shrink-0 text-ai-accent" aria-hidden />
+              <Sparkles className="mt-0.5 size-3.5 shrink-0 text-on-surface-variant" aria-hidden />
               不是为了打卡：哪天不想写，跳过也算数。
             </p>
           </Panel>
@@ -534,13 +560,14 @@ export default function DailyPage() {
             第二张卡：把上面那些回答按「落在哪个维度」归一下。
             为什么要有它：右列只放一张矮卡时，下方会空出一大片（实测 ~200px 的死白），
             两列高度差直接摊在脸上。这里用**真数据**把余下高度接住，
-            而不是靠 padding / 拉伸卡片硬撑。
+            而不是靠 padding / 拉伸卡片硬撑；它自己 `flex-1` 兜住两卡之间的余量，
+            左列更高时右列的下沿也不会缩回去。
           */}
           {dimensionRows.length ? (
-            <Panel data-print="card" className="gap-4">
+            <Panel data-print="card" className="flex-1 gap-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-headline-sm text-primary">你更常想什么</span>
-                <span className="text-caption text-on-surface-variant">
+                <span className="text-headline-md text-primary">你更常想什么</span>
+                <span className="text-body-sm text-on-surface-variant">
                   {dimensionScoped ? `看的是最近 ${items.length} 条` : `一共 ${items.length} 条`}
                 </span>
               </div>
@@ -598,7 +625,7 @@ function HistoryRow({ item, index }: { item: DailyHistoryItem; index: number }) 
           {historyDate(item.answered_at)}
         </span>
         {dimension ? (
-          <Badge variant="secondary" className="rounded-full font-normal">
+          <Badge variant="secondary" className="rounded-full font-normal text-caption">
             {dimension}
           </Badge>
         ) : null}

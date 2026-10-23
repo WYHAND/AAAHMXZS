@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ClipboardList, Compass, Flag, RotateCcw, SkipForward } from 'lucide-react'
+import { ClipboardList, Flag, SkipForward } from 'lucide-react'
 
 import { Reveal, staggerDelay } from '@/components/Motion'
 import { Panel } from '@/components/Panel'
@@ -31,6 +31,15 @@ import { STORAGE_KEY, storage } from '@/utils/storage'
  *   「你会经历什么」这类说明抽到下方一张支撑卡，形成「主角 + 支撑」的节奏，
  *   不再把所有信息挤进一张登录式卡片里。
  *
+ * 2026-10-22 方案 A：
+ *   - 去掉卡顶的图标块（纯装饰、且把 h1 往下推）；赭金只留 h1 上方一条 2px 细线，
+ *     主按钮仍是墨色实心（全屏唯一实心块），两者不抢；
+ *   - 主角是一句话 + 一个按钮：h1 走 headline-xl(30)，导语抬到 body-lg(16)，
+ *     支撑卡三条说明留在 body-sm(14)（承载信息的最低档）；
+ *   - 支撑卡标题从栏目名「先和你说清楚」改成结论句「整个过程比你想的轻松」；
+ *   - 高度按"一屏不滚"算过：本页在 BlankLayout 里（main 的 py-10 + 底部系统名），
+ *     390×844 可用约 724px；最坏情况（来自面试 + 有未提交进度）约 690px。
+ *
  * 数据来源：题量从接口 `GET /test/questions` 取（题库条数只有接口知道），拿不到就不显示数字，
  *   绝不编造；时长只说「几分钟就能答完」这种量级，不写死具体分钟数。
  */
@@ -46,6 +55,14 @@ export default function TestIntroPage() {
   const [searchParams] = useSearchParams()
   // 拆成原始值，避免 useSearchParams 引用不稳定带来的重复渲染
   const retest = searchParams.get('retest') === '1'
+  /*
+   * 来源路径（守卫 RequireProfile 带过来的 ?from=...）。
+   * 只用来**说清"你为什么被带到这一页"**：实测新账号点「模拟面试」会直接看到
+   * 整页「先做一次职业测评」，没有一句话解释，用户会以为点错了。
+   * 只认 /interview 这一个来源（其余来源保持原样），且**不影响任何跳转逻辑**。
+   */
+  const fromPath = searchParams.get('from') ?? ''
+  const fromInterview = !retest && fromPath.startsWith('/interview')
   const fetched = useProfileStore((s) => s.fetched)
   const loading = useProfileStore((s) => s.loading)
   const failed = useProfileStore((s) => s.failed)
@@ -126,25 +143,26 @@ export default function TestIntroPage() {
     <div className="flex w-full flex-col gap-6">
       {/* 主角卡：整页唯一的大块，只做一件事 —— 让你安心地开始 */}
       <Reveal lg>
-        <Panel className="gap-6">
-          <div className="flex flex-col gap-3">
-            {/* 小面积浅桃底（与 /login 的身份头一致），琥珀只在这里出现一次 */}
-            <span className="flex size-9 items-center justify-center rounded-lg bg-secondary-fixed text-on-secondary-fixed">
-              {retesting ? (
-                <RotateCcw className="size-4" aria-hidden />
-              ) : (
-                <Compass className="size-4" aria-hidden />
-              )}
-            </span>
+        <Panel className="gap-4">
+          <div className="flex flex-col gap-2">
+            {/* 全屏唯一的赭金：一条 2px 细线（细线/小圆点是允许的用量，别换成色块） */}
+            <span aria-hidden className="h-0.5 w-8 rounded-full bg-secondary" />
             <h1 className="text-headline-xl font-bold tracking-tight text-primary">
               {retesting ? '重新做一次职业测评' : '先做一次职业测评'}
             </h1>
-            <p className="text-body-md text-on-surface-variant">
+            <p className="text-body-lg text-on-surface-variant">
               {retesting
                 ? '重测会更新你现在的三项分数和阶段判断，已经拿到的标签和任务都不受影响。'
                 : '这是唯一一次要你主动填东西；答完我就知道你在哪个阶段，之后靠聊天和打卡慢慢认识你。'}
             </p>
           </div>
+          {/* 从模拟面试被拦过来时补一句原因：否则用户以为"我点的是面试，怎么给我一个测评"。
+              它是"为什么来这一页"的说明（信息），所以走 body-sm，不再用 body-md 和正文抢。 */}
+          {fromInterview ? (
+            <p className="rounded-lg bg-surface-inset px-4 py-3 text-body-sm text-on-surface">
+              模拟面试要按你的画像和简历出题，所以先花几分钟做个测评；做完就能回去开面试。
+            </p>
+          ) : null}
 
           {hasProgress ? (
             <Panel inset className="gap-3">
@@ -178,8 +196,8 @@ export default function TestIntroPage() {
         480ms 播完（动效被吃掉）。改成"卡片静态、内容错峰"，三条按 staggerDelay 依次升起。
       */}
       <Panel className="gap-4">
-        <Reveal as="h2" delay={160} className="text-headline-sm text-primary">
-          先和你说清楚
+        <Reveal as="h2" delay={160} className="text-headline-md text-primary">
+          整个过程比你想的轻松
         </Reveal>
         <ul className="flex flex-col gap-3">
           {facts.map(({ icon: Icon, text }, index) => (
@@ -190,7 +208,7 @@ export default function TestIntroPage() {
               className="flex items-start gap-3"
             >
               <Icon className="mt-0.5 size-4 shrink-0 text-on-surface-variant" aria-hidden />
-              <span className="text-body-md text-on-surface-variant">{text}</span>
+              <span className="text-body-sm text-on-surface-variant">{text}</span>
             </Reveal>
           ))}
         </ul>

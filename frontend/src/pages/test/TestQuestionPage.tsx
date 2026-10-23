@@ -219,7 +219,11 @@ export default function TestQuestionPage() {
     //   - 不能用 h-full：外层是 min-h-svh，min-height 不构成确定高度，百分比会退化成 auto。
     //   - 动效只加不改几何：Reveal / motion-lift / motion-press 都是位移/透明度，不改变盒子占位，
     //     所以上面那套"一屏固定高度 + 按钮钉底"的几何不受影响。
-    <div className="mx-auto flex h-[calc(100svh-var(--spacing-shell-total))] min-h-0 w-full max-w-2xl flex-col gap-5 px-margin pt-shell">
+    //   - 2026-10-22 字号抬高后的 390×844 账（可用 736 = 844 − 108）：
+    //     进度区 36 + 间隙 16 + 操作区 93（按钮行 44 + 8 + 提示 22 + 上边距 16 + 描边 1）
+    //     + 间隙 16 = 161，题干卡还剩 575 —— 四个选项即使每个两行（约 476）也放得下；
+    //     真超长题干/更多选项时由中间那层 overflow-y-auto 自己滚，按钮不会被推出屏幕。
+    <div className="mx-auto flex h-[calc(100svh-var(--spacing-shell-total))] min-h-0 w-full max-w-2xl flex-col gap-4 px-margin pt-shell">
       {/* 顶部进度：一行文字（第几题 / 共几题）+ 细进度条，固定高度 */}
       <Reveal className="flex shrink-0 flex-col gap-2">
         <div className="flex items-center justify-between gap-3 text-body-sm text-on-surface-variant">
@@ -228,7 +232,11 @@ export default function TestQuestionPage() {
           </span>
           <span>{remaining > 0 ? `还剩 ${remaining} 题` : '这是最后一题'}</span>
         </div>
-        <Progress value={percent} className="h-1.5" aria-label="答题进度" />
+        <Progress
+          value={percent}
+          className="h-1.5 bg-surface-container [&>div]:bg-secondary"
+          aria-label="答题进度"
+        />
       </Reveal>
 
       {/* 题目主卡：吃掉剩余高度并垂直居中；选项过多时本区域内部滚动
@@ -246,8 +254,10 @@ export default function TestQuestionPage() {
 
               {/* 选项区：未选中白底；选中浅墨底 + 描边环 + 实心字母点
                   （不能只靠浅底表达选中，规范 2.1）。
+                 用色纪律（2026-10-22）：选中态**不用赭金**——赭金本屏只给顶部那条进度，
+                 选项再实心一次就会和底部主按钮抢主角。
                   可点整块给 motion-lift（悬浮轻抬）+ motion-press（按下轻缩）。 */}
-              <ul className="flex flex-col gap-2">
+              <ul className="flex flex-col gap-2.5">
                 {current.options.map((option, i) => {
                   const selected = answers[current.id] === option.key
                   return (
@@ -258,7 +268,7 @@ export default function TestQuestionPage() {
                         onClick={() => choose(option.key)}
                         className={cn(
                           // transition-all 会盖掉 motion-* 的过渡，删掉；motion-lift 已含 transform/前景/底色过渡
-              'motion-lift motion-press flex w-full items-center gap-3 rounded-lg border px-4 py-3.5 text-left text-body-md',
+                          'motion-lift motion-press flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left text-body-md',
                           selected
                             ? 'border-transparent bg-primary-soft text-primary ring-1 ring-primary/30'
                             : 'border-border bg-card text-on-surface hover:bg-surface-container',
@@ -307,7 +317,8 @@ export default function TestQuestionPage() {
             </Button>
           </div>
         </div>
-        <p className="text-right text-caption text-on-surface-variant">
+        {/* 提示行是"用户要不要跳过"的依据，属于信息，最低 text-body-sm（不能再用 caption） */}
+        <p className="text-right text-body-sm text-on-surface-variant">
           答不上来没关系，跳过也不会扣分
         </p>
       </Reveal>

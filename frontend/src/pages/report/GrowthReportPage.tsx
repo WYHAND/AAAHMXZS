@@ -11,7 +11,6 @@ import {
 import { toast } from 'sonner'
 
 import { AIThinking } from '@/components/AIThinking'
-import { AnimatedNumber } from '@/components/AnimatedNumber'
 import { EmptyState } from '@/components/EmptyState'
 import { Reveal, staggerDelay } from '@/components/Motion'
 import { Panel } from '@/components/Panel'
@@ -25,12 +24,7 @@ import { reportApi } from '@/api/report'
 import { taskApi } from '@/api/task'
 import { STAGE_LABEL, normalizeStage } from '@/constants/stage'
 import { toTaskDetail } from '@/constants/routes'
-import {
-  SCORE_ITEMS,
-  SCORE_LABEL,
-  formatScoreDelta,
-  scoreDeltaTone,
-} from '@/constants/score'
+import { SCORE_ITEMS, SCORE_LABEL, formatScoreDelta } from '@/constants/score'
 import { useStage } from '@/hooks/useStage'
 import type { GrowthReportData } from '@/types'
 import { formatDateTime, parseServerTime } from '@/utils/format'
@@ -52,8 +46,9 @@ import { cn } from '@/lib/utils'
  *    再加一句由三个维度里最低的那一项派生的实话，不编造；卡内是**全页唯一的进度条**
  *    （整体准备度）与**唯一的实心 CTA**（保存这一份）。整体准备度从「当前阶段」搬上来，
  *    避免同一个分数在屏上出现两次；
- * 3. 数字区走 StatGroup（3 列），琥珀只给一个数字，标签用 caption；
- * 4. 「下一步」与「你做得好的」按 7/5 两列；没有亮点的分区不开第二列；
+ * 3. 数字区走 StatGroup（3 列），赭金只给一个数字，标签用 body-sm；
+ * 4. 「下一步」与「你做得好的」按 7/5 两列、**等高**（右卡用 stretch + h-full 补到左卡高度）；
+ *    没有亮点的分区不开第二列；
  * 5. 「当前阶段」单独整行铺开，三条维度直接显示；与上一份基线的差值**并进同一行**
  *    （分数右侧的 `+8`），不再为同一组数字单开一张「与上一份报告相比」卡；
  *    综合得分的差值跟着主角卡里的「整体准备度」走，因为它本来就是同一个分数；
@@ -192,6 +187,11 @@ export default function GrowthReportPage() {
   }
 
   if (loading) {
+    /*
+     * 第一道闸：数据没到就**一个数字都不渲染**，只挂加载占位（AIThinking，复用现有组件）。
+     * 所以「整体准备度 0 / 100」不是从这里来的 —— 它来自主角卡里那个从 0 数起的数字滚动，
+     * 第二道闸在下面（分数直接渲染真值）。
+     */
     return (
       <PageShell title="成长报告" breadcrumb="成长报告">
         <Reveal fade>
@@ -298,24 +298,36 @@ export default function GrowthReportPage() {
           <p className="max-w-[60ch] text-body-md text-on-surface-variant">{heroSupport}</p>
 
           <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <span className="text-body-sm text-on-surface-variant">整体准备度</span>
-              <span className="text-headline-sm text-primary">
-                <AnimatedNumber value={overall} />
-                <span className="ml-1 text-caption font-normal text-on-surface-variant">/ 100</span>
-                {totalDelta !== null ? (
-                  /*
-                   * 这里刻意不用 cn('text-caption', tone)：tailwind-merge 会把 `text-caption`
-                   * 和 `text-success` 判成同一组（都是 text-*），后者赢、caption 字号被丢掉，
-                   * 差值就会跟主数字一样大。用字符串拼接让两个类都留下。
-                   */
-                  <span
-                    className={`ml-2 text-caption font-normal tabular-nums ${scoreDeltaTone(totalDelta)}`}
-                  >
-                    较上次 {formatScoreDelta(totalDelta)}
+            <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+              <div className="flex flex-col gap-1">
+                <span className="text-body-sm text-on-surface-variant">整体准备度</span>
+                {/*
+                 * 第二道闸：分数直接渲染真值，**不用 AnimatedNumber**。
+                 * 它初始化是 `useState(reduce ? value : 0)` —— 数据明明已经到了（上面 `loading` 已经拦掉
+                 * 没数据的渲染），它却先生成一个「整体准备度 0 / 100」再数到真实值，
+                 * 用户看到的就是"我的准备度是 0"。0 不是真值就不许端出去
+                 * （`overall` 来自已到手的 report，见上面的 `const overall = Math.round(report.total_score)`）。
+                 * tabular-nums：数字等宽，值变了不跳宽（原来由 AnimatedNumber 内部加的那个类）。
+                 */}
+                <span className="flex items-baseline gap-1.5">
+                  <span className="font-numeric text-display tabular-nums text-primary">{overall}</span>
+                  <span className="text-body-md text-on-surface-variant">/ 100</span>
+                </span>
+              </div>
+              {totalDelta !== null ? (
+                /*
+                 * 这一屏的主角是「变化」：差值单独一行，比正文大一档。
+                 * 这里刻意不用 cn('text-headline-md', tone)：tailwind-merge 会把字号类
+                 * 和 `text-settled` / `text-attention` 判成同一组（都是 text-*），后者赢、字号被丢掉。
+                 * 用字符串拼接让两个类都留下。
+                 */
+                <span className="flex items-baseline gap-2 pb-1">
+                  <span className="text-body-sm text-caption-foreground">较上次</span>
+                  <span className={`text-headline-md tabular-nums ${deltaTone(totalDelta)}`}>
+                    {formatScoreDelta(totalDelta)}
                   </span>
-                ) : null}
-              </span>
+                </span>
+              ) : null}
             </div>
             <div className="grow-x">
               <Progress
@@ -343,17 +355,17 @@ export default function GrowthReportPage() {
                 <Link to="/task">去看看今天的任务</Link>
               </Button>
             </div>
-            <span className="text-caption text-caption-foreground">
+            <span className="text-body-sm text-caption-foreground">
               {savedAt ? '上次保存于 ' + savedAt : '还没有保存过基线 · 本页每次打开都是最新数据'}
             </span>
           </div>
         </Panel>
       </Reveal>
 
-      {/* 数字区：StatGroup 三列，琥珀只给一个数字，标签走 caption */}
+      {/* 数字区：StatGroup 三列，赭金只给一个数字，标签走 body-sm */}
       <Reveal delay={110}>
         <Panel data-print="card" className="gap-3">
-          <h2 className="text-headline-sm text-primary">这段时间的节奏</h2>
+          <h2 className="text-headline-md text-primary">这段时间的节奏</h2>
           <StatGroup columns={3}>
             <Stat value={report.completed_tasks} unit="个" label="完成的小任务" accent />
             <Stat value={report.completed_steps} unit="步" label="走完的微步" divided />
@@ -367,7 +379,7 @@ export default function GrowthReportPage() {
                 ['days', report.active_days],
               ] as const
             ).map(([kind, value]) => (
-              <p key={kind} className="text-caption text-on-surface-variant">
+              <p key={kind} className="text-body-sm text-on-surface-variant">
                 {statCaption(kind, value)}
               </p>
             ))}
@@ -375,15 +387,18 @@ export default function GrowthReportPage() {
         </Panel>
       </Reveal>
 
-      {/* 下一步（7） + 你做得好的（5）：按内容高度对齐，不拉成等高卡片 */}
+      {/* 下一步（7） + 你做得好的（5）：两卡等高、底边齐平（grid 默认 stretch + 卡 h-full）。
+          右卡内容短：亮点列表 flex-1 在剩余高度里居中，空白不会全堆在卡底。
+          ⚠️ 卡必须带 `w-full`：Reveal 这里是 `flex`（横向），卡是它的 flex item，
+          沿主轴宽度按内容收缩（实测 562/286，右边到不了栏边）；w-full 才回到 7/5 满宽。 */}
       {hasNext || hasHighlights ? (
-        <div className={cn('grid grid-cols-1 items-start gap-6', twoCol && 'lg:grid-cols-12')}>
+        <div className={cn('grid grid-cols-1 gap-6', twoCol && 'lg:grid-cols-12')}>
           {hasNext ? (
-            <Reveal delay={220} className={cn(twoCol && 'lg:col-span-7')}>
-              <Panel data-print="card" className="ai-inset gap-4">
+            <Reveal delay={220} className={cn('flex', twoCol && 'lg:col-span-7')}>
+              <Panel data-print="card" className="ai-inset h-full w-full gap-4">
                 <div className="flex items-center gap-2">
                   <Lightbulb className="size-[18px] text-primary" aria-hidden />
-                  <h2 className="text-headline-sm text-primary">下一步</h2>
+                  <h2 className="text-headline-md text-primary">下一步</h2>
                 </div>
                 <p className="text-body-md text-on-surface-variant">
                   {anyActionable
@@ -423,10 +438,12 @@ export default function GrowthReportPage() {
           ) : null}
 
           {hasHighlights ? (
-            <Reveal delay={320} className={cn(twoCol && 'lg:col-span-5')}>
-              <Panel data-print="card" className="gap-3">
-                <h2 className="text-headline-sm text-primary">你做得好的</h2>
-                <ul className="flex flex-col gap-2">
+            <Reveal delay={320} className={cn('flex', twoCol && 'lg:col-span-5')}>
+              <Panel data-print="card" className="h-full w-full gap-3">
+                <h2 className="text-headline-md text-primary">你做得好的</h2>
+                {/* flex-1 + justify-center：亮点只有一两条时，列表在卡内剩余高度里居中，
+                    而不是留一大块空白压在卡底（标题仍在最上方，两卡首行基线不变） */}
+                <ul className="flex flex-1 flex-col justify-center gap-2">
                   {highlights.map((item, i) => (
                     <Reveal
                       as="li"
@@ -452,14 +469,14 @@ export default function GrowthReportPage() {
         <Panel data-print="card" className="gap-4">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
             <div className="flex flex-col gap-1">
-              <h2 className="text-headline-sm text-primary">当前阶段</h2>
+              <h2 className="text-headline-md text-primary">当前阶段</h2>
               <p className="text-body-sm text-on-surface-variant">
                 {stageLabel} · {report.stage_changed ? '这一周期阶段发生变化了' : '阶段保持稳定'}
               </p>
             </div>
-            {/* 只留一行 caption 说明右边的 +x 是什么，不再用一整张卡解释 */}
+            {/* 只留一行小字说明右边的 +x 是什么，不再用一整张卡解释 */}
             {hasBaseline ? (
-              <span className="shrink-0 text-caption text-caption-foreground">较上次保存</span>
+              <span className="shrink-0 text-body-sm text-caption-foreground">较上次保存</span>
             ) : null}
           </div>
           <div className="flex flex-col gap-3">
@@ -490,10 +507,10 @@ export default function GrowthReportPage() {
                       {Math.round(value)}
                     </span>
                     {hasBaseline ? (
-                      /* 字符串拼接（不用 cn）：tailwind-merge 会把 text-caption 当成颜色类丢掉 */
+                      /* 字符串拼接（不用 cn）：tailwind-merge 会把字号类当成颜色类丢掉 */
                       <span
-                        className={`w-8 shrink-0 text-right tabular-nums text-caption ${
-                          typeof change === 'number' ? scoreDeltaTone(change) : ''
+                        className={`w-8 shrink-0 text-right tabular-nums text-body-sm ${
+                          typeof change === 'number' ? deltaTone(change) : ''
                         }`}
                       >
                         {typeof change === 'number' ? formatScoreDelta(change) : null}
@@ -510,7 +527,7 @@ export default function GrowthReportPage() {
       {/* 我的补充：用户唯一能写的地方（分数由行为算出，不给任何改分入口） */}
       <Reveal delay={610}>
         <Panel data-print="card" className="gap-3">
-          <h2 className="text-headline-sm text-primary">我的补充</h2>
+          <h2 className="text-headline-md text-primary">我的补充</h2>
           <p className="text-body-sm text-on-surface-variant">
             写点你自己想记的：这段时间的感受、卡住的地方、下一步打算。写好后点上面的「保存这一份」，它会跟这份报告一起存下来。
           </p>
@@ -530,7 +547,7 @@ export default function GrowthReportPage() {
             )}
           >
             {dirty ? (
-              <span className="text-body-sm text-warning">
+              <span className="text-body-sm text-secondary">
                 有未保存的修改，记得点上面的「保存这一份」
               </span>
             ) : null}
@@ -552,6 +569,20 @@ export default function GrowthReportPage() {
       </Reveal>
     </PageShell>
   )
+}
+
+/**
+ * 分差的语义色（方案 A：只从 token 取）。
+ *
+ * 涨 = 克制绿 --settled；跌 = 注意红 --attention；没变 = 次要墨色。
+ * 共享的 `scoreDeltaTone` 仍映射到旧的 --destructive 与 --success，
+ * 新色板下红色应为 --attention；这里先在本页落新色，等共享层统一后可删掉本函数。
+ */
+function deltaTone(value: number): string {
+  const rounded = Math.round(value)
+  if (rounded > 0) return 'text-settled'
+  if (rounded < 0) return 'text-attention'
+  return 'text-on-surface-variant'
 }
 
 /**

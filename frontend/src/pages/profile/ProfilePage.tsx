@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { Award, ChevronDown, RotateCcw } from 'lucide-react'
 
 import { AIThinking } from '@/components/AIThinking'
-import { AnimatedNumber } from '@/components/AnimatedNumber'
 import { BadgeMedallion } from '@/components/BadgeMedallion'
 import { BadgeScene } from '@/components/BadgeScene'
 import { EmptyState } from '@/components/EmptyState'
@@ -29,7 +28,7 @@ import { useProfileStore } from '@/store/profileStore'
 import type { BadgeItem, BadgeOverview, ProfileTag } from '@/types'
 import { remainingSteps } from '@/utils/badge'
 import { formatDate, formatDateTime } from '@/utils/format'
-import { groupTags, GROUP_LIMIT, SPHERE_MIN_TAGS, visibleTags } from '@/utils/profileDisplay'
+import { groupTags, GROUP_LIMIT, sphereLabels, visibleTags } from '@/utils/profileDisplay'
 import { STORAGE_KEY, storage } from '@/utils/storage'
 import { cn } from '@/lib/utils'
 
@@ -37,7 +36,7 @@ import { cn } from '@/lib/utils'
  * 个人中心 / 画像（T06：一屏一个主角 + 统一卡片）
  *
  * 版式自上而下：
- * 1. 主角：画像概览 —— 最大的一张卡，阶段徽章 + 一句人话总结 + 26px 综合分 + **唯一一条进度条**
+ * 1. 主角：画像概览 —— 最大的一张卡，阶段徽章 + 一句人话总结 + 34px 综合分 + **唯一一条进度条**
  *    （综合分，值一变从左长出来）+ **唯一一个实心 CTA**（放在卡内，不再挂在页头）；
  *    三个维度刻度条收进「看分数明细」，默认收起（首屏留给人话与那条进度条）；
  * 2. 我的奖章：整行；
@@ -117,7 +116,15 @@ export default function ProfilePage() {
       }))
     : []
 
-  const showInitialLoading = !ready || (loading && !profile)
+  /*
+   * 整页加载占位只在「手里还没有画像可渲染」时出现。
+   * 原来写的是 `!ready || (loading && !profile)`，而 `ready` 要等**奖章接口**也回来才置 true；
+   * 画像却通常早在路由守卫（RequireAuth）里就取回来了 —— 于是首屏会**同屏**出现
+   * 「正在读你的画像…」和一张已经写着真实分数的英雄卡：上面说"还在读"，下面已经有数了。
+   * 现在：有画像就不喊加载（真要刷新，下面的分数/进度条自己会变）；
+   * 只有真没画像、且没失败、且还在读的时候才用 AIThinking 兜住（复用现有组件，不新造占位）。
+   */
+  const showInitialLoading = !profile && !failed && (loading || !ready)
   const showProfileError = failed && !profile
 
   return (
@@ -170,19 +177,27 @@ export default function ProfilePage() {
             <Panel data-print="card" className="gap-5">
               <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
                 <div className="flex flex-col gap-2.5">
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <h2 className="text-headline-sm text-primary">当前阶段</h2>
-                    <StageBadge stage={stage} showStepper />
-                  </div>
-                  <p className="max-w-[46ch] text-body-lg text-on-surface-variant">
+                  <StageBadge stage={stage} showStepper />
+                  {/* 卡内标题用结论：直接说明这一段的重点，阶段名交给上面的徽章，不再重复 */}
+                  <h2 className="max-w-[46ch] text-headline-md text-primary">
                     {STAGE_DESC[stage]}
-                  </p>
+                  </h2>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <AnimatedNumber
-                    value={Math.round(profile.total_score)}
-                    className="font-numeric text-headline-xl font-bold text-primary"
-                  />
+                  {/*
+                   * 分数直接渲染真值，**不用 AnimatedNumber** —— 真机实测的"0 / 100 综合分"就出在这。
+                   * 它初始化是 `useState(reduce ? value : 0)`，第一帧渲染的是货真价实的
+                   * 「0 / 100 综合分」，再在 520ms 里数到 34：用户看到的是"我的综合分是 0"，
+                   * 那正是项目红线里说的"把 0 当成真值端出去"（同一条红线见 InterviewReviewPage 的 hasScores）。
+                   *
+                   * 外层已经由 `profile ?` 兜住：能走到这一段就说明画像数据到手了，
+                   * 压根不存在"数据没到却渲染了数字"的窗口，所以这里不需要占位；数据没到时
+                   * 由上面的 AIThinking 占位负责（见 showInitialLoading）。
+                   * tabular-nums 保住原来"数字等宽、值变了不跳宽"的版式约束。
+                   */}
+                  <span className="font-numeric text-display tabular-nums text-primary">
+                    {Math.round(profile.total_score)}
+                  </span>
                   <span className="text-body-md text-on-surface-variant">/ 100 综合分</span>
                 </div>
               </div>
@@ -268,7 +283,7 @@ export default function ProfilePage() {
             <Reveal delay={250} className="min-w-0 lg:col-span-5">
               <Panel data-print="card" className="h-full gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <h2 className="text-headline-sm text-primary">画像雷达</h2>
+                  <h2 className="text-headline-md text-primary">画像雷达</h2>
                   <p className="text-body-sm text-on-surface-variant">
                     看的是你聊过的内容分布，不是分数；哪一项靠外都不代表好或差。
                   </p>
@@ -373,7 +388,7 @@ function BadgesPanel({
         <div className="flex flex-col gap-3 lg:col-span-4">
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <h2 className="flex items-center gap-2 text-headline-sm text-primary">
+              <h2 className="flex items-center gap-2 text-headline-md text-primary">
                 <Award className="size-4 text-secondary" aria-hidden />
                 我的奖章
               </h2>
@@ -429,7 +444,7 @@ function BadgesPanel({
 
 /**
  * 勋章陈列：**三枚横排**（窄屏竖排）。每枚是一张竖版小卡（奖章 + 名称 + 状态），
- * 点选后选中态高亮，详情渲染在左侧文字区（`#badge-detail`）。
+ * 点选后选中态高亮，详情渲染在左侧文字区（badge-detail 区块）。
  * **点已选中的那一枚不会取消选中**（组里始终有一枚选中，不存在「都没选」的态）。
  * 中性 bg-surface-container —— 卡内小卡不要用 bg-card（那是「同屏两种卡片」的来源）。
  */
@@ -466,7 +481,7 @@ function BadgeShelf({
               {/* 名称 15px：陈列品的标签，用更轻的字重，不抢区块标题 */}
               <span className="text-body-lg font-medium leading-6 text-primary">{badge.name}</span>
               {/* 状态行用次要文字色（caption 灰在中性底上只有 4.17，不够 4.5） */}
-              <span className="text-caption text-on-surface-variant" title={badgeHint(badge)}>
+              <span className="text-body-sm text-on-surface-variant" title={badgeHint(badge)}>
                 {badge.obtained ? '已获得' : '还差 ' + remainingSteps(badge.progress) + ' 个步骤'}
               </span>
             </button>
@@ -512,7 +527,7 @@ function BadgeDetail({ badge }: { badge: BadgeItem }) {
             ? '获得于 ' + formatDate(badge.obtained_at)
             : '还差 ' + remainingSteps(badge.progress) + ' 个步骤'}
         </span>
-        <span className="text-caption text-on-surface-variant">
+        <span className="tabular-nums text-on-surface-variant">
           进度 {badge.progress.current} / {badge.progress.target}
         </span>
       </div>
@@ -522,6 +537,13 @@ function BadgeDetail({ badge }: { badge: BadgeItem }) {
 
 /**
  * 「我的画像」：上=你是谁、中=标签球、下=可读的三行（勘误 9.24.4）。
+ *
+ * 2026-10-22 修订（用户验收）：**球体永远显示**。
+ * - 可见标签不足 12 条时，球上补「还没聊到的维度名」（浅色幽灵字，见 `sphereLabels`）；
+ *   0 条标签时就是六个维度名在转 —— 新用户第一眼就能看到这个功能，而不是一张空卡；
+ * - 幽灵字只影响渲染：不写回画像、不算标签数、不进 AI 输入、不影响奖章
+ *   （性质和右侧雷达里 weight=0 的轴一样：是骨架，不是数据）；
+ * - 真实标签 ≥ 12 条时幽灵字退场，回到原来的完整球。
  *
  * 这是**展示层**的卡片，只读 `profile.summary` 与 `profile.tags`：
  * - 顶部那句「你是个什么样的人」由后端生成并落库（AI 不可用时是模板句），
@@ -540,13 +562,30 @@ function ProfileCard({
 }) {
   const visible = useMemo(() => visibleTags(tags), [tags])
   const groups = useMemo(() => groupTags(tags), [tags])
-  const labels = useMemo(() => visible.map((tag) => tag.label), [visible])
+  const sphere = useMemo(() => sphereLabels(tags), [tags])
+  const ghostCount = sphere.reduce((count, item) => (item.ghost ? count + 1 : count), 0)
+
+  /**
+   * 球下面那句图例：把「实心 = 已有、浅色 = 还没聊到」说清楚。
+   *
+   * - 一条可见标签都没有：要么真没标签，要么标签全是判断类被过滤了 —— 两种文案要分开；
+   * - 有真实标签、也还有幽灵字：报一个真实条数，让用户知道球上哪些是自己的；
+   * - 幽灵字全部退场（≥12 条）：不再解释，回到原来的卡片。
+   */
+  const legend =
+    visible.length === 0
+      ? tags.length > 0
+        ? '你聊过的内容我都记下了，只是还没攒出能放进这里的样子 —— 球上的浅色字是还没聊到的方面。'
+        : '球上现在只有六个待点亮的方面。聊两轮，它们会一个个长出你的标签。'
+      : ghostCount > 0
+        ? `实心是你已经留下的痕迹（${visible.length} 条），浅色是还没聊到的方面。`
+        : null
 
   return (
     <Panel data-print="card" className="h-full gap-5">
       {/* 区域 1：你是谁（标题 + 一句人物速写） */}
       <div className="flex flex-col gap-1.5">
-        <h2 className="text-headline-sm text-primary">我的画像</h2>
+        <h2 className="text-headline-md text-primary">我的画像</h2>
         {summary ? (
           <p className="text-body-lg text-on-surface">{summary}</p>
         ) : (
@@ -556,19 +595,22 @@ function ProfileCard({
         )}
       </div>
 
-      {visible.length ? (
-        <>
-          {/* 区域 2：标签球。标签太少时不画 —— 稀疏的球面比列表还难看，
-              所以阈值与理由写在 utils/profileDisplay.ts 的 SPHERE_MIN_TAGS */}
-          {labels.length >= SPHERE_MIN_TAGS ? (
-            <ProfileTagSphere
-              labels={labels}
-              className="h-[360px] w-full [&_.profile-sphere-item]:whitespace-nowrap [&_.profile-sphere-item]:text-body-sm [&_.profile-sphere-item]:text-on-surface"
-            />
-          ) : null}
+      {/*
+        区域 2：标签球（**永远显示**）。
+        新用户就是六个浅色维度名；真实标签会一个个把它们替换掉。
+        标签太少时不再整颗隐藏 —— 那等于让用户以为这个功能还没做。
+      */}
+      <ProfileTagSphere
+        labels={sphere}
+        className="h-[360px] w-full [&_.profile-sphere-item]:whitespace-nowrap [&_.profile-sphere-item]:text-on-surface"
+      />
 
-          {/* 区域 3：可读的三行（与球体同一份顺序，每组最多 GROUP_LIMIT 条） */}
-          <div className="flex flex-col gap-2.5 border-t border-outline-variant/40 pt-4">
+      {/* 区域 3：图例 + 可读的三行（与球体同一份顺序，每组最多 GROUP_LIMIT 条） */}
+      <div className="flex flex-col gap-2.5 border-t border-outline-variant/40 pt-4">
+        {legend ? <p className="text-body-sm text-on-surface-variant">{legend}</p> : null}
+
+        {visible.length ? (
+          <>
             {groups.map((group) => {
               const shown = group.tags.slice(0, GROUP_LIMIT)
               const rest = group.tags.length - shown.length
@@ -588,34 +630,20 @@ function ProfileCard({
               <span className="text-caption text-caption-foreground">
                 最近更新 · {formatDate(updatedAt)}
               </span>
-              <span className="text-caption text-caption-foreground">
+              <span className="text-body-sm text-caption-foreground">
                 这些是我从你的对话、测评和任务里一点点记下来的。
               </span>
             </div>
+          </>
+        ) : (
+          /* 一条可读标签都没有：球照常转，这里只留一个继续积累的入口 */
+          <div>
+            <Button variant="outline" size="sm" asChild className="motion-press">
+              <Link to="/chat">{tags.length ? '继续聊聊' : '和 AI 聊聊'}</Link>
+            </Button>
           </div>
-        </>
-      ) : tags.length ? (
-        // 有标签、但都被"可见维度"过滤掉了：文案必须说真话，不能套零值空态
-        <EmptyState
-          title="这块还在长"
-          description="你聊过的内容我都记下了，只是还没攒出能放进这里的样子 —— 再多聊几轮就有了。"
-          action={
-            <Button variant="outline" size="sm" asChild className="motion-press">
-              <Link to="/chat">继续聊聊</Link>
-            </Button>
-          }
-        />
-      ) : (
-        <EmptyState
-          title="画像还没长出来"
-          description="和我聊两轮，或者做完基础测评，这里就会一点点具体起来。"
-          action={
-            <Button variant="outline" size="sm" asChild className="motion-press">
-              <Link to="/chat">和 AI 聊聊</Link>
-            </Button>
-          }
-        />
-      )}
+        )}
+      </div>
     </Panel>
   )
 }

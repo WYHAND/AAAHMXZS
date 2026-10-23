@@ -4,9 +4,7 @@ import {
   ArrowRight,
   Check,
   ChevronDown,
-  Clock,
   Footprints,
-  Gauge,
   Lightbulb,
   ListChecks,
   MoreHorizontal,
@@ -50,15 +48,17 @@ import { formatRelative } from '@/utils/format'
 type TaskPath = { done: number; total: number; current: string | null }
 
 /**
- * 「手上的其它任务」最多一屏露 3 个框（单框 72px + 框间距 8px），多出来的滑动查看 ——
+ * 「手上的其它任务」最多一屏露 3 个框（单框 76px + 框间距 8px），多出来的滑动查看 ——
  * 这套滑动是用户要保留的，**不要**改成折叠。
  * 注意它是**上限**（max-height）：不足 3 条时卡片按内容收短，不留大块空白。
- * ⚠️ 改这里的数字，要同步 TaskRow 上的 `h-[72px]` 与 DailyQuote 的 `h-[72px]`。
+ * 76 是 15px 标题（25 行高）+ 14px 元信息（22 行高）+ 上下 12px 内边距算出来的；
+ * 字号阶再抬一档就要重新算，否则文字会被 `overflow-hidden` 切掉。
+ * ⚠️ 改这里的数字，要同步 TaskRow 上的 `h-[76px]` 与 DailyQuote 的 `h-[76px]`。
  */
-const ROW_H = 72
+const ROW_H = 76
 const ROW_GAP = 8
 const VISIBLE_ROWS = 3
-const SLOT_H = ROW_H * VISIBLE_ROWS + ROW_GAP * (VISIBLE_ROWS - 1) // 232
+const SLOT_H = ROW_H * VISIBLE_ROWS + ROW_GAP * (VISIBLE_ROWS - 1) // 244
 
 /**
  * 「走过的路」清单的折叠阈值：超过 2 条才折叠（默认只露 2 条 + 一个「展开」按钮），
@@ -72,13 +72,14 @@ const FOLD_AT = 2
  *
  * 版式（2026-10 前端迭代 02，对齐主页样板）：
  * - 页头交给 PageShell 里的 PageHeader（标题 26/700 + 一句人话 + 右侧一个次按钮）；
- * - 一屏一个主角：把「当前最该做的那一条」做成最大的白卡 —— 浅桃 chip 点题、
- *   标题、一句副墨的「为什么值得做」、关联痛点 chip、**步骤路径**（唯一的一处进度）
- *   + 「已完成 1/2 步」读数、唯一的实心 CTA「继续做」；没有进行中任务时，
+ * - 一屏一个主角：把「当前最该做的那一条」做成最大的白卡 —— 中性 chip 点题、
+ *   标题、一句副墨的「为什么值得做」、关联痛点 chip、**步骤路径**（唯一的一处进度，也是
+ *   全屏唯一用到赭金的地方）+ 「已完成 1/2 步」读数、唯一的实心 CTA「继续做」；没有进行中任务时，
  *   主角区改成「开始新任务」的真话引导，不伪造任务；
  * - 其余任务按状态分组，两列 7/5 支撑（左：手上的其它；右：走过的路）。
- *   两栏都是「随内容收短、最多 3 个框」，`items-start` 保证谁也不会把对方拉长；
- *   左栏「手上的其它任务」：最多一屏露 3 条（多了滑动、少了就收短）；
+ *   两栏**顶边与下沿对齐**：grid 默认 stretch，较矮的一栏用 `flex-1` 吃满行高，
+ *   列表区把余量居中分配，不会把几十 px 空白全堆在卡片底部；
+ *   左栏「手上的其它任务」：最多一屏露 3 条（多了滑动、少了就居中收在卡内）；
  *   右栏「走过的路」：顶部固定一句「每日一句」（按日期轮换、一个框那么大、醒目），
  *   下面 2 个框给做过的任务；超过 2 条时标题行右侧出现「展开其余 N 条 / 收起」（不占额外高度）。
  *
@@ -184,7 +185,7 @@ export default function TaskListPage() {
     <PageShell
       title="成长任务"
       badge={
-        <Badge variant="secondary" className="rounded-full font-normal">
+        <Badge variant="secondary" className="rounded-full font-normal text-caption">
           小步打卡
         </Badge>
       }
@@ -264,18 +265,21 @@ export default function TaskListPage() {
             </Reveal>
           )}
 
-          {/* ② 其余任务按状态分组，两列 7/5 支撑；items-start：两栏各自按内容定高，谁也不许把对方拉长 */}
-          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-            <Reveal delay={140} className="min-w-0 lg:col-span-7">
-              <Panel data-print="card" className="gap-4">
+          {/* ② 其余任务按状态分组，两列 7/5 支撑。
+              不加 items-start：grid 默认 stretch，两栏顶边、下沿对齐，
+              较矮的一栏靠卡片 flex-1 吃满行高（余量在卡内分配，不留在卡外） */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+            <Reveal delay={140} className="flex min-w-0 flex-col lg:col-span-7">
+              <Panel data-print="card" className="flex-1 gap-4">
+                {/* 卡内标题改成结论句（数字进标题，所以 count 传 0 不再出重复的计数 chip） */}
                 <SectionHead
-                  title="手上的其它任务"
-                  count={otherOngoing.length}
+                  title={otherOngoing.length ? `手边还有 ${otherOngoing.length} 件` : '手边没有别的任务'}
+                  count={0}
                   note="一件一件来"
                 />
-                {/* 最多一屏 3 个框（多出来的滑动查看）；不足 3 条时按内容收短，
-                    不再固定撑满 232px —— 那截空白是这张卡最显眼的"空" */}
-                <div>
+                {/* 最多一屏 3 个框（多出来的滑动查看）；不足 3 条时由列表区 flex-1
+                    居中吃掉余量 —— 不固定撑满 232px，也不把空白堆在卡片底部 */}
+                <div className="flex flex-1 flex-col justify-center">
                   {otherOngoing.length ? (
                     <ul
                       className="flex flex-col gap-2 overflow-y-auto pr-1"
@@ -296,21 +300,25 @@ export default function TaskListPage() {
                   ) : (
                     <SupportLine
                       icon={<Sparkles className="size-4" />}
-                      text="手头只有这一件在做，把它做完再换下一件就好。"
+                      text={
+                        heroTask
+                          ? '手头只有这一件在做，把它做完再换下一件就好。'
+                          : '现在没有进行中的任务，想继续就从上面的入口生成一件。'
+                      }
                     />
                   )}
                 </div>
               </Panel>
             </Reveal>
 
-            <Reveal delay={250} className="min-w-0 lg:col-span-5">
-              <Panel data-print="card" className="gap-4">
+            <Reveal delay={250} className="flex min-w-0 flex-col lg:col-span-5">
+              <Panel data-print="card" className="flex-1 gap-4">
                 <SectionHead
-                  title="走过的路"
-                  count={done.length + abandoned.length}
+                  title={historyTasks.length ? `走过 ${historyTasks.length} 件` : '走过的路还空着'}
+                  count={0}
                   note="记录都还留着"
                   action={
-                    /* 折叠开关放标题行里：不占高度，所以折叠态两栏永远等高对齐 */
+                    /* 折叠开关放标题行里：不占额外高度，两栏靠 grid stretch 对齐下沿 */
                     historyFoldable ? (
                       <Button
                         variant="ghost"
@@ -328,10 +336,10 @@ export default function TaskListPage() {
                     ) : undefined
                   }
                 />
-                {/* 折叠态最多 3 个框高（每日一句 + 2 条）＝上限，不是固定高度：
-                    内容不足时按内容收短；展开后右栏才长高，左栏不动 */}
+                {/* 折叠态最多 3 个框高（每日一句 + 2 条）＝上限，不是固定高度；
+                    展开后右栏内容变高，左栏卡片随 grid stretch 一起拉高，下沿仍然齐平 */}
                 <div
-                  className="flex flex-col gap-2"
+                  className="flex flex-1 flex-col gap-2"
                   style={historyOpen ? undefined : { maxHeight: SLOT_H }}
                 >
                   <DailyQuote />
@@ -397,7 +405,7 @@ function LoadingBlock() {
   return (
     <div className="flex flex-col gap-6">
       <AIThinking text="正在把你的任务列出来…" lines={2} />
-      <Skeleton className="h-64 rounded-xl" />
+      <Skeleton className="h-72 rounded-xl" />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <Skeleton className="h-40 rounded-xl lg:col-span-7" />
         <Skeleton className="h-40 rounded-xl lg:col-span-5" />
@@ -408,8 +416,8 @@ function LoadingBlock() {
 
 /**
  * 主角卡：当前最该做的那一件。
- * 浅桃 chip 点题 / 标题 / 一句副墨的「为什么值得做」/ 关联痛点 chip /
- * 步骤路径（唯一的一处进度）+ 唯一的实心 CTA「继续做」。
+ * 中性 chip 点题 / 标题 / 一句副墨的「为什么值得做」/ 关联痛点 chip /
+ * 步骤路径（唯一的一处进度，也是全屏唯一的赭金）+ 唯一的实心 CTA「继续做」。
  * 一屏只有一种进度表达：进度条与百分比已删（和「已完成 n/m 步」重复）。
  * 「···」 菜单里是低频动作（放弃 / 删除），确认弹窗逻辑与改版前完全一致。
  */
@@ -429,26 +437,27 @@ function HeroTask({
   return (
     <Panel
       data-print="card"
-      className={cn('gap-6', highlighted && 'ring-1 ring-primary/30')}
+      className={cn('gap-6 p-7 md:p-8', highlighted && 'ring-1 ring-primary/30')}
     >
       <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 flex-col gap-2">
-          {/* 点题 chip：浅桃只占这么一小块，全屏只此一处 */}
-          <span className="inline-flex w-fit items-center gap-2 rounded-full bg-secondary-fixed px-2.5 py-1 text-caption font-medium text-on-secondary-fixed">
-            <span className="size-1.5 shrink-0 rounded-full bg-secondary" aria-hidden />
+        <div className="flex min-w-0 flex-col gap-3">
+          {/* 点题 chip：中性浅底 + 墨点。全屏唯一的赭金留给下面的进度路径 */}
+          <span className="inline-flex w-fit items-center gap-2 rounded-full bg-surface-inset px-3 py-1.5 text-body-sm font-medium text-on-surface-variant">
+            <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
             今天先做这一件
           </span>
-          <h2 className="text-headline-lg text-primary">{task.title}</h2>
-          {/* 为什么值得做：不再单独占一块浅底，降级成标题下的一行副墨小字（主角卡只留一处浅底） */}
+          <h2 className="text-headline-lg text-balance text-primary">{task.title}</h2>
+          {/* 为什么值得做：不再单独占一块浅底，降级成标题下的一行副墨说明（14px，最低档）。
+              允许两行：68ch 的一句话在窄屏会被切成半句，读起来像乱码 */}
           {task.value_note ? (
-            <p className="line-clamp-1 max-w-[68ch] text-body-sm text-on-surface-variant">
+            <p className="line-clamp-2 max-w-[68ch] text-body-sm text-on-surface-variant">
               {task.value_note}
             </p>
           ) : null}
-          {/* 关联痛点：浅桃小面积 chip（hero 的关键上下文，不用大面积底色） */}
+          {/* 关联痛点：与 hero chip 同一套中性浅底（赭金不在这里花） */}
           {task.pain_point ? (
-            <span className="mt-0.5 inline-flex w-fit items-center gap-1.5 rounded-full bg-secondary-fixed px-3 py-1 text-body-sm text-on-secondary-fixed">
-              <Tag className="size-3.5" aria-hidden />
+            <span className="mt-0.5 inline-flex w-fit max-w-full items-center gap-1.5 rounded-full bg-surface-inset px-3 py-1 text-body-sm text-on-surface-variant">
+              <Tag className="size-3.5 shrink-0" aria-hidden />
               关联痛点：{task.pain_point}
             </span>
           ) : null}
@@ -494,7 +503,8 @@ function HeroTask({
  * 之后是中性灰待办；连线按进度着色，琥珀**只走到当前步为止**。
  * 与首页焦点舞台的 StepPath 同一套语言，但**不带脉冲环、连线也不生长**：
  * 这一屏的进度只有它一处（进度条已删），所以它自己也不动。
- * 底下一行元信息：现在做 / 难度 / 预计（同一行，窄了换行）＋ 右侧「已完成 n/m 步」读数。
+ * 底下一组信息：「现在做」+ 当前步名（17px，这张卡的行动焦点），
+ * 再下一行是难度 / 预计（14px），右侧是「已完成 n/m 步」读数。
  */
 function StepPath({
   total,
@@ -506,7 +516,7 @@ function StepPath({
   total: number
   done: number
   currentTitle: string | null
-  /** 成本读数与「现在做」并成一条元信息行（窄了允许换行，不再拆成两段） */
+  /** 成本读数降一档排在当前步下面（14px；不再和当前步挤同一行） */
   difficulty?: string | null
   estimatedDays?: number | null
 }) {
@@ -523,12 +533,12 @@ function StepPath({
       aria-valuenow={done}
     >
       <div className="relative flex items-center justify-between">
-        {/* 轨道：整条浅灰细线，左右缩进到圆点圆心 */}
-        <span aria-hidden className="absolute inset-x-3.5 inset-y-0 flex items-center">
+        {/* 轨道：整条浅灰细线，左右缩进到圆点圆心（移动端圆点 24px，缩进跟着收） */}
+        <span aria-hidden className="absolute inset-x-3 inset-y-0 flex items-center sm:inset-x-3.5">
           <span className="h-px w-full bg-outline-variant/60" />
         </span>
-        {/* 已走过的连线：按进度着色，只走到当前步为止（静态，不再生长） */}
-        <span aria-hidden className="absolute inset-x-3.5 inset-y-0 flex items-center">
+        {/* 已走过的连线：全屏唯一的赭金，只走到当前步为止（静态，不再生长） */}
+        <span aria-hidden className="absolute inset-x-3 inset-y-0 flex items-center sm:inset-x-3.5">
           <span className="h-px bg-secondary" style={{ width: fill * 100 + '%' }} />
         </span>
         {Array.from({ length: total }, (_, index) => {
@@ -537,7 +547,7 @@ function StepPath({
             <span
               key={index}
               className={cn(
-                'relative z-10 flex size-7 shrink-0 items-center justify-center rounded-full text-caption font-semibold tabular-nums',
+                'relative z-10 flex size-6 shrink-0 items-center justify-center rounded-full text-label-md font-semibold tabular-nums sm:size-7',
                 status === 'done' && 'bg-secondary-fixed text-on-secondary-fixed',
                 status === 'current' && 'bg-primary text-on-primary',
                 status === 'todo' && 'bg-surface-container text-on-surface-variant',
@@ -553,31 +563,35 @@ function StepPath({
         })}
       </div>
 
-      {/* 一条元信息行：「现在做」+ 难度 + 预计 并排，读数（已完成 n/m 步）贴右侧 */}
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-body-sm text-on-surface-variant">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="flex min-w-0 items-center gap-1.5">
+      {/* 一条人话：这张卡里最该被看见的是「现在做哪一步」，抬到 17px；
+          难度 / 预计 / 步数读数退到 14px，窄了各自换行，不挤在同一行里 */}
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <span className="flex items-center gap-1.5 text-caption tracking-wide text-caption-foreground">
             <Footprints className="size-3.5 shrink-0" aria-hidden />
-            <span className="truncate">
-              {currentTitle ? '现在做：' + currentTitle : '这一件已经全部做完了'}
-            </span>
+            现在做
           </span>
-          {difficulty ? (
-            <span className="flex shrink-0 items-center gap-1.5">
-              <Gauge className="size-3.5 shrink-0" aria-hidden />
-              难度
-              <span className="font-medium text-primary">{difficulty}</span>
-            </span>
-          ) : null}
-          {estimatedDays ? (
-            <span className="flex shrink-0 items-center gap-1.5">
-              <Clock className="size-3.5 shrink-0" aria-hidden />
-              预计
-              <span className="font-medium text-primary">{estimatedDays} 天</span>
+          {/* 当前步允许两行：截成半句的步骤名等于没说 */}
+          <span className="line-clamp-2 text-headline-sm text-primary">
+            {currentTitle ?? '这一件已经全部做完了'}
+          </span>
+          {difficulty || estimatedDays ? (
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body-sm text-on-surface-variant">
+              {difficulty ? (
+                <span>
+                  难度 <span className="font-medium text-primary">{difficulty}</span>
+                </span>
+              ) : null}
+              {difficulty && estimatedDays ? <span aria-hidden>·</span> : null}
+              {estimatedDays ? (
+                <span>
+                  预计 <span className="font-medium text-primary">{estimatedDays}</span> 天
+                </span>
+              ) : null}
             </span>
           ) : null}
         </div>
-        <span className="shrink-0 tabular-nums">
+        <span className="shrink-0 text-body-sm tabular-nums text-on-surface-variant">
           {done === 0 ? '还没开始' : '已完成 ' + done + '/' + total + ' 步'}
         </span>
       </div>
@@ -607,23 +621,32 @@ function TaskRow({
     tone === 'done' ? '已完成' : tone === 'abandoned' ? '停在 ' + percent + '%' : percent + '%'
 
   return (
-    <Panel inset className={cn('h-[72px] overflow-hidden', highlighted && 'ring-1 ring-primary/30')}>
-      <div className="flex items-center gap-3">
+    <Panel
+      inset
+      className={cn(
+        /* 76px = 25(标题) + 2(gap) + 22(元信息) + 上下 12px；字号阶改了要重算，
+           否则 `overflow-hidden` 会把最后一行切掉 */
+        'h-[76px] overflow-hidden py-3',
+        highlighted && 'ring-1 ring-primary/30',
+      )}
+    >
+      <div className="flex items-center gap-2.5 sm:gap-3">
         {tone === 'ongoing' ? (
-          <span className="size-2 shrink-0 rounded-full bg-secondary" aria-hidden />
+          <span className="size-2 shrink-0 rounded-full bg-primary" aria-hidden />
         ) : tone === 'done' ? (
-          <Check className="size-4 shrink-0 text-primary" aria-hidden />
+          <Check className="size-4 shrink-0 text-settled" aria-hidden />
         ) : (
           <span className="size-2 shrink-0 rounded-full bg-outline-variant" aria-hidden />
         )}
 
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="truncate text-body-md font-medium text-primary">{task.title}</span>
-          {/* 限一行（标题 + 元信息各占一行 = 44px），保证每条都是同一个框高，两栏才对得齐 */}
+          {/* 限一行（标题 + 元信息各占一行 = 44px），保证每条都是同一个框高，两栏才对得齐。
+              日期是装饰（caption），390px 放不下就整条收掉；痛点与进度是信息，留在行内 */}
           <div className="flex min-w-0 items-center gap-2 text-body-sm text-on-surface-variant">
-            {task.pain_point ? <span className="truncate">{task.pain_point}</span> : null}
+            {task.pain_point ? <span className="min-w-0 truncate">{task.pain_point}</span> : null}
             <span className="shrink-0 tabular-nums">{meta}</span>
-            <span className="shrink-0 text-caption">{formatRelative(task.updated_at)}</span>
+            <span className="hidden shrink-0 text-caption sm:inline">{formatRelative(task.updated_at)}</span>
           </div>
         </div>
 
@@ -638,7 +661,7 @@ function TaskRow({
               variant="ghost"
               size="sm"
               aria-label={'删除「' + task.title + '」'}
-              className="motion-press size-8 px-0 text-on-surface-variant hover:text-destructive"
+              className="motion-press size-8 px-0 text-on-surface-variant hover:text-attention"
               onClick={() => onDelete(task)}
             >
               <Trash2 className="size-3.5" aria-hidden />
@@ -666,7 +689,7 @@ function SectionHead({
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex items-center gap-2">
-        <h2 className="text-headline-sm text-primary">{title}</h2>
+        <h2 className="text-headline-md text-primary">{title}</h2>
         {count > 0 ? (
           <span className="rounded-full bg-surface-container px-2 py-0.5 text-caption font-medium tabular-nums text-on-surface-variant">
             {count}
@@ -679,8 +702,9 @@ function SectionHead({
 }
 
 /**
- * 「走过的路」的每日一句：占**一个框**那么大（与任务行等高，浅桃底 + 琥珀图标），
+ * 「走过的路」的每日一句：占**一个框**那么大（与任务行等高，卡内浅底），
  * 按「当年第几天」取模轮换 —— 每天自动换一条，不用手动维护。
+ * 底色用中性浅底而不是浅赭：这一屏的赭金只给主角卡的进度。
  * 文案只做鼓励，不吹成绩、不替用户宣布结果（与全站口径一致）。
  */
 const DAILY_QUOTES = [
@@ -703,8 +727,8 @@ function DailyQuote() {
   }, [])
 
   return (
-    <div className="flex h-[72px] shrink-0 items-center gap-3 rounded-lg bg-secondary-fixed px-3.5 text-on-secondary-fixed">
-      <Sparkles className="size-5 shrink-0" aria-hidden />
+    <div className="flex h-[76px] shrink-0 items-center gap-3 rounded-lg bg-surface-inset px-3.5 py-2.5 text-on-surface">
+      <Sparkles className="size-5 shrink-0 text-on-surface-variant" aria-hidden />
       <p className="line-clamp-2 text-headline-sm">{quote}</p>
     </div>
   )
