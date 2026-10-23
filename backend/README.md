@@ -143,20 +143,24 @@ backend/
 │   │   ├── idempotency.py ★        # client_msg_id 幂等（设计文档 4.3，见第 6 节 ⑤）
 │   │   ├── resume_service.py  interview_service.py  task_service.py
 │   │   ├── daily_question_service.py  report_service.py  badge_service.py
+│   │   ├── question_bank_service.py # ★新增：真实面试题库检索（目标岗位 -> 方向 × 场景）
+│   │   ├── career_content_service.py ★  chat_director.py ★  # ★新增：就业内容素材检索（31 条，含行业现状 market）/ 对话供料层（见 §4.16.13 / §4.16.14 / 勘误 9.40）
 │   │   ├── home_service.py ★  event_service.py ★   # 补实现（见 §4.8 / §4.9）
 │   ├── ai/
 │   │   ├── deepseek_client.py      # httpx 直连 + 流式 + 结构化 + 兜底（7.1/7.2/7.3/7.6）
 │   │   ├── parser.py               # Prompt 加载 + JSON 抠取 + 校验（7.3）
 │   │   ├── schemas.py              # ★新增：AI 输出契约（Pydantic）
 │   │   ├── fallbacks.py            # ★新增：兜底话术与默认值（7.6）
-│   │   └── prompts/
-│   │       ├── chat_system.txt     # 7.5 原文；★规则 8/11/12 已改、新增 13/14 反杜撰（见 §4.16.3 / §4.16.7 / §6 ㊴）
+│   │   ├── prompts/
+│   │       ├── chat_system.txt     # 7.5；★已整体重写（2026-11 对话 v3：从"别做什么"改成"每轮必须交付什么"，见 §4.16.13 / 勘误 9.31）
 │   │       ├── profile_extract.txt  resume_polish.txt
 │   │       ├── interview_question.txt  interview_followup.txt
 │   │       ├── interview_review.txt  task_generate.txt  daily_question.txt
 │   │       ├── profile_summary.txt  # ★新增（9.24「我的画像」顶部人物速写，见 §4.7）
 │   │       └── chat_conclusion.txt # ★新增（11.11 结论卡片用）
 │   │           chat_opening.txt    # ★新增（新会话 AI 先开口，见 §4.16）
+│   │   ├── question_bank/           # ★新增：真实面试题库（按岗位方向分 JSON 文件；出题只从中挑选 + 贴合简历改写）
+│   │   └── career_content/          # ★新增：就业内容素材库（general / software 2 个方向 / 31 条，含 market 行业现状；见 §4.16.13 / §4.16.14 / 勘误 9.40）
 │   ├── tasks/
 │   │   ├── scheduler.py            # APScheduler 注册（12.1 / 12.2）
 │   │   ├── daily_question_job.py  reminder_job.py  badge_job.py
@@ -171,6 +175,9 @@ backend/
 ├── alembic.ini                     # ★Alembic 配置
 ├── uploads/                        # 历史上传文件目录（老简历链路已移除，见 §4.10；目录与历史文件保留）
 ├── tests/                          # 占位说明（骨架阶段不写测试）
+├── scripts/                        # ★新增：一次性 / 回归脚本
+│   ├── chat_v3_selfcheck.py        # ★新增：对话 v3 自检（24 项，不连库 / 不联网，可随时回归）
+│   └── chat_v3_smoke.py            # ★新增：对话 v3 冒烟（11 项，内存 SQLite + 桩掉 LLM，不联网 / 不花额度，可随时回归）
 ├── requirements.txt                # 固定版本（未验证）
 ├── .env.example                    # 3.5 全部变量
 ├── Dockerfile                      # 16.2 的 app 镜像
@@ -389,7 +396,7 @@ data: [DONE]
 | 服务端未捕获异常 | `error`（随后 `end`） | `{"code":5000,"message":"服务器内部错误","data":null}` |
 | 幂等命中（**另起一条流**） | `pending`（随后 `end`） | 上一轮已完成：`{"code":0,"message":"该消息已提交过，未重复生成","data":{"type":"pending","replay_message_id":"<uuid>"}}`；上一轮还在生成：`{"code":0,...,"data":{"type":"pending","pending":true}}` |
 | 未登录 / 会话不属于自己 / 会话不存在 | **不开流**，直接返回 JSON 错误 | `401 {code:1002}` / `404 {code:2001}`（见 §4.1，FIX 3 后是真状态码） |
-| 7.6 拒绝回答 / 答不上来 | 正常 `delta`（内容来自本地模板，不调模型） | — |
+| ~~7.6 拒绝回答 / 答不上来~~ | **已移除**（对话 v3，见 §4.16.13）：不再有"不调模型、直接回本地模板"的短路，拒绝 / 答不上来也交给模型，由导演层决定这一轮干什么 | — |
 
 前端建议处理：`pending` 事件不要弹错误；有 `replay_message_id` 时拉一次
 `GET /chat/conversations/{id}/messages` 对齐，没有就等上一轮的流。
@@ -1426,6 +1433,11 @@ Prompt 规则（`chat_opening.txt` 第四步 / `chat_system.txt` 规则 13、14�
 
 > **2026-10 追加（本节的"Partial"补丁）**：正文侧现在**有一个只留痕的事后检查**
 > （`audit_reply_for_leak`），它不改写、不打断流，只记 warning。见 §4.16.10。
+>
+> **2026-11 追加（对话 v3，见 §4.16.13）**：正文侧**多了一道机械校验** —— "给内容"的轮次
+> 先攒到 80 字再决定是否放流，整段过短且没沾到素材要点（`chat_director.looks_like_empty_turn`）
+> 就重试一次、再不合格由服务端用素材直给。所以上表那句"❌ 没有"只对**闲聊 / 提问**轮次成立；
+> 表里写的"`chat_system.txt` 规则 13/14"编号也已随该文件整体重写而作废。
 
 #### 4.16.9 L1：让 AI 看见用户自己说过的原话（证据归属 + 素材带证据）
 
@@ -1687,6 +1699,73 @@ L1 原话证据、任务/标签候选全部不再进 Prompt）：
 
 ⚠️ 仍然成立的老契约：`sys:opening` 幂等、`truncate(text, 60)`、绝不 500、
 开场白不写任何画像标签（见 §4.16.1 / §4.16.7）。
+
+#### 4.16.13 🆕 2026-11（第四次修正）：对话 v3 —— 服务端导演层 + 就业内容素材库，短路模板退场
+
+> **[已决策：勘误 9.31 全文]** 用户原话：「很明显我的AI对话根本就没有思考只是按照模板在提问……
+> 这个问题非常严重」「我要的是让AI 思考要有随机性的要有活人感的，并且大胆重构」。
+
+- **根因**：① `_shortcut_reply` 在**调用模型之前**就把"答不上来 / 拒绝"接走，回一句**全项目唯一**的
+  本地模板（`STUCK_REPLY`），所以两次对话一字不差；② 对话侧**没有任何就业内容**可给，
+  "复述他的话 + 抛一个问题"是唯一永远不违规的输出。
+- **改了哪些文件**：新增内容库 `app/ai/career_content/`（`general` + `software` 2 个方向）与检索
+  `app/services/career_content_service.py`；新增服务端导演层 `app/services/chat_director.py`
+  （**只做三件事**：按方向 + "讲过没有"挑素材、给模型一个"走到哪一步"的进度提示、划三条底线
+  —— 不许编数字 / 不许重复 / 不许只复述+反问；**不替模型决定 intent / angle**，见 §4.16.14）；
+  `chat_system.txt` 整体重写；`chat_service.py` 删掉 `_shortcut_reply` / `shortcut` 全链路、
+  注入 `【本轮任务】`、"给内容"轮次走先攒后发 + 空转校验兜底；`ai/fallbacks.py` 与 `utils/text.py`
+  的 `STUCK_REPLY` / `REFUSAL_REPLY` / `stuck_reply()` / `refusal_reply()` / `looks_like_stuck()` /
+  `looks_like_refusal()` 全部删除（只剩 AI 调用失败用的 `FALLBACK_CHAT_REPLY`）。
+- **为什么这么做**：把"有没有就业内容可给"这件事从模型自觉变成服务端保证（Prompt 层"请注意多样性"这类软提示在本项目实测无效）；
+  "给什么素材"由服务端定，"怎么说"仍留给模型 —— 那是活人感的来源。
+  ⚠️ 这条**覆盖了勘误 9.28「等他主动问『那我该怎么办』才给方案」的时机决定**：目标用户不会主动问。
+  ⚠️ **随机性不再由服务端指派**：用户随后拍板"不要分配模型、约束不要太多"，原来由服务端定 intent / angle 与两条硬闸的做法**已删除**（见 §4.16.14）。
+- **验证到什么程度**：`py_compile`（8 个文件）通过、`import app.main`（全部路由）与 `chat_service / chat_director / career_content_service` 可导入、
+  `content_stats()` = **2 方向 / 25 条**（通用 12 + 计算机 13）、`text.MAX_ASSISTANT_CHARS = 1500`；
+  **自检脚本** `scripts/chat_v3_selfcheck.py` **24/24 通过**、**冒烟脚本（新增）** `scripts/chat_v3_smoke.py` **11/11 通过**
+  （内存 SQLite + 桩掉 `deepseek_client.chat_text` / `stream_chat`，不联网、不花额度）；
+  **真机（真 Key）未验证**，且改完 prompt 必须重启后端（见勘误 9.28「.txt 热重载并没有生效」）。
+- **收尾（真机前）又修了三处**（都是自检 / 冒烟跑出来的真问题）：① 供料线索补上 `User.major`
+  （注册填了"计算机科学与技术"但本轮没提方向词时，原先只给通用素材、不给计算机方向）；② 空转判定改用更严门槛
+  `chat_director._EMPTY_TURN_OVERLAP_MIN = 6`（原先复用去重的 3 字口径，"有没有"这种巧合就能把一句空话判成"给了内容"，
+  空转闸形同虚设），去重路径仍用宽松口径、**两处刻意不同**；③ 去重探针从标题改为 `career_content_service.item_probe()`
+  要点串（同组标题太像，拿标题当探针会把整组日常类素材一次剔光）。
+- ⚠️ 现有边界：内容库只有 2 个方向；导演层的「讲过没有」与「走到哪一步」是**机械判定**，不是模型判断。
+
+#### 4.16.14 🆕 2026-11（第五次修正）：模型面实测 —— 没有 V4.1、思考是默认行为、统一模型
+
+> **[已决策：勘误 9.32 全文]** 用户原话：「思考模式用的是V4还是V4.1」；随后拍板「所有对话都带思考，不要分配模型」「（思考过程给用户看）不给」「开放长度」「删」「我只要活人感，要有思考，要给用户分析就业环境，要引导用户选择他要学什么，约束不要太多」。
+
+- **实测模型面**（真 Key 探针打 `GET /models` + 逐名试调用，不查文档猜）：只有 `deepseek-v4-pro` / `deepseek-flash` 两个 ID；
+  `deepseek-v4.1` / `deepseek-v4.1-pro` / `deepseek-v4.1-flash` / `deepseek-v4` **全部 HTTP 400（没有 V4.1）**；
+  `deepseek-chat` 与 `deepseek-reasoner` 都可用、但响应 `model` 字段**回落到 `deepseek-flash`**（前者还**没有** `reasoning_content`）
+  —— 写 `deepseek-reasoner` 等于写 flash。两个 V4 模型**默认都返回 `reasoning_content`**（思考是这代的默认行为），
+  `thinking={"type":"disabled"}` 可显式关；`max_tokens=64` 时正文直接空（**思考吃 max_tokens**）。
+- **所以 `.env` 里 `DEEPSEEK_MODEL=deepseek-chat` 是个错觉**：它是指向 flash、且关掉思考的别名，"换个名字变聪明"不成立；
+  思考与否**只能靠调用方显式声明**，靠模型名猜必错。
+- **最终口径**：① **不分配模型** —— 全项目统一 `deepseek-v4-pro`；② **对话正文 `thinking=True`**；
+  ③ 结构化 / 短任务（出题 / 抽标签 / 生成任务 / 复盘）**同一个模型但 `thinking=False`**（关思考，避免思考吃掉 JSON 的 max_tokens）；
+  ④ **思考过程不给用户看** —— 后端未向 SSE 加 `thinking` 事件、前端也没接，用户等待期只有现有加载态；
+  ⑤ 超时与预算：`DEEPSEEK_THINKING_TIMEOUT=300`（思考单独一档）、`DEEPSEEK_CHAT_MAX_TOKENS=4000`（给小了正文会空）；
+  `DEEPSEEK_REASONER_TIMEOUT` / `DEEPSEEK_CHAT_MODEL` 这类按名字猜的配置**已废除**。
+- **长度放开**：对话正文 300 字上限取消，按内容分档、**硬上限 1500 字**（手册 7.7 已标注修订）。
+- **导演层降级**：删掉服务端指派 intent / angle 与两条硬闸，只留"挑素材 + 进度提示 + 三条底线（不许编数字 / 不许重复 / 不许只复述+反问）"。
+- ⚠️ **没做**：没有逐模型的价格 / 延迟基准测试（只有"开思考更慢更贵"的定性结论）；没有真机跑完整对话（需重启后端 + 真 Key）。
+
+> **2026-10-19 追加（勘误 9.35 补充）**：对话默认变短 —— Prompt 改为"一条就够、约 200 字以内"，
+> `chat_director.MATERIAL_LIMIT` **3→2**、`text.MAX_ASSISTANT_CHARS` **1500→800**（上面的 1500 以本条为准）；
+> 拆条改为看段落结构（161 字三段 → 3 条），最后一段是提问时服务端留白 **1.4s** 再发。
+
+#### 4.16.15 🆕 2026-10-19（第六次修正）：模型换 V4.1 Flash（API 名 `deepseek-flash`），预算调"够用"
+
+> **[已完成：勘误 9.36 全文]** 用户原话：「把现在的AIAPI模型换成4.1flash 开思考　输出的极限大小和思考的极限大小也给我优化到适合我们项目的够用的程度」「固定effort low」「你去查官方api」。
+
+- **模型**：`deepseek-flash`（= **DeepSeek-V4.1-Flash-1017**，输出 $0.6–1.2 /1M）；全项目仍统一一个模型。
+- **思考**：对话显式 `thinking: enabled` + **`reasoning_effort: "low"`**（硬编码 `deepseek_client.CHAT_REASONING_EFFORT`，**不做配置项**）；开思考时**不发 temperature**（官方口径：thinking 模式下采样参数不生效）。
+- **预算**：对话 `max_tokens=2000`（实测总用量 447-602，约 3 倍余量；同时堵掉官方默认的 64K）；思考超时 **120s**（原 300s，实测 3.4-10.4s）。
+- **结构化任务不变**：出题 / 抽标签 / 生成任务 / 复盘 / 每日一问仍 `thinking: disabled`、`max_tokens` 原值 —— 同一个模型关思考，避免思考挤掉 JSON 预算。
+- **⚠️ 以官方文档为准，不按名字猜**：`deepseek-v4.1-flash` 这类按版本号拼的名字会 **HTTP 400**（报错列出 `deepseek-flash, deepseek-v4-pro`）；官方 `/models` 只有这两个名字，而 `deepseek-flash` 就是 V4.1 Flash（§4.16.14 的"没有 V4.1"表述已由勘误 9.32 更正）。
+- **验证**：专项校验 9/9；真调一次 3.4s / 117 字；**未真机跑完整对话**（需重启后端）。
 
 ---
 

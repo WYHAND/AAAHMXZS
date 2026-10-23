@@ -257,7 +257,7 @@
 
 | 技术 | 选型 | 说明 |
 |---|---|---|
-| 模型 | DeepSeek API | 只接一家，`deepseek-chat` |
+| 模型 | DeepSeek API | 只接一家；**全项目统一 `deepseek-flash`（= DeepSeek-V4.1-Flash-1017）** —— 对话正文开思考（`reasoning_effort` 固定 `low`），结构化任务（出题 / 抽标签 / 生成任务 / 复盘）关思考。`deepseek-v4-pro` 是更强的备选，改 `.env` 一行即可（见勘误 9.32 / 9.36） |
 | 调用方式 | httpx 直接调用 | 不引入LangChain，减少抽象层 |
 | 流式输出 | SSE | 对话流式返回；事件具名 `start/delta/tag/pending/done/error`，`end` 收尾 |
 | 结构化输出 | Pydantic + JSON Schema | 画像标签、诊断卡、面试评分等 |
@@ -411,9 +411,16 @@ DATABASE_URL=sqlite:///./data/app.db
 SECRET_KEY=your-secret-key
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
 
-# DeepSeek
+# DeepSeek（模型面见勘误 9.32）
 DEEPSEEK_API_KEY=sk-xxxxxxxx
 DEEPSEEK_BASE_URL=https://api.deepseek.com
+# 全项目统一 deepseek-flash（= V4.1-Flash-1017）：对话正文开思考（effort 固定 low），
+# 结构化任务关思考（由调用方显式声明）
+DEEPSEEK_MODEL=deepseek-flash
+# 开思考更慢（实测 3-10s），120s 已足够；对话正文预算 2000（思考也花这份额度，实测总用量 447-602）
+DEEPSEEK_THINKING_TIMEOUT=120
+DEEPSEEK_CHAT_MAX_TOKENS=2000
+# ⚠️ 模型名只有 deepseek-flash / deepseek-v4-pro；deepseek-v4.1-flash 这种按版本号拼的名字会 400
 
 # 文件存储
 UPLOAD_DIR=./uploads
@@ -1118,7 +1125,7 @@ async def chat(messages, temperature=0.7, stream=False, max_tokens=2048):
             DEEPSEEK_API_URL,
             headers={"Authorization": f"Bearer {settings.DEEPSEEK_API_KEY}"},
             json={
-                "model": "deepseek-chat",
+                "model": "deepseek-flash",  # = V4.1-Flash-1017（勘误 9.36）
                 "messages": messages,
                 "temperature": temperature,
                 "stream": stream,
@@ -1128,6 +1135,14 @@ async def chat(messages, temperature=0.7, stream=False, max_tokens=2048):
         resp.raise_for_status()
         return resp
 ```
+
+> **模型口径（勘误 9.32 / 9.36）**：全项目统一用 `deepseek-flash`（= V4.1-Flash-1017，不按用途分配模型 id）；
+> `deepseek-v4-pro` 是更强的备选，改 `.env` 一行即可。
+> 区别只在**思考开关**：对话正文传 `thinking=True`（V4 这代默认就思考，不要带 `temperature`，
+> 且思考会消耗 `max_tokens`，预算必须给足，本项目对话正文用 2000）；出题 / 抽标签 / 生成任务 / 复盘等结构化任务显式
+> `thinking={"type": "disabled"}`。对话正文的思考强度**固定 `reasoning_effort=low`**（实测够用）。
+> `deepseek-v4.1-flash` 这种按版本号拼的名字会 400；`deepseek-chat` / `deepseek-reasoner`
+> 实测只是指向 `deepseek-flash` 的别名（其中 `deepseek-chat` 会关思考）—— **靠模型名猜是否思考必错**。
 
 ### 7.2 流式输出
 
@@ -1197,7 +1212,7 @@ tag = ProfileTag.model_validate_json(content)
 你是高校学生的AI职业指导助手，像学长学姐一样亲切。
 规则：
 1. 每轮用户回答后，必须回应并主动抛出下一个问题或方向。
-2. 每次输出不超过300字，长内容分段。
+2. 篇幅按内容分档：**默认短** —— 一般 3-4 句、约 200 字以内，一段只讲一个重点；只有用户明确要求「详细讲讲」才展开。硬上限 800 字（勘误 9.35，原 1500 已下调），超出分段（见 7.7）。
 3. 语气平等，不说教，可适当使用语气词。
 4. 用户表达迷茫或焦虑时，先共情，再引导到兴趣、经历。
 5. 用户拒绝回答时，立即跳过并切换话题。
@@ -1220,8 +1235,8 @@ tag = ProfileTag.model_validate_json(content)
 
 - DeepSeek调用失败：返回模板回复，不报错（`chat_text()` 的契约就是「不抛异常」）。
 - 结构化输出解析失败：重试1次，仍失败则使用默认值。
-- 用户拒绝回答：跳过，切换话题。
-- 用户答不上来：给提示思路。
+- 用户拒绝回答：**已修订（勘误 9.31）—— 不再用本地模板短路，交回模型处理**（Prompt 要求不逼问、换一个更小的切口）。
+- 用户答不上来：**已修订（勘误 9.31）—— 不再用本地 `STUCK_REPLY` 模板，交回模型处理**（该给内容 / 台阶时给内容，而不是换一道题再问一遍）。
 - **开场白有专用的分档兜底模板**（按背景丰度分三档），不能复用「中途断线」那句兜底话术 —— 它放在会话第一句非常突兀（见 11.4）。
 
 ### 7.7 对话边界控制
@@ -1234,7 +1249,7 @@ tag = ProfileTag.model_validate_json(content)
   全部不再存在（`chat_system.txt` 里对应那条规则也已删除，其余规则重新编号保持连续）；
   真实库里的那两个字段也已物理删除。
   **前端不应再实现「追问进度 1/3」这类进度环，SSE 事件里没有这两个字段。**
-- 输出≤300字：Prompt约束+后端截断。
+- ~~输出≤300字：Prompt约束+后端截断。~~ **已修订（勘误 9.31 / 9.32 / 9.35）**：字数上限先是放开到 1500，随后按用户反馈「说的有点多了，要提炼重点」**下调到 800**（默认口径是"一般 3-4 句、约 200 字以内、一段只讲一个重点"）。仍由 Prompt 约束 + 后端截断兜住；出题 / 复盘等结构化任务不受此限。
 - 过渡语模板：本地维护，随机选择。
 - **面试追问另有一套上限**：`MAX_FOLLOWUP_PER_QUESTION = 2`（每题最多 1-2 轮追问，见 11.9）。
   它与上面被移除的聊天计数器**完全无关**，属于模拟面试的核心功能，保留不变。
@@ -1726,7 +1741,7 @@ linux:
 - 用户填写：前端提交前把空字段剔掉（**用户没写的字段绝不发给 AI**）。
 - 润色：`POST /resume/polish` 调 `resume_polish.txt`，**只改写用户写过的内容**（口语 → 简历口吻 / 按 STAR 重组），一个字的事实都不许新增；**唯一的例外是技能栏** —— 用户在那里写的通常只是关键词，要展开成简历上的能力表述（「Java」→「熟悉 Java 基础语法、面向对象编程、集合框架与异常处理。能使用 Java 独立完成控制台程序开发。」），但**不许加用户没写过的其它技术名、不许加任何数字、不许写"精通/资深"**（这条边界与它的机械缺口见 9.20）；服务端另做机械校验（数字必须是用户原文数字的子集、用户没填的字段不许被填、技能条目**一一对应且每条必须留着原技术名**），命中就把那个字段回退成用户原文。
 - 技能的填写方式：**一项一行**（模板下发 `lines: true`，前端渲染成多行输入框）。因为展开后的一句话自带顿号逗号，用顿号分隔的单行输入框会把一句话切成好几项假技能；展示态也只对短词条用「、」拼接，展开成句子的技能一条一行。
-- 展示 / 保存 / 打印：点「润色」立刻先按用户原文排出一份完整简历（顶上提示"正在润色"），AI 回来后原地换成润色版；可编辑、可 `PUT /resume/mine` 保存、可打印导出。
+- 展示 / 保存 / 导出：点「润色」立刻先按用户原文排出一份完整简历（顶上提示"正在润色"），AI 回来后原地换成润色版；可编辑、可 `PUT /resume/mine` 保存、可导出 PDF（桌面端 `printToPDF` 直接落盘，网页端退回系统打印窗口）。
 - 画像回流：完整度（`calculate_completeness`，权重 25/10/20/10/20/10/5 合计 100）、项目经验、技能栈。
 - 老链路的「上传 PDF → 解析 → ATS 评分 → 优化报告 → 下载」已**整体删除**，本节的标题与编号沿用，内容以上面这几条为准（见 9.17）。
 
@@ -2160,7 +2175,7 @@ docker-compose up -d
 
 | 问题 | 答案 |
 |---|---|
-| 如何修改DeepSeek模型？ | 改 `.env` 的 `DEEPSEEK_MODEL`（或 `deepseek_client.py` 中的 model 字段） |
+| 如何修改DeepSeek模型？ | 改 `.env` 的 `DEEPSEEK_MODEL`（默认 `deepseek-flash` = V4.1-Flash-1017，全项目统一；想更强就改 `deepseek-v4-pro`）；**思考开关在调用方**（对话开、结构化任务关），不是靠模型名；对话思考强度固定 `reasoning_effort=low`（见勘误 9.32 / 9.36） |
 | 如何增加岗位？ | 在岗位关键词库中添加（代码常量，见 5.4） |
 | 如何导出报告？ | 浏览器打印（`src/styles/print.css` 提供打印样式） |
 | 改了 prompt 为什么不生效？ | prompt 带 `lru_cache`，必须重启后端（见 3.6） |
