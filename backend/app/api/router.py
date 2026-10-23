@@ -40,6 +40,7 @@ from app.api.v1 import (
     resume,
     task,
     test,
+    voice,
 )
 
 API_V1_PREFIX = "/api/v1"
@@ -52,6 +53,8 @@ api_router.include_router(profile.router)
 api_router.include_router(chat.router)
 api_router.include_router(resume.router)
 api_router.include_router(interview.router)
+# 面试语音（转写 / 朗读）：只做语音 <-> 文字，业务仍走 interview
+api_router.include_router(voice.router)
 api_router.include_router(task.router)
 api_router.include_router(daily_question.router)
 api_router.include_router(report.router)

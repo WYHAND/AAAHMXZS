@@ -22,6 +22,7 @@ from app.api.v1 import (
     resume,
     task,
     test,
+    voice,
 )
 
 __all__ = [
@@ -37,4 +38,5 @@ __all__ = [
     "badge",
     "home",
     "events",
+    "voice",
 ]

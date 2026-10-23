@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CornerDownRight, SkipForward } from 'lucide-react'
+import { CornerDownRight, Mic, SkipForward } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { AIThinking } from '@/components/AIThinking'
 import { EmptyState } from '@/components/EmptyState'
 import { Reveal } from '@/components/Motion'
+import { VoiceCallIntro } from '@/components/interview/VoiceCallIntro'
+import { VoiceCallStage } from '@/components/interview/VoiceCallStage'
+import { VoiceMicButton } from '@/components/interview/VoiceMicButton'
 import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
@@ -21,7 +24,12 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Panel } from '@/components/Panel'
 import { INTERVIEW_ANSWER_MAX } from '@/constants/form'
+import { INTERVIEW_SKIP_ANSWER } from '@/constants/interview'
+import { appendDictation } from '@/constants/voice'
 import { toInterviewReview } from '@/constants/routes'
+import { useDictation } from '@/hooks/useDictation'
+import { useVoiceCall } from '@/hooks/useVoiceCall'
+import type { VoiceTurnResult } from '@/hooks/useVoiceCall'
 import { cn } from '@/lib/utils'
 import { useInterviewStore } from '@/store/interviewStore'
 import { STORAGE_KEY, storage } from '@/utils/storage'
@@ -39,6 +47,27 @@ const ANSWER_MAX = 500
 const ANSWER_COUNT_FROM = Math.floor(ANSWER_MAX * 0.8)
 
 /**
+ * 在“接通”这次点击里先把麦克风权限要下来。
+ *
+ * 为什么不在 TTS 读完再要：浏览器权限弹窗会打断第一题的朗读，
+ * 用户也容易以为“没声音”。这里先 getUserMedia 一次、拿到后立刻释放，
+ * 真正的识别仍由 SpeechRecognition 自己开麦。
+ * 拿不到权限就直接留在入口页，别让用户听完题才发现麦克风没开。
+ */
+async function primeMicrophone(): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+    return true
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    stream.getTracks().forEach((track) => track.stop())
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * 面试进行中（设计说明书 2.1 /interview/session，3.2 一题一屏）
  * 全屏沉浸（BlankLayout），无侧栏。
  *
@@ -49,7 +78,7 @@ const ANSWER_COUNT_FROM = Math.floor(ANSWER_MAX * 0.8)
  * 上下文行（2026-10-19）：顶部那行先说清"这是哪一场、到第几题"——
  * 场景取自 store 里已经有的 `session.scene`（`/interview/start` 的返回值），
  * **不为此新增请求**；刷新页面后 store 里没有 session，就只留题号，不显示半截信息。
- * 底部动作分三层：「跳过这题」（弱）→「结束面试」（危险，text-destructive 文字按钮）
+ * 底部动作分三层：「跳过这题」（弱）→「结束面试」（危险，text-attention 文字按钮）
  * → 主 CTA（唯一实心）。未输入时主 CTA 是浅底副墨的"还不能提交"态，
  * 不用 `opacity-50` 的灰条：灰条既看不出禁用，也把黑色权重提前用掉了。
  *
@@ -87,6 +116,12 @@ export default function InterviewSessionPage() {
   const [submitting, setSubmitting] = useState(false)
   /** 「结束面试」正在生成复盘（要调 AI，可能十几秒，按钮上必须给出反馈） */
   const [finishing, setFinishing] = useState(false)
+  /**
+   * intro = 全真刚进来，还没选语音/文字；
+   * voice = 语音通话中；text = 文字作答。
+   * 小测试不使用 intro/voice，直接按 text 渲染。
+   */
+  const [inputMode, setInputMode] = useState<'intro' | 'voice' | 'text'>('intro')
 
   const load = useCallback(async () => {
     if (!sessionId) return
@@ -111,33 +146,81 @@ export default function InterviewSessionPage() {
     [finish, navigate],
   )
 
-  const submit = async (skip = false) => {
+  /**
+   * 文字/语音共用的提交入口。
+   *
+   * 不再在页面里 switch 到 finishAndReview：语音模式需要先读完“告别语”，
+   * 所以 finished 只返回 onDone，由文字/语音各自的调用方决定什么时候收尾。
+   */
+  const submitText = useCallback(
+    async (text: string): Promise<VoiceTurnResult> => {
+      if (!sessionId) return { error: '没有进行中的面试' }
+
+      // 从 store 现取，避免闭包里的 currentIndex/pendingFollowup 过期
+      const latest = useInterviewStore.getState()
+      const current = latest.questions[latest.currentIndex - 1]
+      if (!current) return { error: '当前题目不存在' }
+
+      setSubmitting(true)
+      const action = await submitAnswer(
+        sessionId,
+        current.id,
+        text.trim().slice(0, INTERVIEW_ANSWER_MAX) || INTERVIEW_SKIP_ANSWER,
+      )
+      setSubmitting(false)
+
+      if (action === 'followup') {
+        const after = useInterviewStore.getState()
+        const followup = after.pendingFollowup?.text ?? ''
+        return followup
+          ? { nextText: followup, nextKind: 'followup' }
+          : { error: '没有拿到追问内容，可以改用文字继续。' }
+      }
+
+      if (action === 'next_question') {
+        const after = useInterviewStore.getState()
+        const next = after.questions[after.currentIndex - 1]
+        return next
+          ? { nextText: next.content, nextKind: 'next' }
+          : { error: '没有拿到下一题，可以改用文字继续。' }
+      }
+
+      if (action === 'finished') {
+        return {
+          done: true,
+          closing: '好，今天先聊到这里，谢谢你。',
+          onDone: () => finishAndReview(sessionId),
+        }
+      }
+
+      return { error: '提交失败，答案还在输入框里。' }
+    },
+    [finishAndReview, sessionId, submitAnswer],
+  )
+
+  const voice = useVoiceCall({ onAnswer: submitText })
+
+  const dictation = useDictation({
+    onText: (text) => {
+      setDraft((prev) => appendDictation(prev, text, ANSWER_MAX))
+    },
+  })
+
+  const handleTextSubmit = async (skip = false) => {
     if (!sessionId) return
-    const current = questions[currentIndex - 1]
-    if (!current) return
     if (!skip && !draft.trim()) return
 
-    setSubmitting(true)
-    // 后端 answer 有 min_length=1：跳过时给一个占位说明
-    const text = skip ? '（跳过这题）' : draft.trim().slice(0, INTERVIEW_ANSWER_MAX)
-    const action = await submitAnswer(sessionId, current.id, text)
-    setSubmitting(false)
+    dictation.cancel()
+    const text = skip ? INTERVIEW_SKIP_ANSWER : draft.trim()
+    if (!skip) setDraft('')
 
-    switch (action) {
-      case 'followup':
-        // 就地续问：题目不变、index 不变，只把追问句换成气泡展示
-        setDraft('')
-        return
-      case 'next_question':
-        setDraft('')
-        return
-      case 'finished':
-        setDraft('')
-        await finishAndReview(sessionId)
-        return
-      default:
-        toast.error('提交失败，答案还在输入框里')
+    const result = await submitText(text)
+    if (result.error) {
+      if (!skip) setDraft(text)
+      toast.error(result.error)
+      return
     }
+    if (result.onDone) await result.onDone()
   }
 
   if (!sessionId) {
@@ -198,10 +281,68 @@ export default function InterviewSessionPage() {
    */
   const scene = session?.scene?.trim() ?? ''
   const sceneLabel = scene ? (scene.endsWith('面') ? scene : `${scene}面`) : ''
+  /** 全真才展示语音；小测试只有输入框里的语音转文字 */
+  const isFull = session?.mode === '全真'
+  const showIntro = isFull && inputMode === 'intro'
+  const isVoiceMode = isFull && inputMode === 'voice'
   /** 一次提交/收尾在跑（两个动作互斥地占用同一段时间，底部所有按钮一起禁用） */
   const busy = submitting || finishing
-  /** 输入框里有字 = 可以提交（禁用与否、CTA 长相都看这一个布尔） */
-  const ready = Boolean(draft.trim())
+  /** 语音转文字正在占用输入框时，先别让用户提交，免得把刚说的话丢掉 */
+  const dictating = dictation.listening || dictation.processing
+  /** 输入框里有字、且当前不在语音输入 = 可以提交 */
+  const ready = Boolean(draft.trim()) && !dictating
+
+  const startVoice = async () => {
+    if (!voice.asrSupported) {
+      toast.error('当前浏览器不支持语音识别，先用文字吧')
+      return
+    }
+    if (!displayText) return
+    const micOk = await primeMicrophone()
+    if (!micOk) {
+      toast.error('麦克风没有打开，可以先用文字作答')
+      return
+    }
+    dictation.cancel()
+    // 语音和文字是两条作答路径，切过去时不让旧草稿在后台“复活”
+    setDraft('')
+    const kind = pendingFollowup ? 'followup' : currentIndex === 1 ? 'opening' : 'none'
+    setInputMode('voice')
+    voice.startTurn(displayText, kind)
+  }
+
+  const chooseText = () => {
+    voice.stop()
+    setInputMode('text')
+  }
+
+  const reopenVoice = () => {
+    if (!displayText) return
+    void startVoice()
+  }
+
+  const switchToText = async () => {
+    const text = await voice.switchToText()
+    setInputMode('text')
+    if (text) {
+      setDraft((prev) => appendDictation(prev, text, ANSWER_MAX))
+    }
+  }
+
+  const handleSkip = () => {
+    dictation.cancel()
+    if (isVoiceMode) {
+      voice.skip()
+      return
+    }
+    void handleTextSubmit(true)
+  }
+
+  const handleEnd = () => {
+    voice.stop()
+    dictation.cancel()
+    void finishAndReview(sessionId)
+  }
   /*
    * 进度：已答完的题占多少（第 1 题时是 0）。
    * 0% 的进度条在浅底上等于"什么都没有"，所以只要有题就至少给一小段起点，
@@ -231,7 +372,7 @@ export default function InterviewSessionPage() {
             </span>
           </p>
           {askingFollowup ? (
-            <span className="shrink-0 text-caption text-caption-foreground">
+            <span className="shrink-0 text-body-sm text-on-surface-variant">
               追问 {pendingFollowup?.round ?? 1}/2
             </span>
           ) : null}
@@ -258,52 +399,108 @@ export default function InterviewSessionPage() {
               （本页没有页头，问句就是这一屏的标题）。进场用大块节拍 rise-in-lg。 */}
           <Reveal lg delay={130} className="w-full">
             <Panel className="w-full gap-5">
-              {askingFollowup ? (
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-caption text-caption-foreground">主问题</span>
-                    <p className="text-body-md text-on-surface-variant">{current.content}</p>
-                  </div>
-                  {/*
-                    追问：同一题的再问，靠「ai-inset」（3px 琥珀竖条）+ 浅底与主问题区分。
-                    浅底走统一实现 <Panel inset>（卡内浅底只有一种外观）。
-                  */}
-                  <Panel inset className="ai-inset flex-row items-start gap-2">
-                    <CornerDownRight className="mt-1.5 size-4 shrink-0 text-secondary" aria-hidden />
-                    <p className="text-headline-xl text-primary">{displayText}</p>
-                  </Panel>
-                </div>
+              {isVoiceMode ? (
+                <VoiceCallStage
+                  state={voice.state}
+                  caption={voice.caption || displayText}
+                  transcript={voice.transcript}
+                  interim={voice.interim}
+                  error={voice.error}
+                  hint={voice.hint}
+                  ttsSupported={voice.ttsSupported}
+                  onReplay={voice.replay}
+                  onStopListening={voice.stopListening}
+                  onContinue={voice.continueSpeaking}
+                  onCommit={voice.commitNow}
+                  onBargeIn={voice.bargeIn}
+                  onSwitchToText={() => void switchToText()}
+                  onRetry={voice.retry}
+                />
               ) : (
-                <h1 className="text-headline-xl text-primary">{displayText}</h1>
+                <>
+                  {askingFollowup ? (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-caption text-caption-foreground">主问题</span>
+                        <p className="text-body-md text-on-surface-variant">{current.content}</p>
+                      </div>
+                      {/*
+                        追问：同一题的再问，靠「ai-inset」（3px 琥珀竖条）+ 浅底与主问题区分。
+                        浅底走统一实现 <Panel inset>（卡内浅底只有一种外观）。
+                      */}
+                      <Panel inset className="ai-inset flex-row items-start gap-2">
+                        <CornerDownRight className="mt-1.5 size-4 shrink-0 text-secondary" aria-hidden />
+                        <p className="text-headline-xl text-primary">{displayText}</p>
+                      </Panel>
+                    </div>
+                  ) : (
+                    <h1 className="text-headline-xl tracking-tight text-primary">{displayText}</h1>
+                  )}
+
+                  {showIntro ? (
+                    <VoiceCallIntro
+                      asrSupported={voice.asrSupported}
+                      ttsSupported={voice.ttsSupported}
+                      onStart={startVoice}
+                      onText={chooseText}
+                    />
+                  ) : (
+                    <>
+                      <div className="flex flex-col gap-1.5">
+                        <div className="relative">
+                          <Textarea
+                            rows={6}
+                            maxLength={ANSWER_MAX}
+                            value={draft}
+                            onChange={(e) => setDraft(e.target.value)}
+                            placeholder={
+                              askingFollowup ? '针对这个追问再补两句' : '按你自己的话说，不用背答案'
+                            }
+                            /* 回答框是这一屏的第二个主角：暖纸浅底 + 正文 15px，和题目一起立起来 */
+                            className="bg-surface-inset pr-12 text-body-md"
+                          />
+                          <VoiceMicButton
+                            supported={dictation.supported}
+                            listening={dictation.listening}
+                            processing={dictation.processing}
+                            onClick={dictation.toggle}
+                            disabled={busy}
+                          />
+                        </div>
+                        {/* 计数只在快写满时才出现：平时旁边不挂"0/500"这种没人需要看的数字 */}
+                        {draft.length >= ANSWER_COUNT_FROM ? (
+                          <span className="self-end text-body-sm text-on-surface-variant">
+                            还能写 {ANSWER_MAX - draft.length} 字
+                          </span>
+                        ) : null}
+                        {dictation.listening || dictation.processing || dictation.error ? (
+                          <p className="text-body-sm text-on-surface-variant" aria-live="polite">
+                            {dictation.processing
+                              ? '正在转成文字…'
+                              : dictation.listening
+                                ? dictation.interim
+                                  ? `正在识别：${dictation.interim}`
+                                  : '正在听你说，说完点一下停止'
+                                : dictation.error}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      {/* 等 AI 回应时不留空白：说清它在做什么（规范 §五 加载态） */}
+                      {busy ? (
+                        <AIThinking
+                          text={
+                            finishing
+                              ? '正在整理这场面试，马上出复盘…'
+                              : '正在提交你的回答，准备下一题…'
+                          }
+                          lines={2}
+                        />
+                      ) : null}
+                    </>
+                  )}
+                </>
               )}
-
-              <div className="flex flex-col gap-1.5">
-                <Textarea
-                  rows={6}
-                  maxLength={ANSWER_MAX}
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder={askingFollowup ? '针对这个追问再补两句' : '按你自己的话说，不用背答案'}
-                />
-                {/* 计数只在快写满时才出现：平时旁边不挂"0/500"这种没人需要看的数字 */}
-                {draft.length >= ANSWER_COUNT_FROM ? (
-                  <span className="self-end text-caption text-on-surface-variant">
-                    还能写 {ANSWER_MAX - draft.length} 字
-                  </span>
-                ) : null}
-              </div>
-
-              {/* 等 AI 回应时不留空白：说清它在做什么（规范 §五 加载态） */}
-              {busy ? (
-                <AIThinking
-                  text={
-                    finishing
-                      ? '正在整理这场面试，马上出复盘…'
-                      : '正在听你的回答，想想下一句该问什么…'
-                  }
-                  lines={2}
-                />
-              ) : null}
             </Panel>
           </Reveal>
         </div>
@@ -312,34 +509,57 @@ export default function InterviewSessionPage() {
       {/*
         底部三层动作：
           ①「跳过这题」= 弱动作（ghost，中性墨色）；
-          ②「结束面试」= **危险动作**，用 text-destructive 文字按钮（无底色、无图标块），
+          ②「结束面试」= **危险动作**，用 text-attention 文字按钮（无底色、无图标块），
              和①同处一行但颜色就把层级分开了；
           ③ 主 CTA 独占一行，是整屏唯一实心块（未输入时降级成浅底副墨的"还不能提交"）。
       */}
       <Reveal delay={250} className="flex shrink-0 flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => void submit(true)}
-            disabled={busy}
-            className="motion-press gap-1.5"
-          >
-            <SkipForward className="size-3.5" />
-            跳过这题
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleSkip}
+              disabled={busy}
+              className="motion-press gap-1.5"
+            >
+              <SkipForward className="size-3.5" />
+              跳过这题
+            </Button>
+            {isFull && !isVoiceMode && !showIntro && voice.asrSupported ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={reopenVoice}
+                disabled={busy || dictating}
+                className="motion-press gap-1.5"
+              >
+                <Mic className="size-3.5" />
+                开启语音
+              </Button>
+            ) : null}
+          </div>
           {/*
             「结束面试」= 收尾动作：必须**真的调 finish 生成复盘**，不能只是跳走。
             以前这里写的是 navigate('/interview')，于是面试永远停在"进行中"、
             复盘永远生成不出来（用户点进去只看到"这份复盘还没生成"）。
-            现在多一层二次确认（会中断当前这场），确认后走的还是同一个 finishAndReview。
+            现在多一层二次确认（会中断当前这场），确认后走的还是同一个 handleEnd。
           */}
-          <AlertDialog>
+          <AlertDialog
+            onOpenChange={(open) => {
+              // 弹窗打开时先停掉语音，避免把“是否结束”的对话录进去；
+              // 用户点“再答一会儿”后，通话页会停在 idle，可点「继续」重听当前题。
+              if (open) {
+                voice.stop()
+                dictation.cancel()
+              }
+            }}
+          >
             <AlertDialogTrigger asChild>
               <Button
                 variant="link"
                 size="sm"
-                className="motion-press px-1 text-destructive hover:text-destructive/80"
+                className="motion-press px-1 text-attention hover:text-attention/80"
                 disabled={busy}
               >
                 {finishing ? '正在生成复盘…' : '结束面试'}
@@ -357,7 +577,7 @@ export default function InterviewSessionPage() {
                 <AlertDialogAction
                   variant="warm"
                   disabled={finishing}
-                  onClick={() => void finishAndReview(sessionId)}
+                  onClick={handleEnd}
                 >
                   结束并生成复盘
                 </AlertDialogAction>
@@ -365,25 +585,31 @@ export default function InterviewSessionPage() {
             </AlertDialogContent>
           </AlertDialog>
         </div>
-        <Button
-          variant={ready ? 'warm' : 'secondary'}
-          size="lg"
-          className={cn(
-            'motion-press w-full disabled:opacity-100',
-            // 没输入：浅底 + 副墨字（可辨认的"暂时不能点"），而不是 50% 透明的灰条
-            !ready && 'disabled:bg-surface-container disabled:text-on-surface-variant',
-          )}
-          onClick={() => void submit(false)}
-          disabled={busy || !ready}
-        >
-          {submitting
-            ? '提交中…'
-            : !ready
-              ? '写下回答后开始'
-              : askingFollowup
-                ? '回答追问'
-                : '提交并继续'}
-        </Button>
+        {isVoiceMode || showIntro ? null : (
+          <Button
+            variant={ready ? 'warm' : 'secondary'}
+            size="lg"
+            className={cn(
+              'motion-press w-full disabled:opacity-100',
+              // 没输入：浅底 + 副墨字（可辨认的"暂时不能点"），而不是 50% 透明的灰条
+              !ready && 'disabled:bg-surface-container disabled:text-on-surface-variant',
+            )}
+            onClick={() => void handleTextSubmit(false)}
+            disabled={busy || !ready}
+          >
+            {submitting
+              ? '提交中…'
+              : dictation.processing
+                ? '正在转成文字…'
+                : dictation.listening
+                  ? '说完再提交'
+                  : !draft.trim()
+                    ? '写下回答后开始'
+                    : askingFollowup
+                      ? '回答追问'
+                      : '提交并继续'}
+          </Button>
+        )}
       </Reveal>
     </div>
   )
