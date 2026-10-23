@@ -81,9 +81,40 @@ export function registerAuthBridge(bridge: AuthBridge): void {
   authBridge = bridge
 }
 
+/**
+ * 当前登录态 token（没有则 null）。
+ *
+ * 只给**走不了 axios 的请求**用 —— 目前唯一一处是 api/chat.ts 的 SSE：
+ * `fetch` + `ReadableStream` 是消费事件流的唯一方式（EventSource 既不能带
+ * Authorization 头也不能带 JSON body），因此它绕过了这里的请求拦截器，
+ * 必须自己取一次 token。其余请求一律继续走 `client`，不要用这个函数。
+ */
+export function getAuthToken(): string | null {
+  return authBridge.getToken()
+}
+
 /* ------------------------------ 实例 ------------------------------ */
 
-export const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1'
+/**
+ * 桌面端 preload 注入的桥：只声明这里用得到的字段，不接管整个 window 的类型。
+ * preload.ts 在 `electronAPI` 上挂了 apiBase —— 端口是主进程**运行时**挑的，
+ * 8000 被占时可能是 `http://127.0.0.1:8010/api/v1`，构建期的 .env 不可能写死。
+ */
+interface DesktopBridge {
+  apiBase?: string
+}
+
+/**
+ * 后端 API 前缀，优先级从高到低：
+ * 1. 桌面端运行时注入的地址 —— 唯一能跟上主进程实际端口的来源；
+ * 2. `VITE_API_BASE`（打包前的构建期配置 / 浏览器开发）；
+ * 3. `/api/v1`（纯浏览器开发走同源代理兜底）。
+ * 浏览器里没有 `window.electronAPI`，前两项自然落到 2、3，行为与以前一致。
+ */
+export const API_BASE =
+  (window as unknown as { electronAPI?: DesktopBridge }).electronAPI?.apiBase ??
+  import.meta.env.VITE_API_BASE ??
+  '/api/v1'
 
 export const client: AxiosInstance = axios.create({
   baseURL: API_BASE,
