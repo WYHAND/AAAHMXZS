@@ -38,6 +38,12 @@ bcrypt==4.0.1
 # --- HTTP 客户端（2.3：调用 DeepSeek） ---
 httpx==0.28.1
 
+# --- 语音（面试语音：阿里云百炼 DashScope） ---
+# ASR paraformer-realtime-v2 / TTS cosyvoice-v3-flash 都走百炼的 WebSocket 协议，
+# 用官方 SDK 处理鉴权与流式收帧。版本与本机 venv 实际安装一致（2.0.1）。
+# 依赖会自动带上 websocket-client / aiohttp，勿再单独锁版本。
+dashscope==2.0.1
+
 # --- 简历文件解析：随老简历链路（上传 PDF → 解析 → ATS → 报告 → 下载）一并删除 ---
 # pdfplumber / python-docx / python-multipart 已无任何代码引用（2026-11 删除，见
 # docs/开发手册-勘误与决策记录.md 9.17）。现在的简历是「问答式生成」：前端一个字段
