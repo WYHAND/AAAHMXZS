@@ -94,3 +94,8 @@ electron/release/
 backend/build/
 backend/dist/
 backend/*.spec
+# ---- 渲染检查产物 / 临时脚本（本地证据，不进 git）----
+tools/render-check/audit/
+tools/render-check/tmp-*
+design-preview/*.png
+audit/
