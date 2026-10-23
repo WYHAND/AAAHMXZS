@@ -93,6 +93,7 @@ class ResumeBasicInfo(BaseModel):
     """基本信息（短事实，润色只做措辞规整，不许补全）。"""
 
     name: str = Field(default="", description="姓名；用户没填就留空")
+    gender: str = Field(default="", description="性别；用户没填就留空")
     grade: str = Field(default="", description="年级；用户没填就留空")
     major: str = Field(default="", description="专业；用户没填就留空")
     school: str = Field(default="", description="学校；用户没填就留空")

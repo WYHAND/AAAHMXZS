@@ -298,7 +298,7 @@ def _event_generator(prep: "chat_service.StreamPreparation", user_id: UUID) -> A
                 user_id,
                 prep.conversation_id,
                 prep.llm_messages,
-                prep.shortcut,
+                prep.brief,
             ):
                 payload = _to_sse_payload(event)
                 yield f"event: {event.get('type', 'message')}\ndata: {_sse_data(payload)}\n\n"

@@ -14,8 +14,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import random
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Dict, Iterable, List, Optional, Tuple
@@ -30,11 +32,10 @@ from app.ai.fallbacks import (
     STRUCTURED_TEMPERATURE,
     fallback_reply,
     opening_fallback,
-    refusal_reply,
-    stuck_reply,
 )
 from app.ai.parser import load_prompt
 from app.ai.schemas import ConclusionCardResult, OpeningResult, empty_conclusion
+from app.core.config import settings
 from app.core.errors import BusinessException, ErrorCode, not_found_unless_owner
 from app.models.conversation import Conversation, Message
 from app.models.task import Task
@@ -48,14 +49,12 @@ from app.schemas.chat import (
     MessageResponse,
     PendingChatResponse,
 )
-from app.services import idempotency, profile_service
+from app.services import chat_director, idempotency, profile_service
 from app.utils.logger import get_logger, sanitize
 from app.utils.reference_match import drop_referenced, looks_referenced
 from app.utils.text import (
     MAX_ASSISTANT_CHARS,
     build_history_text,
-    looks_like_refusal,
-    looks_like_stuck,
     normalize_for_match,
     truncate,
 )
@@ -64,6 +63,34 @@ logger = get_logger(__name__)
 
 # 传给模型的历史消息条数上限（控制 token 成本）
 HISTORY_LIMIT = 12
+
+# 空转校验的"攒字阈值"（勘误 9.31/9.32）：给内容的回复通常是长文，**只有整段都很短**才可能是空转。
+# 所以流式路径先把开头这几字攒住不发给前端（用户感觉不到，一眨眼就过），
+# 攒过这个长度就当作"有内容"，照常逐块流出去；整段都没攒过它，才做空转判定。
+# ⚠️ 这个值必须 ≥ ``chat_director.looks_like_empty_turn`` 自己的长度上限（它判 >80 字为"非空转"），
+# 否则会出现"已经发出去了才判定为空转、改不了"的死角。
+EMPTY_TURN_PROBE_CHARS = 80
+
+# 「问句先压一下」的停顿秒数（勘误 9.35 的追加要求）。
+#
+# 用户原话：「在给出下一个提问的时候要给用户时间反应，说不定用户想要回答上一个问题，
+# 结果下一个问题就出来了」。落地方式：**最后一段如果是提问**，就先压住不发 ——
+# 正文那几段照常流式输出，等正文说完、停这一下，再把问句发出去。
+# 为什么必须放在服务端：前端是"一收到 done 就把草稿换成落库消息"，
+# 客户端做延迟会在替换那一刻被绕过去；只有在 done 之前睡，用户才真的看到这个停顿。
+# 取值范围：太短（<0.8s）感觉不出来，太长（>3s）会被当成卡住。1.4s 实测比较像"人说话"。
+QUESTION_HOLD_SECONDS = 1.4
+
+# 被压住的"最后一段提问"的长短上限：超过这个长度多半是正文里带了问号，
+# 不是"最后抛一个问题"，压住会让用户干等。
+_QUESTION_TAIL_MAX_CHARS = 200
+
+# 「模型在思考」的心跳间隔（秒，勘误 9.38）。
+# 用户原话：「不能光有一个动画在动，不然会以为是网卡了」。思考通常 3-10s，
+# 这段时间里如果只有三个点在跳，用户会怀疑卡死；所以每 2 秒发一次 `status` 事件，
+# 带上**真实已用毫秒**，前端显示成"正在想怎么跟你说… 6s"。
+# 2s 是"够密但不刷屏"的折中：再密会让状态行每帧都在抖，再疏（>3s）又会重新像卡住。
+STATUS_HEARTBEAT_SECONDS = 2.0
 
 
 @dataclass
@@ -78,7 +105,9 @@ class StreamPreparation:
     conversation_id: Optional[UUID] = None
     user_message: Optional[MessageResponse] = None
     llm_messages: List[Dict[str, str]] = field(default_factory=list)
-    shortcut: Optional[str] = None
+    # 本轮的"料"（供料层算好的：走到哪一步 / 可用素材 / 目的地）——
+    # 纯数据，可以安全地跨 Session 传给 SSE 生成器（见 ``stream_reply`` 的说明）。
+    brief: Optional[chat_director.TurnBrief] = None
     # 幂等命中时填充：上一次的助手回复（可能为 None 表示还在生成中）
     replay_reply: Optional[MessageResponse] = None
     pending: Optional[PendingChatResponse] = None
@@ -245,8 +274,12 @@ def _build_llm_messages(
     db: Session,
     conversation: Conversation,
     user: User,
-) -> List[Dict[str, str]]:
-    """组装发给 DeepSeek 的 messages（14.7：系统 Prompt 与用户输入分离）。"""
+) -> Tuple[List[Dict[str, str]], chat_director.TurnBrief]:
+    """组装发给 DeepSeek 的 messages（14.7：系统 Prompt 与用户输入分离），并顺带算本轮的"料"。
+
+    返回 ``(messages, brief)``：``brief`` 是供料层算出来的"走到哪一步 / 可用素材 / 目的地"，
+    调用方在生成后用它的 ``materials`` 做空转校验（见 ``_needs_delivery_retry``）。
+    """
     system_prompt = load_prompt("chat_system")
     tags = profile_service.list_tags(db, user.id)
     stage = profile_service.get_stage(db, user.id)
@@ -306,6 +339,32 @@ def _build_llm_messages(
     else:
         context_lines.append("用户目前没有进行中的成长任务。")
 
+    # ---------------------------------------------------------------------
+    # 本轮的"料"（勘误 9.31/9.32）：走到哪一步 + 可用素材 + 目的地 + 三条硬边界
+    # ---------------------------------------------------------------------
+    # ⚠️ 这里是**供料**，不是"指挥模型说哪句话"（指令式的 intent / angle / 频次硬闸
+    # 已按用户要求整块删掉，别再加回来）。为了让供料认得准方向，除了画像标签与用户原话，
+    # 还把「注册时填的专业」与「进行中任务标题」一起当线索给它 —— 他这轮可能一个方向词
+    # 都没说，但档案里早就写着"计算机"（冒烟测试抓出来的真缺口：漏了 ``user.major``，
+    # 结果一个计算机专业的学生拿到的全是通用素材）。
+    recent_pairs = [
+        (message.role, message.content)
+        for message in _recent_messages(db, conversation.id, HISTORY_LIMIT * 2)
+        if message.role in {"user", "assistant"}
+    ]
+    last_user_text = next((text for role, text in reversed(recent_pairs) if role == "user"), "")
+    profile_hints = [
+        user.major or "",
+        *(tag.label for tag in tags),
+        *(line.split('说过："', 1)[-1].rstrip('"') for line in evidence_lines),
+        *(task.title for task in ongoing_tasks),
+    ]
+    brief = chat_director.brief_turn(
+        last_user_text,
+        recent_pairs,
+        profile_text=" ".join(hint for hint in profile_hints if hint),
+    )
+
     # 跨会话信息（"不重复提问"要扩到别的会话）：
     # 不注入这块，模型只知道**当前会话**里问过什么，于是在新会话里会把
     # 用户已经答过的事（"还在弄吗" -> "不想搞了"）重新问一遍。
@@ -315,14 +374,20 @@ def _build_llm_messages(
         _collect_cross_session(db, user.id, conversation.id).as_prompt_block()
     )
 
-    system_content = system_prompt + "\n\n【当前用户背景】\n" + "\n".join(context_lines)
+    system_content = (
+        system_prompt
+        + "\n\n【当前用户背景】\n"
+        + "\n".join(context_lines)
+        + "\n\n"
+        + brief.as_prompt_block()
+    )
 
     # content 里只存纯原话（幂等 id 在 Message.client_msg_id 列上），无需任何 strip
     llm_messages: List[Dict[str, str]] = [{"role": "system", "content": system_content}]
     for message in _recent_messages(db, conversation.id, HISTORY_LIMIT):
         if message.role in {"user", "assistant"}:
             llm_messages.append({"role": message.role, "content": message.content})
-    return llm_messages
+    return llm_messages, brief
 
 
 # ---------------------------------------------------------------------------
@@ -756,6 +821,8 @@ async def _compose_opening(context: OpeningContext) -> str:
             #    但那一路有 default 兜底成模板；而"活人感"是这一版开场白的核心诉求，
             #    降温度会把句子重新变成产品文案（见 OPENING_TEMPERATURE 的说明）。
             temperature=OPENING_TEMPERATURE,
+            # 开场白契约是 ≤60 字 + used=[]，2048 是 30 倍冗余（勘误 9.37 的审计）。
+            max_tokens=256,
         )
     except Exception as exc:  # noqa: BLE001 - 开场白绝不能因为 AI 挂了就失败
         logger.warning("开场白生成异常，走本地模板: %s", sanitize(exc))
@@ -1459,13 +1526,12 @@ async def send_message(db: Session, user: User, conversation_id: UUID, payload: 
     # ⚠️ 这里**不修改会话标题**：需求 2 的范围已收敛为"仅创建时按序号命名"，
     #    "用首条消息自动命名"的方案已按用户要求完整回退（理由见 next_default_title 的说明）。
 
-    # 7.6 边界：拒绝回答 / 答不上来，走本地模板，不调用模型
-    shortcut = _shortcut_reply(payload.content)
-    if shortcut is not None:
-        assistant_text = shortcut
-    else:
-        llm_messages = _build_llm_messages(db, conversation, user)
-        assistant_text = await deepseek_client.chat_text(llm_messages)
+    # 对话正文一律交回模型（勘误 9.31/9.32）：
+    # 旧的 "7.6 拒绝回答 / 答不上来 -> 本地模板，不调模型" 短路**已删除**——
+    # 它用一句写死的话替模型提问，用户截图里出现过两次一字不差的重复，
+    # 而手册规则 11 要的恰恰是"答不上来时给 2-3 个具体台阶"（那是模型该干的活）。
+    llm_messages, brief = _build_llm_messages(db, conversation, user)
+    assistant_text = await _generate_guarded(llm_messages, brief)
 
     assistant_message = _save_assistant_message(db, conversation.id, assistant_text)
 
@@ -1540,15 +1606,16 @@ def prepare_stream(
     #    标题只在 create_conversation 里写一次（见 next_default_title 的说明）。
     user_message = _persist_user_message(db, conversation, content, client_msg_id)
 
-    shortcut = _shortcut_reply(content)
-    llm_messages = [] if shortcut else _build_llm_messages(db, conversation, user)
+    # 本轮上下文 + 供料（勘误 9.31/9.32）：**不再有本地模板短路**，
+    # 一律把 messages 和"料"一起交给生成器（它自己开 Session 去发模型）。
+    llm_messages, brief = _build_llm_messages(db, conversation, user)
 
     return StreamPreparation(
         is_duplicate=False,
         conversation_id=conversation.id,
         user_message=MessageResponse.model_validate(user_message),
         llm_messages=llm_messages,
-        shortcut=shortcut,
+        brief=brief,
     )
 
 
@@ -1557,7 +1624,7 @@ async def stream_reply(
     user_id: UUID,
     conversation_id: UUID,
     llm_messages: Optional[List[Dict[str, str]]] = None,
-    shortcut: Optional[str] = None,
+    brief: Optional[chat_director.TurnBrief] = None,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """SSE 用的异步生成器：产出 ``{"type": ..., ...}`` 事件字典（7.2 + 设计文档 5.4）。
 
@@ -1569,43 +1636,145 @@ async def stream_reply(
 
     流程：
     1. 先发 start 事件（带 conversation_id）
-    2. 逐块 yield delta（命中 7.6 本地模板就一次性 yield）
-    3. 累积完整文本 -> 截断到 300 字（7.7）-> 落库
-    4. 7.8 回流画像标签 -> 发 tag 事件
-    5. 发 done 事件
+    2. **发 `status` 状态事件（勘误 9.38）**：思考那几秒里必须让用户看见"在干什么"，
+       否则只有一个转圈动画，看起来像网卡了。三个阶段：
+       ``reading``（开场一次）→ ``thinking``（**每 2 秒心跳一次**，带 elapsed_ms）
+       → ``writing``（正文开始前一次）。
+       ⚠️ 这里**不显示模型的思维链原文**（用户拍板"思考过程不给用户看"），只报阶段与耗时。
+    3. 逐块 yield delta —— ⚠️ **开头几十字先攒住不发**（``EMPTY_TURN_PROBE_CHARS``）：
+       攒过这个长度就当作"有内容"，补齐后照常逐块流出去；整段都没攒过它，才有必要
+       判一次空转（``chat_director.looks_like_empty_turn``），不合格就带反馈重来一次。
+       这么做的原因见该常量与 ``looks_like_empty_turn`` 的说明 ——
+       **流出去的字改不了**，所以只能在"还没发"的那一小段里做质量兜底。
+       —— 同时：**最后一段如果是提问，会先压住**（``QUESTION_HOLD_SECONDS``），
+       等正文说完、停一下再发问句，给用户留出反应时间（见该常量说明）。
+    4. 累积完整文本 -> 截断（``MAX_ASSISTANT_CHARS``）-> 落库
+    5. 7.8 回流画像标签 -> 发 tag 事件
+    6. 发 done 事件
     """
     yield {
         "type": "start",
         "conversation_id": conversation_id,
     }
 
-    buffer: List[str] = []
+    # 第一帧就给"在干什么"：方向认出来了就说得具体一点（计算机方向 / 通用资料）
+    direction = brief.direction if brief else None
+    yield {
+        "type": "status",
+        "stage": "reading",
+        "text": f"正在翻{direction}方向的就业资料…" if direction else "正在翻就业资料…",
+        "elapsed_ms": 0,
+    }
+
+    text = ""
+    probing = brief is not None
+    released_at = 0  # 已经发出去的字符数（>= 这个位置的才算"用户看到了"）
+    started = time.monotonic()
+    writing_started = False
+
+    # 用"后台泵 + 队列"而不是直接 `async for`：这样才能在**等第一个 token** 的时候
+    # 每 STATUS_HEARTBEAT_SECONDS 发一次心跳。
+    # ⚠️ 不能用 ``asyncio.wait_for(iterator.__anext__())`` 做超时 —— 取消 `__anext__`
+    # 会把异步生成器一起关掉（流直接断），所以必须由一个独立 task 持续消费。
+    queue: "asyncio.Queue[tuple]" = asyncio.Queue()
+
+    async def _pump() -> None:
+        try:
+            async for piece in deepseek_client.stream_chat(
+                llm_messages or [],
+                max_tokens=settings.DEEPSEEK_CHAT_MAX_TOKENS,
+                thinking=True,
+            ):
+                await queue.put(("chunk", piece))
+        except Exception as exc:  # noqa: BLE001 - 交给主循环统一走 7.6 兜底
+            await queue.put(("error", exc))
+        finally:
+            await queue.put(("done", None))
+
+    task = asyncio.create_task(_pump())
     try:
-        if shortcut is not None:
-            buffer.append(shortcut)
-            yield {
-                "type": "delta",
-                "content": shortcut,
-            }
-        else:
-            async for piece in deepseek_client.stream_chat(llm_messages or []):
-                buffer.append(piece)
+        while True:
+            try:
+                kind, payload = await asyncio.wait_for(queue.get(), timeout=STATUS_HEARTBEAT_SECONDS)
+            except asyncio.TimeoutError:
+                # 还在想：报一次真实耗时，让"动画"变成"进度"
                 yield {
-                    "type": "delta",
-                    "content": piece,
+                    "type": "status",
+                    "stage": "thinking",
+                    "text": "正在想怎么跟你说…",
+                    "elapsed_ms": int((time.monotonic() - started) * 1000),
                 }
+                continue
+
+            if kind == "done":
+                break
+            if kind == "error":
+                raise payload
+
+            text += str(payload)
+            visible, held = _split_held_question(text)
+            if probing and len(visible) <= EMPTY_TURN_PROBE_CHARS:
+                continue  # 先攒着：短回复必须整段才判得出空转
+            if probing:
+                probing = False
+            if len(visible) > released_at:
+                if not writing_started:
+                    writing_started = True
+                    yield {
+                        "type": "status",
+                        "stage": "writing",
+                        "text": "正在写…",
+                        "elapsed_ms": int((time.monotonic() - started) * 1000),
+                    }
+                # 攒够之后一次补齐开头，之后逐块发；被压住的问句段不进 visible
+                yield {"type": "delta", "content": visible[released_at:]}
+                released_at = len(visible)
+
+        if probing:
+            # 整段都没超过阈值：这时才有必要判空转
+            if _needs_delivery_retry(text, brief):
+                text = await _regenerate_with_delivery_feedback(llm_messages, brief, text)
+                if _needs_delivery_retry(text, brief):
+                    text = chat_director.material_fallback_text(brief.materials)
+            if not writing_started:
+                writing_started = True
+                yield {
+                    "type": "status",
+                    "stage": "writing",
+                    "text": "正在写…",
+                    "elapsed_ms": int((time.monotonic() - started) * 1000),
+                }
+            # 短回复同样要"问句留白"：先发正文，停一下再抛问题
+            visible, held = _split_held_question(text)
+            if held:
+                yield {"type": "delta", "content": visible}
+                released_at = len(visible)
+                await asyncio.sleep(QUESTION_HOLD_SECONDS)
+                yield {"type": "delta", "content": held}
+            else:
+                yield {"type": "delta", "content": text}
+            released_at = len(text)
+        elif released_at < len(text):
+            # 最后那段"提问"被压住了：停一下再发 —— 用户可能还在看刚说完的那段，
+            # 甚至正准备回答上一个问题，问句紧跟着砸下来会很赶人。
+            await asyncio.sleep(QUESTION_HOLD_SECONDS)
+            yield {"type": "delta", "content": text[released_at:]}
+            released_at = len(text)
     except Exception as exc:  # noqa: BLE001 - 7.6 兜底：流式失败也不能 500
         logger.error("SSE 流式生成异常 conversation_id=%s err=%s", conversation_id, sanitize(exc))
-        if not buffer:
+        if not released_at:
             fallback = fallback_reply()
-            buffer.append(fallback)
+            text = fallback
             yield {
                 "type": "delta",
                 "content": fallback,
             }
         yield {"type": "error", "code": int(ErrorCode.AI_ERROR), "message": "AI 回复中断，已切换兜底话术"}
+    finally:
+        if not task.done():
+            task.cancel()
 
-    full_text = truncate("".join(buffer), MAX_ASSISTANT_CHARS)
+    full_text = truncate(text, MAX_ASSISTANT_CHARS)
     message = _save_assistant_message(session, conversation_id, full_text)
 
     # 正文侧跨会话泄漏自检（追加要求 2）：**只留痕，不改写、不打断流**
@@ -1663,6 +1832,8 @@ async def get_conclusion(db: Session, user: User, conversation_id: UUID) -> Chat
         schema=ConclusionCardResult,
         default=empty_conclusion(),
         temperature=STRUCTURED_TEMPERATURE,
+        # 结论卡是 300~500 字的小卡片；2048 有 4~10 倍冗余（勘误 9.37 的审计）。
+        max_tokens=1024,
     )
 
     generated_at = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -1756,13 +1927,99 @@ def _save_assistant_message(db: Session, conversation_id: UUID, content: str) ->
     return message
 
 
-def _shortcut_reply(content: str) -> Optional[str]:
-    """7.6：拒绝回答 / 答不上来时不调模型，直接用本地模板 + 过渡语。"""
-    if looks_like_refusal(content):
-        return refusal_reply()
-    if looks_like_stuck(content):
-        return stuck_reply()
-    return None
+def _split_held_question(text: str) -> Tuple[str, str]:
+    """把"最后抛出的那个问题"从**可见文本**里摘出来（流式用）。
+
+    返回 ``(可见文本, 被压住的问句)``；没有该压的就返回 ``(text, "")``。
+
+    规则（保守，宁可少压）：
+    1. 只在**最后一段**（最后一个空行之后）里找；这一段超过 ``_QUESTION_TAIL_MAX_CHARS``
+       就认为"正文里带了个问号"，不压；
+    2. 在这一段里，从**最后一个句末标点之后**算起（问句通常独立成句）；
+    3. 那截里必须真的含问号，且前面已经有一段正文（整条只有一句问话时不压 ——
+       压住等于不流式了）。
+    """
+    paragraph_start = text.rfind("\n\n") + 2 if "\n\n" in text else 0
+    tail = text[paragraph_start:]
+    if not tail.strip() or len(tail) > _QUESTION_TAIL_MAX_CHARS:
+        return text, ""
+
+    cut = max(tail.rfind(mark) for mark in ("。", "！", "!", "；", ";"))
+    candidate = tail[cut + 1 :] if cut >= 0 else tail
+    if len(candidate.strip()) < 2:
+        return text, ""
+    if not any(mark in candidate for mark in ("？", "?")):
+        return text, ""
+    # 前面得有正文：整条就是一句问话时，压住会让用户以为卡了
+    if len(text) - len(candidate) < 12:
+        return text, ""
+    return text[: len(text) - len(candidate)], candidate
+
+
+def _needs_delivery_retry(text: str, brief: Optional[chat_director.TurnBrief]) -> bool:
+    """这一轮要不要"带反馈重来一次"（勘误 9.31 / 9.41）。
+
+    三种情况下不判：
+    - 没有 ``brief``（非对话路径）；
+    - 这段文字就是"AI 挂了"的兜底话术 —— 那不是空转，重试也没有意义；
+    - **他这一轮只是在闲聊/敷衍/讲自己的事** —— 用户明确要求「想闲聊的时候可以陪他聊两句，
+      **不用目的性那么强**」。只有 ``卡住``（他说不知道）和 ``要东西``（他在问"有什么用/学什么"）
+      这两类，才要求这一轮**必须有东西交付**；闲聊轮丢回去一句"哈哈，那你打得不错啊"是完全正常的。
+    """
+    if brief is None or text == fallback_reply():
+        return False
+    if brief.user_state not in ("卡住", "要东西"):
+        return False
+    return chat_director.looks_like_empty_turn(text, brief.materials)
+
+
+async def _regenerate_with_delivery_feedback(
+    llm_messages: Optional[List[Dict[str, str]]],
+    brief: chat_director.TurnBrief,
+    previous: str,
+) -> str:
+    """空转时**带反馈**重来一次。
+
+    ``retries=0``：网络失败那层重试由第一次调用负责（``chat_text`` 默认会重试），
+    这里再来一次就是"重试套重试"，只会拖时间。
+    """
+    logger.warning("对话空转命中，带反馈重试一次 | %s", brief.reason)
+    messages = [
+        *(llm_messages or []),
+        {"role": "assistant", "content": previous},
+        {
+            "role": "user",
+            "content": "（系统提示：你上一句只把话问回去了，他这一轮什么都没得到。"
+            "请重新说一次 —— 至少给他一条能带走的东西，不许只提问。）",
+        },
+    ]
+    return await deepseek_client.chat_text(
+        messages,
+        max_tokens=settings.DEEPSEEK_CHAT_MAX_TOKENS,
+        thinking=True,
+        retries=0,
+    )
+
+
+async def _generate_guarded(
+    llm_messages: List[Dict[str, str]],
+    brief: chat_director.TurnBrief,
+) -> str:
+    """非流式路径的"生成 + 空转兜底"（``send_message`` 用）。
+
+    与流式路径的唯一区别是**没有"先攒后发"那一步**：这边本来就要等整段生成完，
+    所以直接判空转即可（判据完全一样）。
+    """
+    text = await deepseek_client.chat_text(
+        llm_messages,
+        max_tokens=settings.DEEPSEEK_CHAT_MAX_TOKENS,
+        thinking=True,
+    )
+    if _needs_delivery_retry(text, brief):
+        text = await _regenerate_with_delivery_feedback(llm_messages, brief, text)
+        if _needs_delivery_retry(text, brief):
+            text = chat_director.material_fallback_text(brief.materials)
+    return text
 
 
 async def _extract_round_tags(db: Session, conversation_id: UUID, user_id: UUID) -> List[Dict[str, Any]]:

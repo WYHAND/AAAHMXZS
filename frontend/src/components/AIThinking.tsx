@@ -6,11 +6,10 @@ import { cn } from '@/lib/utils'
  * AI 等待态（设计说明书 6.5：骨架 + 阶段文案，不用转圈）
  * 文案随阶段变化，让「AI 在读你的经历」这件事显性化。
  *
- * 2026-10 收口（AI 面板的唯一正确底色）：**中性浅底 + 琥珀竖条 + 正文字色**，
- * 浅桃 bg-accent 只留给 chip / 小按钮 / 状态点这类小面积强调 ——
- * 大面积粉底会变成"到处都在提示你"，这正是首页之外看着更闹的原因之一。
- * （首页的「AI 随行手记」就是同一个写法：bg-surface-container-low + ai-inset。）
- * 骨架条用画布色，在浅底上仍看得见。
+ * 2026-10-22（方案 A）：与对话页 AI 气泡统一 —— **白卡 + 主墨 + 左侧 3px 赭金竖条**。
+ * 之前是 bg-surface-container-low，放在暖纸画布上几乎和底色融成一片；
+ * 白卡让"AI 正在读"这块真的浮起来，竖条则保留"这是 AI 说的话"的识别度。
+ * 骨架条用画布色，在白色卡上仍能看见。
  */
 export interface AIThinkingProps {
   stage?: Stage
@@ -33,11 +32,12 @@ export function AIThinking({ stage, text, lines = 3, className }: AIThinkingProp
     <div
       data-slot="ai-thinking"
       className={cn(
-        'ai-inset flex flex-col gap-3 rounded-lg bg-surface-container-low px-4 py-3',
+        // 与 ChatBubble 的 AI 外形保持一致：白卡 + 1px 中性描边（不要彩色竖条）
+        'flex min-w-0 max-w-full flex-col gap-3 rounded-xl border border-outline-variant/60 bg-card px-4 py-3.5 shadow-card',
         className,
       )}
     >
-      <p className="text-body-sm text-on-surface">{message}</p>
+      <p className="text-body-md text-primary">{message}</p>
       <div className="flex flex-col gap-2">
         {Array.from({ length: lines }).map((_, index) => (
           <Skeleton

@@ -6,7 +6,6 @@ import { toast } from 'sonner'
 import { ChatBubble, ChatTypingBubble } from '@/components/ChatBubble'
 import { Panel } from '@/components/Panel'
 import { PageHeader } from '@/components/PageHeader'
-import { StageBadge } from '@/components/StageBadge'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,8 +50,15 @@ import { cn } from '@/lib/utils'
  *   （store/chatHistory.ts 的 shouldEnsureOpening），**不是** messages 为空。
  * - **历史拉取失败**：有内容就保留内容 + 一条轻提示；没内容就给失败态 + 「重新加载」，
  *   绝不静默空白，也绝不用一条回放的开场白装作"有内容"。
- * - **发送不流式**：用户气泡发送即弹出，AI 回复**整条生成完**才作为一个气泡弹出。
- *   等待期间是一个三点加载气泡。发送瞬间输入框向上抬一下（liftComposer）。
+ * - **发送优先 SSE 流式**：正文逐块上屏；流本身失败时 store 自动回退到非流式
+ *   POST /messages，体验不降级。等待期间输入框发送按钮禁用。
+ *   发送瞬间输入框向上抬一下（liftComposer）。
+ * - **多气泡按真人节奏揭示**：一条回复拆出的 2-3 个气泡**不能同时冒出来** ——
+ *   store 的 ticker 每约 3 秒才把 `shown` 推进一段，这里渲染 `stream.shown`
+ *   （不是完整的 `content`）；最后一段显示完才落成正式消息，提交那一刻不跳字。
+ * - **等待区不只有动画**：三点动画上方再给一行真实阶段（正在看你的画像和资料 /
+ *   正在翻…资料 / 正在想怎么跟你说… Ns），文案与已用时间都来自服务端 status 事件。
+ *   只显示"在干什么"，**不显示**模型思维链原文；正文第一个 delta 到达即让位给气泡。
  * - 悬浮输入框叠在对话区底部之上（底部留白 + 渐隐，内容可以滚到它后面）。
  * - AI 气泡渲染 Markdown 但不允许 HTML 注入（components/ChatBubble）
  * - 结论卡片：回复带回 conclusion_ready=true 时浮出可折叠卡片
@@ -83,7 +89,7 @@ const RAIL_TAG_LIMIT = 6
 export default function ChatPage() {
   const navigate = useNavigate()
   const { isDesktop } = useResponsive()
-  const { stage, desc } = useStage()
+  const { desc, label: stageLabel } = useStage()
   const tags = useProfileStore((s) => s.tags)
   const profileVersion = useProfileStore((s) => s.version)
   const fetchProfile = useProfileStore((s) => s.fetchProfile)
@@ -101,12 +107,22 @@ export default function ChatPage() {
   const composingRef = useRef(false)
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const composerRef = useRef<HTMLDivElement | null>(null)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  /**
+   * 消息区是否已经离开顶部（scrollTop > 0）。
+   *
+   * 只用来决定「顶部渐隐」开不开：停在顶部时内容不会被切，戴渐隐会白白把第一条
+   * 消息的上沿擦掉（短会话尤其明显）；一旦滚动过，上沿才开始有被裁掉的气泡残片，
+   * 这时才需要渐隐把它收掉。见 index.css 的 `.chat-scroll-faded`。
+   */
+  const [chatScrolled, setChatScrolled] = useState(false)
 
   const {
     conversations,
     activeId,
     messages,
     replyingIds,
+    streams,
     conclusionReady,
     conclusion,
     openingFor,
@@ -128,6 +144,31 @@ export default function ChatPage() {
   /** 当前会话的 AI 整条回复还没回来：显示三点加载，发送按钮禁用 */
   const replying = activeId !== null && replyingIds.includes(activeId)
   const sendDisabled = replying || !draft.trim()
+
+  /**
+   * 当前会话正在流式生成的**临时态**：`content` 是服务端给到的完整正文，
+   * `shown` 是**已揭示**到哪（UI 渲染的是它，见下面 stream.shown 那处渲染）。
+   * 按 activeId 取：切到别的会话不会把上一个会话的草稿画上来。
+   */
+  const stream = activeId ? (streams[activeId] ?? null) : null
+
+  /**
+   * 当前会话正在进行的**生成阶段**（reading / thinking / writing）。
+   *
+   * 它是"AI 到底在干什么"的唯一来源：文案 + 服务端已用时间。刻意**不含**思维链原文 ——
+   * 用户要的是"没卡住"的确定感，而不是模型的思考过程。
+   * 它只在"屏幕上还什么都看不到"的等待期存在：第一段被揭示出来的那一刻，
+   * store 的 publishDraft 写出不带 status 的条目，状态行让位给气泡。
+   * （注意不是"第一个 delta" —— 揭示要等段落被 `\n\n` 闭合，那之前用户屏幕上
+   *   确实只有动画，状态行反而更该在。）
+   */
+  const streamStatus = stream?.status ?? null
+  /**
+   * thinking 阶段显示服务端的已用秒数（每 2 秒被心跳刷新一次）。
+   * 直接换算 elapsed_ms，前端**不自己跑秒**：否则断线时数字还会一直涨，
+   * 那就成了一种"看起来在动、其实早就死了"的假象。
+   */
+  const streamStatusElapsedSec = streamStatus ? Math.floor(streamStatus.elapsedMs / 1000) : 0
 
   /** 画像标签按权重取前几个，给左栏「AI 对你的了解」用 */
   const railTags = [...tags].sort((a, b) => b.weight - a.weight).slice(0, RAIL_TAG_LIMIT)
@@ -177,6 +218,22 @@ export default function ChatPage() {
   useEffect(() => {
     void fetchProfile()
   }, [fetchProfile, profileVersion])
+
+  /*
+   * 消息区的滚动状态（只决定顶部渐隐开不开）。
+   * 监听 Radix 的 Viewport：ScrollArea 根节点上收不到 scroll（scroll 不冒泡）。
+   * 阈值 4px 留一点余量，避免触控板回弹的 0.5px 抖动把渐隐闪开。
+   */
+  useEffect(() => {
+    const viewport = scrollRef.current?.querySelector<HTMLElement>(
+      '[data-radix-scroll-area-viewport]',
+    )
+    if (!viewport) return
+    const sync = () => setChatScrolled(viewport.scrollTop > 4)
+    sync()
+    viewport.addEventListener('scroll', sync, { passive: true })
+    return () => viewport.removeEventListener('scroll', sync)
+  }, [])
 
   useEffect(() => {
     if (!activeId) return
@@ -228,10 +285,12 @@ export default function ChatPage() {
     void ensureOpening(activeId)
   }, [activeId, loading, messages, openingFailedFor, historyLoad, ensureOpening])
 
-  // 新消息（或等待占位出现）滚到底；底部留白在消息列表末尾，保证最后一条不被输入框遮住
+  // 新消息（或等待占位出现、或流式正文增长）滚到底；
+  // 底部留白在消息列表末尾，保证最后一条不被输入框遮住。
+  // 依赖里带上流式正文长度，否则逐块增长时不会跟随滚动。
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' })
-  }, [messages.length, replying])
+  }, [messages.length, replying, stream?.shown.length])
 
   const handleSend = useCallback(() => {
     const text = draft.trim()
@@ -293,35 +352,43 @@ export default function ChatPage() {
   }, [deleteTarget, deleting, deleteConversation])
 
   /*
-   * 高度 = 视口 − 外壳顶距（--spacing-shell: 76px = 窗口头 44 + main 的 pt-shell 32；
-   * AppLayout 的 main 用同一个 token，两边永远同步）。min-h-[560px] 兜住矮窗口。
-   *
-   * 移动端（<768px）再抬一条底栏：AppLayout 底部有 64px 固定 Tab 栏（h-16）+
-   * main 的 pb-24（96px），而 pb-24 是**padding-bottom**（不占内容高度），
-   * 直接引用上面的高度会让输入区落到 Tab 栏底下。所以只在移动端多减 64px。
+   * 高度 = 视口 − 外壳占掉的那一段，而且必须**正好等于 main 的内容盒高度**：
+   * 多一点页面就会滚。这一页的规矩是「对话再长也只有对话区滚，页面本身不动」。
+   *   · 桌面：main 的竖向内边距 = pt-shell(76) + pb-margin(32) = --spacing-shell-total(108)
+   *   · 移动：pb-margin 被换成了 pb-24(96) = --spacing-tabbar(64) + --spacing-margin(32)，
+   *           所以再扣掉一个 --spacing-tabbar
+   * ⚠️ 早先写的是 `100svh - --spacing-shell`（少扣了底部那 32px），实测桌面端页面
+   * 恒定多出 32px 可以滚；再配一个 `min-h-[560px]`，矮窗口（1440×560）整页能滚 108px。
+   * 那个 min-h 已经删掉：它和「页面不可滚」是直接矛盾的，矮窗口宁可把对话区压扁。
+   * 根上再加 `overflow-hidden` 兜底 —— 就算某个子树撑出高度，也绝不会把整页顶出滚动条。
    */
   return (
-    <div className="mx-auto grid h-[calc(100svh-var(--spacing-shell))] min-h-[560px] w-full grid-cols-1 gap-4 max-md:h-[calc(100svh-var(--spacing-shell)-64px)] md:grid-cols-[240px_minmax(0,1fr)] md:gap-6">
+    <div className="mx-auto grid h-[calc(100svh-var(--spacing-shell-total))] w-full grid-cols-1 gap-4 overflow-hidden max-md:h-[calc(100svh-var(--spacing-shell-total)-var(--spacing-tabbar))] lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-6">
       {/* 左栏（桌面端）：阶段 + AI 对你的了解 + 新对话 + 历史会话 */}
       {isDesktop ? (
         <aside className="flex min-h-0 flex-col gap-3">
-          <Panel className="shrink-0 gap-3">
+          {/* 侧栏退后：卡外浅底 + 去阴影，白卡与赭金都留给对话本身 */}
+          <Panel className="shrink-0 gap-3 bg-surface-container-low shadow-none">
             <div className="flex flex-col gap-2">
-              <p className="text-body-sm text-on-surface-variant">当前阶段</p>
-              <StageBadge stage={stage} showStepper className="self-start" />
+              <p className="text-caption tracking-wide text-caption-foreground">当前阶段</p>
+              {/* 侧栏的赭金预算为零：阶段只留中性圆点 + 名称，阶段说明就在下一行 */}
+              <span className="flex items-center gap-2 self-start text-label-md font-medium text-primary">
+                <span className="size-1.5 rounded-full bg-on-surface-variant/50" aria-hidden />
+                {stageLabel}
+              </span>
               <p className="text-body-sm text-on-surface-variant">{desc}</p>
             </div>
 
             <div className="h-px bg-outline-variant/50" />
 
             <div className="flex flex-col gap-2">
-              <p className="text-body-sm text-on-surface-variant">AI 对你的了解</p>
+              <p className="text-caption tracking-wide text-caption-foreground">AI 对你的了解</p>
               {railTags.length ? (
                 <div className="flex flex-wrap gap-1.5">
                   {railTags.map((tag) => (
                     <span
                       key={tag.id}
-                      className="rounded-full bg-surface-container-low px-2.5 py-1 text-body-sm text-on-surface"
+                      className="rounded-full bg-surface-inset px-2.5 py-1 text-body-sm text-on-surface-variant"
                     >
                       {tag.label}
                     </span>
@@ -336,7 +403,7 @@ export default function ChatPage() {
                 variant="ghost"
                 size="sm"
                 onClick={() => navigate(ROUTES.profile)}
-                className="self-start px-0 text-primary"
+                className="self-start px-0 text-body-sm text-on-surface-variant hover:bg-transparent hover:text-primary"
               >
                 查看完整画像 →
               </Button>
@@ -347,14 +414,14 @@ export default function ChatPage() {
             variant="outline"
             onClick={() => void handleNewConversation()}
             disabled={creating}
-            className="shrink-0 gap-1.5"
+            className="shrink-0 gap-1.5 bg-surface-inset"
           >
             <Plus className="size-4" />
             新对话
           </Button>
 
-          <Panel padded={false} className="min-h-0 flex-1 overflow-hidden py-2">
-            <p className="px-4 pt-2 pb-1 text-body-sm text-on-surface-variant">历史会话</p>
+          <Panel padded={false} className="min-h-0 flex-1 overflow-hidden bg-surface-container-low py-2 shadow-none">
+            <p className="px-4 pt-2 pb-2 text-caption tracking-wide text-caption-foreground">历史会话</p>
             {/* px/py：给列表项留出余量 —— 选中态是外描边(ring)，ScrollArea 的 Viewport 会
                 裁掉溢出，贴边时圆角和描边就会被切平（实拍踩过）。 */}
             <ScrollArea className="min-h-0 flex-1 px-2 py-1">
@@ -364,19 +431,18 @@ export default function ChatPage() {
                    * 会话项 = 「切换会话」按钮 + 右侧删除按钮的兄弟组合。
                    * 不用"按钮套按钮"（非法 HTML、点击目标也会打架）。
                    */
-                  <div key={conversation.id} className="group relative">
+                  <div key={conversation.id} className="group relative text-body-sm">
                     <button
                       type="button"
                       onClick={() => setActive(conversation.id)}
                       className={cn(
                         // pr-8 给右侧删除图标留位，标题仍然 truncate
-                        'w-full truncate rounded-md py-2 pr-8 pl-3 text-left text-body-sm transition-colors',
+                        'w-full truncate rounded-md py-2 pr-8 pl-3 text-left transition-colors',
                         conversation.id === activeId
-                          ? // 光靠 bg-primary-soft 在新 token 下几乎看不出选中（它≈画布色），
-                            // 必须再补一圈描边；用 ring-inset 画在元素内部，避免被
-                            // ScrollArea 视口(overflow:hidden)从左右裁掉（实拍踩过）
-                            'bg-primary-soft text-primary ring-1 ring-inset ring-primary/30'
-                          : 'text-on-surface-variant hover:bg-surface-container',
+                          ? // 选中态：比侧栏浅一档的小底 + 主墨；不抢对话区的白卡
+                            'bg-surface-inset font-medium text-primary ring-1 ring-inset ring-outline-variant/70'
+                          : // 侧栏退后：14px + 次要墨色，不和正文的 15px 主墨抢
+                            'text-on-surface-variant hover:bg-surface-inset/70 hover:text-primary',
                       )}
                     >
                       {conversation.title}
@@ -392,7 +458,7 @@ export default function ChatPage() {
                         setDeleteTarget(conversation)
                       }}
                       className={cn(
-                        'absolute top-1/2 right-1 -translate-y-1/2 rounded-sm p-1 text-on-surface-variant',
+                        'absolute top-1/2 right-1 -translate-y-1/2 rounded-sm p-1 text-caption-foreground',
                         'opacity-0 transition-opacity group-hover:opacity-100',
                         // 键盘 Tab 到它时也要看得见
                         'focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
@@ -415,57 +481,79 @@ export default function ChatPage() {
         </aside>
       ) : null}
 
-      {/* 右列：页头 + 对话区。对话列在右列里居中（最宽 720px），页头与它对齐 */}
-      <div className="mx-auto flex min-h-0 min-w-0 w-full max-w-[720px] flex-col gap-4">
-        <PageHeader
-          title="AI 对话"
-          description="主题：跟着你的阶段走。新对话是重新开始：不带上一段聊天的记忆，只看你的画像。"
-          actions={
-            /*
-              这里**不说**"AI 自动生成"：简历页只润色用户写的内容，不替他编经历。
-            */
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate('/resume')}
-              className="gap-1.5"
-            >
-              <FileText className="size-4" />
-              生成简历
-            </Button>
-          }
-        />
+      {/*
+        右列：页头 + 对话区。对话列在右列里居中（最宽 720px），页头与它对齐。
 
-        {/* 移动端没有左侧会话栏：用一排可横滑的胶囊代替，「+ 新对话」放第一个 */}
-        {!isDesktop ? (
-          <div className="flex shrink-0 gap-2 overflow-x-auto px-1 pb-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void handleNewConversation()}
-              disabled={creating}
-              className="shrink-0 gap-1 rounded-full"
-            >
-              <Plus className="size-3.5" />
-              新对话
-            </Button>
-            {conversations.map((conversation) => (
-              <button
-                key={conversation.id}
-                type="button"
-                onClick={() => setActive(conversation.id)}
-                className={cn(
-                  'shrink-0 rounded-full px-3 py-1 text-body-sm transition-colors',
-                  conversation.id === activeId
-                    ? 'bg-primary-soft text-primary ring-1 ring-inset ring-primary/30'
-                    : 'text-on-surface-variant ring-1 ring-inset ring-outline-variant/60 hover:bg-surface-container',
-                )}
+        2026-10-22：页头（含移动端会话胶囊）整体包进一层 `relative z-10 bg-surface`
+        的容器；原来的 `gap-4` 换成容器自己的 `pb-4`，让页头的实底一直铺到
+        滚动区上沿，中间不留缝。
+
+        黑条的真正来源（当天实测纠正）：不是 bubble-pop 的合成层逃逸，而是
+        **一条用户气泡刚好滚到视口上沿之外** —— 只剩底部 17px 的深墨圆角露在
+        视口里，没有文字，看起来就像一条悬空的黑条。ScrollArea 的裁剪本身是对的
+        （hit-test 和像素都停在视口上沿）。
+        所以修法不是继续加遮罩，而是给视口顶部一段**渐隐**（滚动过才挂
+        `.chat-scroll-faded`，见 index.css / 本文件的 chatScrolled）：顶部 18px
+        完全透明、到 48px 才完全显现，17px 的气泡残片直接看不见；正常滚动时消息
+        从顶部柔和淡入，也不会被硬切。停在顶部时不挂，短会话的第一条消息不受影响。
+      */}
+      <div className="mx-auto flex min-h-0 min-w-0 w-full max-w-[720px] flex-col">
+        <div className="relative z-10 flex shrink-0 flex-col gap-4 bg-surface pb-4">
+          <PageHeader
+            title="把求职里的困惑聊开"
+            /*
+              2026-10-22：这句压成一行。原句 44 字，在 1440 宽下被右侧「生成简历」
+              挤成两行、末行只剩「像。」一个词；现在仍说同一件事（跟着阶段走 /
+              新对话不带记忆 / 只看画像），但能一行放完。
+            */
+            description="主题：跟着你的阶段走。新对话重新开始，只看你的画像。"
+            actions={
+              /*
+                这里**不说**"AI 自动生成"：简历页只润色用户写的内容，不替他编经历。
+              */
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/resume')}
+                className="gap-1.5"
               >
-                {conversation.title}
-              </button>
-            ))}
-          </div>
-        ) : null}
+                <FileText className="size-4" />
+                生成简历
+              </Button>
+            }
+          />
+
+          {/* 移动端没有左侧会话栏：用一排可横滑的胶囊代替，「+ 新对话」放第一个 */}
+          {!isDesktop ? (
+            <div className="flex shrink-0 gap-2 overflow-x-auto px-1 pb-1 text-body-sm">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void handleNewConversation()}
+                disabled={creating}
+                className="shrink-0 gap-1 rounded-full"
+              >
+                <Plus className="size-3.5" />
+                新对话
+              </Button>
+              {conversations.map((conversation) => (
+                <button
+                  key={conversation.id}
+                  type="button"
+                  onClick={() => setActive(conversation.id)}
+                  className={cn(
+                    'shrink-0 rounded-full px-3 py-1 transition-colors',
+                    conversation.id === activeId
+                      ? 'bg-surface-inset font-medium text-primary ring-1 ring-inset ring-outline-variant/70'
+                      : 'text-on-surface-variant ring-1 ring-inset ring-outline-variant/60 hover:bg-surface-inset hover:text-primary',
+                  )}
+                >
+                  {conversation.title}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
           {/*
@@ -505,13 +593,13 @@ export default function ChatPage() {
               </div>
               <CollapsibleContent className="pt-3">
                 {conclusion ? (
-                  <div className="flex flex-col gap-3 text-body-md">
+                  <div className="flex min-w-0 flex-col gap-3 text-body-md break-words">
                     {conclusion.summary ? (
-                      <p className="text-on-surface">{conclusion.summary}</p>
+                      <p className="text-primary">{conclusion.summary}</p>
                     ) : null}
                     {conclusion.pain_points.length ? (
                       <div>
-                        <p className="font-medium text-on-surface">痛点</p>
+                        <p className="font-medium text-primary">痛点</p>
                         <ul className="list-disc pl-5 text-on-surface-variant">
                           {conclusion.pain_points.map((item, i) => (
                             <li key={i}>{item}</li>
@@ -521,7 +609,7 @@ export default function ChatPage() {
                     ) : null}
                     {conclusion.suggestions.length ? (
                       <div>
-                        <p className="font-medium text-on-surface">建议</p>
+                        <p className="font-medium text-primary">建议</p>
                         <ul className="list-disc pl-5 text-on-surface-variant">
                           {conclusion.suggestions.map((item, i) => (
                             <li key={i}>{item}</li>
@@ -531,7 +619,7 @@ export default function ChatPage() {
                     ) : null}
                     {conclusion.next_actions.length ? (
                       <div>
-                        <p className="font-medium text-on-surface">下一步可以直接做</p>
+                        <p className="font-medium text-primary">下一步可以直接做</p>
                         <ul className="list-disc pl-5 text-on-surface-variant">
                           {conclusion.next_actions.map((item, i) => (
                             <li key={i}>{item}</li>
@@ -562,7 +650,13 @@ export default function ChatPage() {
               24px 处、输入框够不到（滚动时能看见气泡被切一半）。
               留白一律加在**滚动内容**里：可视区一直延伸到容器底部（藏在输入框后面）。
             */}
-            <ScrollArea className="min-h-0 flex-1 px-3">
+            <ScrollArea
+              ref={scrollRef}
+              className={cn(
+                'chat-scroll min-h-0 flex-1 px-3',
+                chatScrolled && 'chat-scroll-faded',
+              )}
+            >
               {messages.length ? (
                 <div className="flex flex-col gap-4 pt-4">
                   {messages.map((message) => (
@@ -574,13 +668,48 @@ export default function ChatPage() {
                       onRetry={() => void retry(message.id)}
                     />
                   ))}
-                  {replying ? <ChatTypingBubble /> : null}
+                  {/*
+                    流式生成中：正文逐块增长的气泡。
+                    它不在 messages 里 —— done 时才用服务端 message_id 落成正式消息。
+                  */}
+                  {/*
+                    这里渲染的是 `shown`（**已揭示**的前缀），不是 `content`（服务端给到的完整正文）。
+                    多段回复由 store 的 ticker 按 3 秒一段推进 shown —— 所以气泡是
+                    "一句一句说出来"的，而不是同一瞬间全部冒出来。
+                  */}
+                  {stream?.shown ? (
+                    <ChatBubble key={`stream-${activeId}`} role="assistant" content={stream.shown} />
+                  ) : null}
+                  {/*
+                    还没有可展示的正文时：三点加载占位 + 一行"正在干什么"。
+                    三点动画是"还活着"的信号，状态文字是"具体在干什么"——
+                    两者都要有，光有动画用户会以为是网卡了。
+                  */}
+                  {replying && !stream?.shown ? (
+                    <div className="flex w-full flex-col gap-1.5">
+                      <ChatTypingBubble />
+                      {streamStatus ? (
+                        <p className="pl-4 text-body-sm text-on-surface-variant tabular-nums">
+                          {streamStatus.text}
+                          {/*
+                            reading / writing 是瞬时阶段，只有 text；
+                            thinking 是每 2 秒一次的心跳，带上服务端的已用秒数。
+                          */}
+                          {streamStatus.stage === 'thinking'
+                            ? ` ${streamStatusElapsedSec}s`
+                            : null}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {/*
                     尾部占位块（不是 padding）：scrollIntoView(block:'end') 会把它的
                     底边对齐到可视区底边 —— 它本身占满输入区的高度，滚到底时最后一条
                     正好停在输入框上方。用 padding 的话滚不到真正的底部（会差一整个高度）。
+                    h-32 覆盖三行输入的上限（max-h-24）与「答不上来」提示的余量，
+                    输入框长高时最后一条气泡也不会被盖住。
                   */}
-                  <div ref={bottomRef} className="h-24" />
+                  <div ref={bottomRef} className="h-32" />
                 </div>
               ) : historyOutcome === 'failed' ? (
                 /*
@@ -593,7 +722,7 @@ export default function ChatPage() {
                  * 文案刻意**不说**"记录没了"：一条都没少，只是这次没读出来。
                  */
                 <div className="flex min-h-full flex-col items-center justify-center gap-3 pt-4 pb-24 text-center">
-                  <p className="text-body-md text-on-surface">这段对话这次没读出来。</p>
+                  <p className="text-body-md text-primary">这段对话这次没读出来。</p>
                   <p className="text-body-sm text-on-surface-variant">
                     你说的每一句都还在，只是网络这次没把记录送过来。
                   </p>
@@ -616,7 +745,7 @@ export default function ChatPage() {
                  * 并且**允许用户直接输入**（输入框任何时候都可用），不把人卡在等待态。
                  */
                 <div className="flex min-h-full flex-col items-center justify-center gap-3 pt-4 pb-24 text-center">
-                  <p className="text-body-md text-on-surface">
+                  <p className="text-body-md text-primary">
                     先别急着定方向，跟我说说你现在最纠结的事。
                   </p>
                   <p className="text-body-sm text-on-surface-variant">
@@ -645,7 +774,7 @@ export default function ChatPage() {
               输入区：一个胶囊（内含透明的自动增高输入）+ 右侧圆形发送按钮。
               发送瞬间整块上抬（liftComposer），与用户气泡的弹出同步。
             */}
-            <div ref={composerRef} className="absolute inset-x-0 bottom-0 bg-canvas px-3 pt-1 pb-4">
+            <div ref={composerRef} className="absolute inset-x-0 bottom-0 bg-canvas px-3 pt-2 pb-3 md:pb-4">
               {/*
                 很轻的一条兜底提示：AI 开场后用户可能"答不上来"。
                 只放一行小字 —— 不用大段静态文案去引导用户先开口（那是"假主动"）。
@@ -655,7 +784,13 @@ export default function ChatPage() {
                   答不上来也没关系，说半句、说错都行，我顺着往下问。
                 </p>
               ) : null}
-              <div className="flex items-end gap-2 rounded-full bg-card py-1.5 pr-1.5 pl-5 shadow-pop ring-1 ring-outline-variant/50">
+              <div className="flex items-end gap-2 rounded-2xl bg-card py-1.5 pr-1.5 pl-4 shadow-pop ring-1 ring-outline-variant/50">
+                {/*
+                  输入框跟随内容长高，但封顶 max-h-24（约三行）：再长就在框内滚，
+                  否则输入区会一路顶到对话区、把最后几条气泡盖住（移动端 390×844 尤其明显）。
+                  字号必须写死 15px（body-md）：Textarea 自带 text-base / md:text-sm 会在 CSS 顺序上
+                  把同名 text-* token 顶掉，所以这里直接取 token 的 CSS 变量落 font-size。
+                */}
                 <Textarea
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
@@ -673,16 +808,16 @@ export default function ChatPage() {
                       ? '回答 AI 的问题…（Enter 发送，Shift+Enter 换行）'
                       : '说点什么…（Enter 发送，Shift+Enter 换行）'
                   }
-                  className="min-h-0 resize-none border-0 bg-transparent px-0 py-2 shadow-none focus-visible:ring-0"
+                  className="max-h-24 min-h-0 resize-none overflow-y-auto border-0 bg-transparent px-0 py-2 leading-[1.6] shadow-none [font-size:var(--text-body-md)] focus-visible:ring-0"
                 />
-                {/* 本页唯一实心主按钮：圆形发送（悬浮胶囊右侧那个圆） */}
+                {/* 本页唯一的赭金实心块：发送。别再在页面别处加第二处赭金底 */}
                 <Button
                   variant="warm"
                   size="icon-lg"
                   onClick={handleSend}
                   disabled={sendDisabled}
                   aria-label="发送"
-                  className="shrink-0 rounded-full"
+                  className="shrink-0 rounded-full bg-secondary text-on-secondary transition-colors hover:bg-secondary/90"
                 >
                   <Send className="size-4" />
                 </Button>

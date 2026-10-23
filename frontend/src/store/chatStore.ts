@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { toast } from 'sonner'
 
-import { chatApi } from '@/api/chat'
+import { chatApi, ChatStreamError } from '@/api/chat'
 import { ApiError } from '@/api/client'
 import { ERROR_CODE } from '@/constants/errorCode'
 import {
@@ -10,23 +10,105 @@ import {
   type HistoryLoad,
 } from '@/store/chatHistory'
 import { useProfileStore } from '@/store/profileStore'
-import type { ChatConclusionCard, ChatMessage, Conversation } from '@/types'
+import type {
+  ChatConclusionCard,
+  ChatMessage,
+  ChatStreamStage,
+  Conversation,
+} from '@/types'
 import { uuid } from '@/utils/format'
 import { normalizeList } from '@/utils/list'
+import { nextReveal } from '@/utils/revealPace'
 import { track } from '@/utils/track'
 
 /**
  * chatStore（4.1 / 4.3）
  *
- * 发送是**一次性**的（POST .../messages）：用户气泡立刻上屏；AI 整条回复生成完才一起上屏。
- * 等待期间 `replyingIds` 里有当前会话，ChatPage 显示加载动画，不做任何逐字增量。
+ * 发送**优先走 SSE**（POST .../stream）：回复正文逐块上屏；
+ * SSE 请求本身失败（HTTP 非 2xx / fetch 抛错 / 浏览器不支持流）时**自动回退**
+ * 到非流式 POST .../messages（同一 client_msg_id，后端幂等），体验不降级。
  *
  * - 幂等：同一 client_msg_id 重试复用，后端不会重复生成
+ * - 正文草稿：逐块累积在 `streams`（临时展示态），done 时才落成一条 assistant 消息
  * - 失败：在消息列表末尾放一个「回答中断，点击重试」气泡（interrupted），重试复用同一 client_msg_id
  * - conclusion_ready：回复里带上，结论卡片入口
  *
  * 不持久化。
  */
+
+/**
+ * 一个会话**正在流式生成**时的临时状态（只在内存、随流结束清掉）。
+ *
+ * 只放"还没落成正式消息"的临时态：
+ * - `content`：**服务端给到的完整正文**（逐块累积），`done` 提交用的就是它；
+ * - `shown`：**当前该显示到哪**（content 的前缀），UI 渲染 `splitReply(shown)`。
+ *   它存在的理由是"真人感"：一条回复拆成 2-3 个气泡时，不能几乎同时冒出来，
+ *   要隔约 REPLY_BUBBLE_GAP_MS 一格格揭示（见 send 里的 ticker 与 utils/revealPace）。
+ * - `status`：生成阶段（reading / thinking / writing）+ 服务端已用时间，
+ *   只给用户看"正在干什么"。**刻意只活在这里**：它不进 messages、
+ *   不进 message.content —— 阶段是临时展示态，不是消息内容的一部分，
+ *   一旦落进消息就会被持久化/被当成正文（见 send 里的 publishStatus）。
+ * - 模型内部推理（思维链原文）前端一概不显示，后端也不下发。
+ */
+export interface ChatStream {
+  conversationId: string
+  /** 回复正文（逐块累积；done 时才落成一条真正的 assistant 消息） */
+  content: string
+  /**
+   * 当前**已揭示**到哪（永远是 `content` 的前缀）。
+   * UI 渲染它（`splitReply(shown)`），而不是 `content` —— 这样多段回复才是
+   * "一段一段地说出来"，而不是三个气泡同时出现。初始为 `''`。
+   */
+  shown: string
+  /**
+   * 生成阶段状态（reading / thinking / writing）。
+   * 正文第一个 delta 到达时清掉（气泡接手）；随所在 ChatStream 一起被
+   * clearStream / reset 清掉，不会在离开会话后残留。
+   */
+  status?: ChatStreamStatus
+}
+
+/** 一条阶段状态：文案由服务端给（本地兜底文案见 LOCAL_STATUS_TEXT），elapsedMs 来自服务端 */
+export interface ChatStreamStatus {
+  stage: ChatStreamStage
+  text: string
+  /** 服务端已用毫秒（thinking 每 2 秒心跳更新一次，前端不自己飙秒） */
+  elapsedMs: number
+}
+
+/**
+ * 发送瞬间的本地阶段文案。
+ *
+ * 为什么需要它：SSE 的响应头要等后端 `prepare_stream`（查库 / 组装画像）之后才回来，
+ * 那几百毫秒到几秒里如果什么都不显示，用户会以为网卡了。所以在**发请求的同时**
+ * 先本地写一条 reading 状态，拿到第一个服务端 status 后立即被替换。
+ * 它同样用于 SSE 失败回退非流式（POST /messages）的那条路径 —— 那时没有事件流，
+ * 只能由本地文案一直兜着，直到回复到达。
+ */
+const LOCAL_STATUS_TEXT = '正在看你的画像和资料…'
+
+/**
+ * 三个阶段的兜底文案：服务端 status 的 `text` 就是给用户看的那句话，
+ * 正常情况下直接用它（不同方向会不一样，例如"正在翻计算机方向的就业资料…"）；
+ * 只在下发为空时按阶段兜一句，避免状态行只剩一个秒数。
+ */
+const STAGE_FALLBACK_TEXT: Record<ChatStreamStage, string> = {
+  reading: LOCAL_STATUS_TEXT,
+  thinking: '正在想怎么跟你说…',
+  writing: '正在把想好的写下来…',
+}
+
+/** 一条回复拆成多个气泡时，气泡之间的间隔（毫秒）。用户要求"大概等三秒下一句话再出来"。 */
+const REPLY_BUBBLE_GAP_MS = 3000
+
+/**
+ * 揭示 ticker 的检查间隔（毫秒）。
+ *
+ * 只是"来看一眼到点没有"的频率，不是揭示间隔本身（那是 REPLY_BUBBLE_GAP_MS）。
+ * 用 setInterval 而不是 requestAnimationFrame：这是"每几秒推进一格"的节奏，
+ * 与帧率无关；rAF 在后台标签页会被暂停，反而把节奏拖乱。
+ */
+const REVEAL_TICK_MS = 200
 
 interface ChatState {
   conversations: Conversation[]
@@ -37,6 +119,11 @@ interface ChatState {
    * 列表而不是单值：切到别的会话再发一句时，前一个会话的回复可能还没回来。
    */
   replyingIds: string[]
+  /**
+   * 正在流式生成的会话（按会话 id）：只放**回复正文草稿**。
+   * 流结束（done / 中断 / 回退非流式收尾）后必须清掉对应条目。
+   */
+  streams: Record<string, ChatStream>
   conclusionReady: boolean
   conclusion: ChatConclusionCard | null
   loading: boolean
@@ -129,6 +216,83 @@ function markLocalWrite(): void {
  */
 let sessionGeneration = 0
 
+/**
+ * 在途的 SSE 请求控制器：换号 / reset 时统一 abort。
+ *
+ * 为什么必须有：fetch 的流不会因为 store 被重置而自己停下，它会继续读下去。
+ * 虽然回调里有 `generation !== sessionGeneration` 兜底（不会把上一个账号的数据
+ * 写进新账号的内存），但让一个已经作废的 AI 生成继续跑纯属浪费，也会让
+ * `replyingIds` 之类的收尾逻辑迟到。abort 是"到此为止"的明确信号。
+ *
+ * ⚠️ 与 openingRequested 一样：**模块级结构必须能在 reset() 里被清掉**
+ * （见 store/reset.ts 的纪律 2）。
+ */
+const streamControllers = new Map<string, AbortController>()
+
+/**
+ * 正在跑的「揭示 ticker」（按会话 id）。
+ *
+ * 它只负责"每隔 REPLY_BUBBLE_GAP_MS 把 shown 推进一段"，是**展示节奏**，
+ * 与网络无关。因此它与 streamControllers 一样是模块级结构，**必须在 reset /
+ * abortStream 里被 clearInterval 掉**（纪律 2：模块级结构都要能在 reset 里清掉），
+ * 否则一个已经作废的会话会留下一个 200ms 的定时器永久空转。
+ */
+const revealTimers = new Map<string, ReturnType<typeof setInterval>>()
+
+/** 停掉某个会话的揭示 ticker（没有就 no-op） */
+function stopReveal(conversationId: string): void {
+  const timer = revealTimers.get(conversationId)
+  if (timer === undefined) return
+  clearInterval(timer)
+  revealTimers.delete(conversationId)
+}
+
+/** 中止某个会话在途的 SSE（会话被删除 / 判定不存在时调用） */
+function abortStream(conversationId: string): void {
+  // 揭示 ticker 先停：被中止的流不该再把 shown 往前推
+  stopReveal(conversationId)
+  const controller = streamControllers.get(conversationId)
+  if (!controller) return
+  controller.abort()
+  streamControllers.delete(conversationId)
+  // 被中止的流不会再走到 finally 的收尾（generation 已经变了）：
+  // 这里直接把它的临时态（正文草稿 + shown + status 阶段）擦掉，避免残留
+  useChatStore.setState((state) => ({ streams: clearStream(state.streams, conversationId) }))
+}
+
+/** 清掉某个会话的流式临时态（不改动别的会话） */
+function clearStream(
+  streams: Record<string, ChatStream>,
+  conversationId: string,
+): Record<string, ChatStream> {
+  if (!(conversationId in streams)) return streams
+  const next = { ...streams }
+  delete next[conversationId]
+  return next
+}
+
+/**
+ * 流失败/被掐断时的收尾：在列表末尾放一个「回答中断，点击重试」气泡。
+ *
+ * `partial` 是**已经流出的正文**：用户在读它，绝不能丢（发新的只会重复生成）。
+ * 空串则退化成原有行为（一个只有重试入口的空气泡）。
+ * 重试复用同一条用户消息的 client_msg_id（见 retry → send）。
+ */
+function appendInterrupted(conversationId: string, clientMsgId: string, partial: string): void {
+  markLocalWrite()
+  const failed: ChatMessage = {
+    id: `failed-${clientMsgId}`,
+    conversation_id: conversationId,
+    role: 'assistant',
+    content: partial,
+    created_at: new Date().toISOString(),
+    interrupted: true,
+  }
+  useChatStore.setState((state) => ({
+    messages: state.activeId === conversationId ? [...state.messages, failed] : state.messages,
+  }))
+}
+
 /* ------------------------- 开场白（AI 主动开口）去重 ------------------------- */
 
 /**
@@ -202,6 +366,8 @@ function isConversationGone(error: unknown): boolean {
 function dropGoneConversation(conversationId: string): void {
   // 这个会话没了：两个模块级结构里的条目一次清干净（否则它们会慢慢堆积）
   forgetConversation(conversationId)
+  // 它上面在途的 SSE 一并中止：流继续跑只会等一个已经被丢弃的结果
+  abortStream(conversationId)
 
   const state = useChatStore.getState()
   if (state.activeId !== conversationId) {
@@ -213,6 +379,7 @@ function dropGoneConversation(conversationId: string): void {
       openingFor: current.openingFor === conversationId ? null : current.openingFor,
       openingFailedFor:
         current.openingFailedFor === conversationId ? null : current.openingFailedFor,
+      streams: clearStream(current.streams, conversationId),
       // 会话都没了，它那份"历史拉到了没有"的结论一并作废
       historyLoad:
         current.historyLoad?.conversationId === conversationId ? null : current.historyLoad,
@@ -236,6 +403,7 @@ function dropGoneConversation(conversationId: string): void {
     // 否则会把"这个不存在的会话正在拉开场白"的等待态继续画在屏幕上
     openingFor: null,
     openingFailedFor: null,
+    streams: clearStream(state.streams, conversationId),
     historyLoad: null,
   })
 }
@@ -288,6 +456,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeId: null,
   messages: [],
   replyingIds: [],
+  streams: {},
   conclusionReady: false,
   conclusion: null,
   loading: false,
@@ -393,10 +562,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // 会话说没就没了：把它的开场白簿记一并清掉
     forgetConversation(id)
+    // 它上面在途的 SSE 也中止（回复已经没有归属的界面了）
+    abortStream(id)
 
     // 删的不是当前会话：只是列表少一条，消息区不动
     if (activeId !== id) {
-      set({ conversations: rest })
+      set((state) => ({ conversations: rest, streams: clearStream(state.streams, id) }))
       return
     }
 
@@ -419,6 +590,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // 开场白状态同样是会话级的（"下一条"若为空会话，它会自己再拉一次开场白）
       openingFor: null,
       openingFailedFor: null,
+      streams: clearStream(get().streams, id),
       historyLoad: null,
     })
   },
@@ -774,6 +946,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
        * 开场白气泡也不会被后面的 loadMessages 弄丢（见那里的合并规则）。
        */
       openingFailedFor: null,
+      /*
+       * 发送瞬间的即时反馈：此刻请求还没发出去（下面才调 streamMessage），
+       * 先在 streams 里放一条本地 reading 状态。正文草稿此刻为空，
+       * UI 会显示三点动画 + 这行字（否则等待区只有动画，像网卡了）。
+       * 服务端第一个 status 到达时被替换；第一个 delta 到达时整条清掉。
+       */
+      streams: {
+        ...state.streams,
+        [conversationId]: {
+          conversationId,
+          content: state.streams[conversationId]?.content ?? '',
+          // 还没揭示任何内容：第 1 段要等它被 `\n\n` 闭合（或整条回复结束）才出现
+          shown: '',
+          status: { stage: 'reading' as const, text: LOCAL_STATUS_TEXT, elapsedMs: 0 },
+        },
+      },
     }))
     // 本地已经写过消息 → 这个会话不再需要开场白
     openingRequested.add(conversationId)
@@ -782,53 +970,337 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     track('chat_round', { conversation_id: conversationId })
 
-    try {
-      const reply = await chatApi.sendMessage(conversationId, {
-        content: text,
-        client_msg_id: clientMsgId,
+    /**
+     * 已经过空值检查的会话 id 常量。
+     * 后面所有异步回调（流事件 / set 的 updater）都在闭包里引用它 ——
+     * 用 `const` 而不是外层那个 `let`，TS 的收窄才不会在闭包边界上丢掉。
+     */
+    const convId: string = conversationId
+
+    /**
+     * SSE 在途的**回复正文草稿**（只活在这条流的生命周期里）：
+     * done 落成正式消息、失败落成中断气泡、回退非流式时丢弃。
+     */
+    let streamed = ''
+    /**
+     * **已经揭示到哪**（`streamed` 的前缀）：UI 渲染的是它。
+     *
+     * 揭示由下面的 ticker 按 REPLY_BUBBLE_GAP_MS 一格格推进 —— 这是"真人感"：
+     * 一条回复拆成 2-3 个气泡时，不能几乎同时冒出来，要隔几秒说一句
+     * （见 utils/revealPace.nextReveal 的规则）。
+     */
+    let revealed = ''
+    /**
+     * 下一次允许揭示的时间戳。初始 0 = "立刻可以揭示第 1 段"：
+     * 第一次揭示**不等** REPLY_BUBBLE_GAP_MS（第 1 段通常在第一个 delta 后
+     * 不到 1 秒就被 `\n\n` 闭合，那时就该说话了）。
+     */
+    let nextRevealAt = 0
+    /**
+     * 挂起的 done：`shown` 还没追上 `content` 时**不能**提交 ——
+     * 一提交就等于把还没显示的段落一瞬间全冒出来（正是用户看到的现象）。
+     * 所以先记住 done 的 content，等揭示追上（revealed === streamed）再落库。
+     * 落库后由 commitStream 用**完整正文**建消息，每一段此前都已显示过，视觉无缝。
+     */
+    let pendingCommit: { messageId: string; conclusionReady: boolean } | null = null
+    let answered = false
+    /** 幂等命中：交回非流式路径处理（见下方 finally 前的收尾判断） */
+    let duplicated = false
+    /** 信封层 error：后端可能随后照常补 done，所以只记录 */
+    let envelopeError: ChatStreamError | null = null
+    /**
+     * 读当前的信封层 error。
+     * 用函数而不是直接读变量：`envelopeError` 只在回调里被赋值，
+     * TS 的控制流分析看不见，会在下面直接读时把它收窄成 `null`（进而报 never）。
+     */
+    const readEnvelopeError = (): ChatStreamError | null => envelopeError
+
+    /**
+     * 把草稿写进 streams：`content` = 服务端给到的完整正文，`shown` = 已揭示的前缀。
+     * ⚠️ 写出来的是**不带 status** 的新条目：第一段一开始，状态行就让位给气泡
+     * （注意是"第一段被揭示"，不是"第一个 delta" —— 节奏化之后，delta 到了也还看不见）。
+     */
+    const publishDraft = (content: string, shown: string) => {
+      if (generation !== sessionGeneration) return
+      set((state) => ({
+        streams: {
+          ...state.streams,
+          [convId]: { conversationId: convId, content, shown },
+        },
+      }))
+    }
+
+    /**
+     * 把服务端下发的生成阶段写进 streams（不碰正文）。
+     * 已经有可见正文就忽略：状态行只在"什么都还没显示出来"的等待期有意义 ——
+     * 判据是 `revealed`（而不是 `streamed`）：揭示要先等段落闭合，
+     * 这期间用户屏幕上还只有动画，状态行必须继续更新（秒数才不会像卡住）。
+     */
+    const publishStatus = (stage: ChatStreamStage, text: string, elapsedMs: number) => {
+      if (generation !== sessionGeneration) return
+      if (revealed) return
+      set((state) => ({
+        streams: {
+          ...state.streams,
+          [convId]: {
+            conversationId: convId,
+            content: state.streams[convId]?.content ?? '',
+            shown: state.streams[convId]?.shown ?? '',
+            status: { stage, text: text || STAGE_FALLBACK_TEXT[stage], elapsedMs },
+          },
+        },
+      }))
+    }
+
+    /** done：把草稿落成一条真正的 assistant 消息（正文不再逐块重渲染） */
+    const commitStream = (messageId: string, conclusionReady: boolean) => {
+      markLocalWrite()
+      set((state) => {
+        const isActive = state.activeId === convId
+        // 切走再切回时，历史可能已经带上了这条回复：按 id 去重
+        // （名字避开 revealed/shown：那个是"显示到哪"，这个是"这条消息在不在")
+        const alreadyThere = state.messages.some((m) => m.id === messageId)
+        const assistant: ChatMessage = {
+          id: messageId,
+          conversation_id: convId,
+          role: 'assistant',
+          content: streamed,
+          created_at: new Date().toISOString(),
+        }
+        return {
+          messages:
+            isActive && !alreadyThere
+              ? [...state.messages, { ...assistant, interrupted: false }]
+              : state.messages,
+          conclusionReady: isActive && conclusionReady ? true : state.conclusionReady,
+          streams: clearStream(state.streams, convId),
+        }
       })
+      // 对话结束属于画像写操作（tag 事件回流也在这一轮里，统一 bump 一次）
+      useProfileStore.getState().bumpVersion()
+    }
+
+    /** 揭示结束后的收尾：把这条会话的"在途"标记清掉（等价于 finally 里那份，二选一执行） */
+    const finishStream = () => {
+      stopReveal(convId)
+      if (generation !== sessionGeneration) return
+      set((state) => ({
+        replyingIds: state.replyingIds.filter((id) => id !== convId),
+        streams: clearStream(state.streams, convId),
+      }))
+    }
+
+    /**
+     * 推进一格揭示；揭示完了就收尾，该提交的就提交。ticker 每次、以及每个 delta 之后都会调它。
+     *
+     * 两个条件缺一不可才会揭示：
+     *   ① `now >= nextRevealAt` —— 到点了（上一段之后已过 REPLY_BUBBLE_GAP_MS；
+     *      第一次时 nextRevealAt=0，所以立刻可揭示）；
+     *   ② `(hasBreak || answered)` —— **这一段已经写完**（后面还有 `\n\n`），或者整个回复
+     *      已经结束（单段回复：没有段落可节奏化，一次给完 —— 别让用户白等）。
+     *      没有 ② 的话，第一块 delta 一到就会把"半句话"当一段揭示出去，然后冻在那 3 秒，
+     *      看起来像卡住而不是像在说话。
+     */
+    const advanceReveal = () => {
+      if (generation !== sessionGeneration) return
+      const now = Date.now()
+      const hasMore = revealed.length < streamed.length
+      const hasBreak = streamed.indexOf('\n\n', revealed.length) !== -1
+      if (hasMore && now >= nextRevealAt && (hasBreak || answered)) {
+        const next = nextReveal(streamed, revealed)
+        if (next !== revealed) {
+          revealed = next
+          // 下一段要等 3 秒：这才是用户要的"真人感"节奏
+          nextRevealAt = now + REPLY_BUBBLE_GAP_MS
+          publishDraft(streamed, revealed)
+        }
+      }
+
+      if (revealed.length >= streamed.length) {
+        // 全部揭示完：ticker 不再有用，立刻收掉（不养一个 200ms 的空转定时器）
+        stopReveal(convId)
+        // done 已经到过（挂起中）→ 此刻才真正落库。因为每一段都已经显示过，
+        // 提交那一刻界面上的文字**一个都不会多**（见 pendingCommit 的注释）。
+        if (pendingCommit) {
+          const { messageId, conclusionReady } = pendingCommit
+          pendingCommit = null
+          commitStream(messageId, conclusionReady)
+          finishStream()
+        }
+      }
+    }
+
+    /** 有待揭示内容时才起 ticker（内容全部显示完 advanceReveal 会自己停掉） */
+    const ensureTicker = () => {
+      if (revealTimers.has(convId)) return
+      revealTimers.set(convId, setInterval(advanceReveal, REVEAL_TICK_MS))
+    }
+
+    const controller = new AbortController()
+    streamControllers.set(convId, controller)
+
+    try {
+      await chatApi.streamMessage(
+        convId,
+        { content: text, client_msg_id: clientMsgId },
+        {
+          onDelta: (chunk) => {
+            // content 照旧逐块累加（done 提交用的就是它）—— 这里**不直接上屏**
+            streamed += chunk
+            // 正文属于本地写入：让在途的历史请求结果作废（否则会冲掉这段流式正文）
+            markLocalWrite()
+            /*
+             * 每来一块就试一次揭示：第一次揭示不等 3 秒（nextRevealAt 初始为 0），
+             * 所以第 1 段一旦被 `\n\n` 闭合就立刻出现；后面的揭示由 ticker 按节奏推进。
+             * ticker 同时起上：有些回复没有下一块 delta 了（等 done），得有东西来推它。
+             */
+            ensureTicker()
+            advanceReveal()
+          },
+          onStatus: (event) => {
+            // 只展示"正在干什么 + 已用时间"，不碰 messages / content
+            publishStatus(event.stage, event.text, event.elapsed_ms)
+          },
+          onTag: () => {
+            /* 画像标签回流：done 时统一 bumpVersion，这里不额外触发 */
+          },
+          onPending: () => {
+            // 幂等命中：后端不会重复生成，交回非流式路径（它同样会回放/拒绝重复）
+            duplicated = true
+          },
+          onError: (code, message) => {
+            envelopeError = new ChatStreamError(message, true, code)
+          },
+          onDone: (event) => {
+            if (generation !== sessionGeneration) return
+            answered = true
+            if (revealed.length < streamed.length) {
+              /*
+               * 正文已经收完了，但界面上还没说完 —— **先挂起**，别提交。
+               * 提交会立刻把整条回复渲染出来，等于把还没"说出口"的段落一次性冒出，
+               * 前面按节奏揭示的努力全白费。等 advanceReveal 把最后一段揭示出来再落库。
+               */
+              pendingCommit = {
+                messageId: event.message_id,
+                conclusionReady: event.conclusion_ready,
+              }
+              ensureTicker()
+              advanceReveal()
+              return
+            }
+            commitStream(event.message_id, event.conclusion_ready)
+          },
+        },
+        controller.signal,
+      )
+
       // 期间换过账号：整份丢弃（新账号的界面不许出现上一个账号的回复）
       if (generation !== sessionGeneration) return
 
-      // 回复到了：让在途的历史请求作废（它要是此刻才返回，会把这条回复冲掉）
-      markLocalWrite()
-      set((state) => {
-        const isActive = state.activeId === conversationId
-        // 切走再切回时，历史可能已经带上了这条回复：按 id 去重
-        const shown = state.messages.some((m) => m.id === reply.assistant_message.id)
-        return {
-          messages:
-            isActive && !shown
-              ? [...state.messages, { ...reply.assistant_message, interrupted: false }]
-              : state.messages,
-          conclusionReady: isActive && reply.conclusion_ready ? true : state.conclusionReady,
-        }
-      })
-      // 对话结束属于画像写操作
-      useProfileStore.getState().bumpVersion()
+      /*
+       * 流没有给出可用的正文：
+       *   - 幂等命中（pending）→ 交回非流式接口，它会回放那条已有回复；
+       *   - 一帧正文都没有就结束 → 视作建流阶段失败，非流式是更可靠的兜底。
+       * 两种情况下 `streamed` 都是空串，所以 started=false，回退是安全的。
+       * 有正文但没等到 done（连接被掐断）**绝不回退**：重发会重复调用模型，
+       * 交给下面的中断分支保住已流出的文字。
+       */
+      if (!answered) {
+        const streamError = readEnvelopeError()
+        throw new ChatStreamError(
+          streamError?.message ?? (duplicated ? '该消息已提交过' : '流式请求未完成'),
+          streamed.length > 0,
+          streamError?.code,
+        )
+      }
     } catch (error) {
       if (generation !== sessionGeneration) return
       if (isConversationGone(error)) {
-        dropGoneConversation(conversationId)
+        dropGoneConversation(convId)
         return
       }
-      // 失败：在列表末尾放一个「重试」气泡（ChatBubble 的 interrupted 入口）
-      markLocalWrite()
-      const failed: ChatMessage = {
-        id: `failed-${clientMsgId}`,
-        conversation_id: conversationId,
-        role: 'assistant',
-        content: '',
-        created_at: new Date().toISOString(),
-        interrupted: true,
+
+      const aborted = error instanceof Error && error.name === 'AbortError'
+      const streamFailure = error instanceof ChatStreamError ? error : null
+      /*
+       * 回退非流式的条件：
+       *   - 不是用户/重置中止；
+       *   - 且「流压根没建立」—— 要么是 fetch 本身抛错（非 ChatStreamError），
+       *     要么是 ChatStreamError 且 started=false。
+       * 只要读到过一帧（started=true）就绝不回退：重发会重复调用模型。
+       */
+      const fallbackToRest = !aborted && (streamFailure === null || !streamFailure.started)
+
+      if (fallbackToRest) {
+        /*
+         * 兜底：SSE 请求本身失败（HTTP 非 2xx / fetch 抛错 / 幂等命中）。
+         * 用**同一个 client_msg_id** 走原有非流式接口 —— 后端幂等，不会重复生成；
+         * 失败文案与处理（中断气泡）沿用原有逻辑，用户体验不比改动前差。
+         *
+         * 这条路径**没有事件流**，只能一直显示本地 reading 状态
+         * （POST /messages 要等整条回复生成完才 resolve），收到回复后随 streams 一起清掉。
+         * 若之前已经收到过服务端的 status，这里也统一换回本地文案：
+         * 阶段心跳停了却还停在"正在想…"会让用户以为卡死。
+         */
+        publishStatus('reading', LOCAL_STATUS_TEXT, 0)
+        try {
+          const reply = await chatApi.sendMessage(convId, {
+            content: text,
+            client_msg_id: clientMsgId,
+          })
+          if (generation !== sessionGeneration) return
+          markLocalWrite()
+          /*
+           * 兜底路径**同样按节奏揭示**（用户要求"多个气泡不能同时冒出来"）。
+           * 拿到的是整段回复，所以 content = 全文、shown 重新从 '' 开始，
+           * 由 ticker 一句一句说出来；揭示完由 advanceReveal 把挂起的提交落成消息
+           * （与 SSE 路径是同一套收尾，不另写一份）。
+           */
+          streamed = reply.assistant_message.content
+          answered = true
+          revealed = ''
+          nextRevealAt = 0
+          pendingCommit = {
+            messageId: reply.assistant_message.id,
+            conclusionReady: reply.conclusion_ready,
+          }
+          publishDraft(streamed, revealed)
+          ensureTicker()
+          advanceReveal()
+        } catch (fallbackError) {
+          if (generation !== sessionGeneration) return
+          if (isConversationGone(fallbackError)) {
+            dropGoneConversation(convId)
+            return
+          }
+          appendInterrupted(convId, clientMsgId, '')
+        }
+        return
       }
-      set((state) => ({
-        messages: state.activeId === conversationId ? [...state.messages, failed] : state.messages,
-      }))
+
+      /*
+       * 流已经建立过（或用户主动中止）：**不能**自动重发。
+       * 已收到的正文一定要留住 —— 用户在读它，重发只会重复调用模型。
+       */
+      appendInterrupted(convId, clientMsgId, streamed)
     } finally {
-      set((state) => ({
-        replyingIds: state.replyingIds.filter((id) => id !== conversationId),
-      }))
+      streamControllers.delete(convId)
+      /*
+       * 挂起提交（done 到了但界面上还没说完）时，ticker 必须**继续跑**：
+       * 它负责把剩下的段落一段段说出来，然后才落库并收尾（finishStream）。
+       * 这一刻清掉 streams / replyingIds 的话，界面上等着的后几段会被整块抽走。
+       */
+      const keepRevealing = generation === sessionGeneration && pendingCommit !== null
+      if (!keepRevealing) {
+        // 其余路径（正常提交完 / 失败 / 中断 / 换号 / 中止）ticker 与临时态一起收掉
+        stopReveal(convId)
+        if (generation === sessionGeneration) {
+          set((state) => ({
+            replyingIds: state.replyingIds.filter((id) => id !== convId),
+            streams: clearStream(state.streams, convId),
+          }))
+        }
+      }
     }
   },
 
@@ -851,6 +1323,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // 换号世代 +1：上一个账号在途的请求（列表 / 历史 / 回复）回来时会被丢掉
     sessionGeneration += 1
     /*
+     * 上一个账号在途的 SSE：主动 abort。只靠世代号兜底也能不写脏数据，
+     * 但让一个作废的 AI 生成继续跑纯属浪费，还会让 replyingIds 的收尾迟到。
+     */
+    for (const controller of streamControllers.values()) controller.abort()
+    streamControllers.clear()
+    // 在途流的揭示 ticker 一并停掉：换号后它推的 shown 已经不属于新账号的界面
+    for (const timer of revealTimers.values()) clearInterval(timer)
+    revealTimers.clear()
+    /*
      * 登出/切换账号：会话 id 全部作废，开场白簿记也必须跟着清空。
      * 这两个模块级结构**不受 store 管辖**（跨组件实例、跨账号存活），
      * 只要漏清一个，新账号就会命中"已经拉过了"的脏簿记 → 永远转圈。
@@ -863,6 +1344,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       activeId: null,
       messages: [],
       replyingIds: [],
+      // 流式临时态（正文草稿）同样是按用户的，一并清掉
+      streams: {},
       conclusionReady: false,
       conclusion: null,
       // loading 也是按用户的：上一个账号在途的请求不该让新账号停在加载态
