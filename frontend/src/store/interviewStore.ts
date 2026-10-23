@@ -1,10 +1,12 @@
 import { create } from 'zustand'
 
+import { ApiError, get } from '@/api/client'
 import { interviewApi } from '@/api/interview'
 import { useProfileStore } from '@/store/profileStore'
 import type {
   InterviewAnswerAction,
   InterviewQuestion,
+  InterviewQuestionsResponse,
   InterviewReview,
   InterviewSession,
   InterviewStartPayload,
@@ -37,6 +39,20 @@ export interface PendingFollowup {
   round: number
 }
 
+/**
+ * 「继续上次面试」入口需要的最小信息。
+ *
+ * 刻意**只读、不进 store 状态**：它是面试选择页上的一次性探活结果，和正在进行的
+ * 那场面试（session / questions）无关，塞进 store 反而会和会话页的加载互相干扰。
+ */
+export interface ResumableInterview {
+  id: string
+  /** 当前应回答第几题（1 起，取自后端 current_index） */
+  currentIndex: number
+  /** 这一场一共几题 */
+  total: number
+}
+
 interface InterviewState {
   session: InterviewSession | null
   questions: InterviewQuestion[]
@@ -57,6 +73,11 @@ interface InterviewState {
   ) => Promise<InterviewAnswerAction | 'error'>
   finish: (interviewId: string) => Promise<boolean>
   fetchReview: (id: string) => Promise<void>
+  /**
+   * 探活 sessionStorage 里残留的面试 id：仍然是「进行中」才返回信息，
+   * 否则（没存 / 已结束 / 已失效）返回 null，并把失效 id 清掉。
+   */
+  probeResumable: () => Promise<ResumableInterview | null>
   reset: () => void
 }
 
@@ -234,6 +255,58 @@ export const useInterviewStore = create<InterviewState>((set) => ({
       set({ review: null })
     } finally {
       if (generation === fetchGeneration) set({ loading: false })
+    }
+  },
+
+  /**
+   * 「继续上次面试」的探活（2026-10-18）。
+   *
+   * 为什么需要它：interviewId 存在 **sessionStorage** —— 刷新页面还在（会话页会从
+   * /questions 重建场次），但**关标签页 / 新开标签页 / 桌面端重启**后就没了。
+   * 服务端那场面试还是「进行中」，用户却没有任何入口回去，面试就成了孤儿。
+   *
+   * 判定只认后端：id 存在 **且** `status === '进行中'`（后端是中文枚举，
+   * 见 services/interview_service.py）才允许显示入口；点击后跳 /interview/session，
+   * 由会话页自己再拉一次题，这里不碰 session / questions。
+   *
+   * 失败一律**静默**：请求带 `silent: true`（否则一个过期 id 会在用户刚进页面时
+   * 弹一句「内容不存在」），并且把失效 id 从 sessionStorage 里清掉 —— 不留坏状态。
+   * 所以这里也**不复用** interviewApi.questions：那条路径没法带 silent。
+   */
+  async probeResumable() {
+    const interviewId = storage.session.get<string | null>(STORAGE_KEY.interviewId, null)
+    // 没存过 id：什么都不做（绝大多数人首次进本页就是这条）
+    if (!interviewId) return null
+    try {
+      const data = await get<InterviewQuestionsResponse>(`/interview/${interviewId}/questions`, {
+        silent: true,
+      })
+      if (data?.status !== '进行中') {
+        // 已经答完 / 已结束：入口不该再出现，顺手清掉这个 id
+        storage.session.remove(STORAGE_KEY.interviewId)
+        return null
+      }
+      const questions = data.questions ?? []
+      const total = questions.length
+      return {
+        id: data.interview_id,
+        // 与 loadQuestions 同一套夹取：current_index 越界时退回一个安全值
+        currentIndex: Math.min(Math.max(data.current_index ?? 1, 1), Math.max(total, 1)),
+        total,
+      }
+    } catch (err) {
+      /*
+       * 只有"这个 id 确实没用了"才清掉：404 / 业务码 2001（id 无效、已删、或不属于本账号）。
+       *
+       * 其它失败（网络抖动、超时、代理瞬时 502）**必须保留 id** ——
+       * 否则用户网络抖一下，入口就永久消失，等于又变回我们要修的那个"面试变孤儿"。
+       * 保留的代价很小：这一次只是少显示一块，下次进页面会重新探活。
+       */
+      const code = err instanceof ApiError ? err.code : undefined
+      if (code === 2001 || code === 404) {
+        storage.session.remove(STORAGE_KEY.interviewId)
+      }
+      return null
     }
   },
 

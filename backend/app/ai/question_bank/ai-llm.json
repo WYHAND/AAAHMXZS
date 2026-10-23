@@ -1,7 +1,7 @@
 {
   "id": "ai-llm",
   "name": "AI/大模型",
-  "aliases": ["大模型", "llm", "ai工程师", "ai开发", "ai应用", "算法工程", "agent", "agent开发", "大模型算法", "prompt", "rag", "生成式ai", "aigc", "人工智能"],
+  "aliases": ["大模型", "llm", "ai", "ai工程师", "ai开发", "ai应用", "算法工程", "agent", "agent开发", "大模型算法", "prompt", "rag", "生成式ai", "aigc", "人工智能"],
   "sources": [
     "liyupi/mianshiya 面试鸭（AI大模型 / LLM / Prompt / RAG 题库）",
     "ni00/DevRusher（大模型算法 / Agent 工程 / Agent 评测 题包）",
@@ -11,6 +11,15 @@
   ],
   "note": "题目为社区公开的大模型/AI 应用岗高频面试题（事实性引用），参考要点为本项目自写。",
   "questions": [
+    {
+      "id": "ai-tech-00",
+      "scene": "技术",
+      "level": "基础",
+      "question": "先用一分钟介绍一下你自己，重点说说和大模型/AI 相关的经历，以及你熟悉的技术（Prompt、RAG、微调等）。",
+      "intent": "破冰 + 考察自我认知与岗位匹配度",
+      "reference_points": ["表述有条理", "能提炼与大模型/AI 相关的经历", "对常用技术有基本认知"],
+      "followup_hints": ["你动手做过的大模型相关的尝试是什么？"]
+    },
     {
       "id": "ai-tech-01",
       "scene": "技术",

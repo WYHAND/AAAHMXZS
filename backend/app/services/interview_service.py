@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from sqlmodel import Session, select
@@ -36,6 +36,7 @@ from app.schemas.interview import (
     InterviewAnswerRequest,
     InterviewAnswerResponse,
     InterviewFinishResponse,
+    InterviewHistoryItem,
     InterviewQuestionResponse,
     InterviewQuestionsResponse,
     InterviewResponse,
@@ -52,6 +53,16 @@ MAX_FOLLOWUP_PER_QUESTION = 2
 
 # 模式 -> 题目数量（小测试轻量，全真完整）
 MODE_QUESTION_COUNT: Dict[str, int] = {"小测试": 3, "全真": 6}
+
+# 场景白名单（5.3）。**故意在本模块自带一份**，不去 import
+# ``question_bank_service.VALID_SCENES``：那个常量是"题库检索"的过滤条件，
+# 这个是"面试记录落库"的合法值域。两者取值眼下相同，但谁先变都不该悄悄把对方
+# 带偏（跨模块引用会把两份独立约束偷偷焊成一份）。
+VALID_SCENES: Tuple[str, ...] = ("HR", "项目", "技术")
+
+# 入参非法时的回落值：宁可按默认值把面试跑起来，也不要卡住用户（见 _normalize_start_params）
+DEFAULT_MODE = "小测试"
+DEFAULT_SCENE = "HR"
 
 FALLBACK_QUESTIONS: List[Dict[str, Any]] = [
     {
@@ -79,15 +90,47 @@ FALLBACK_QUESTIONS: List[Dict[str, Any]] = [
 # 开始面试 / 出题
 # ---------------------------------------------------------------------------
 
+def _normalize_start_params(mode: str, scene: str) -> Tuple[str, str]:
+    """把 ``POST /interview/start`` 的 ``mode`` / ``scene`` 收敛到白名单内。
+
+    **只回落、不抛 1001**：start 是用户"已经点了开始"的动作，参数写歪时把整场
+    面试卡在错误提示上，不如按默认值正常跑起来（与 mode 原有的兜底风格一致）。
+
+    为什么 scene 也必须挡（历史 bug）：它以前是 ``payload.scene or "HR"``，任何
+    非空字符串都会**原样写进 ``interviews.scene``**，库里留下解释不了的场景名，
+    而且这时 AI 出题已经真金白银调过一次 —— 白烧一次调用换回一条脏数据。
+
+    mode 的合法值域就是 ``MODE_QUESTION_COUNT`` 的键（题量依赖它），所以不另立
+    ``VALID_MODES``，免得两份白名单哪天对不上。
+    """
+    normalized_mode = mode if mode in MODE_QUESTION_COUNT else DEFAULT_MODE
+    normalized_scene = scene if scene in VALID_SCENES else DEFAULT_SCENE
+    if normalized_mode != mode:
+        logger.warning("面试入参 mode 非法，已回落 %r -> %r", mode, normalized_mode)
+    if normalized_scene != scene:
+        logger.warning("面试入参 scene 非法，已回落 %r -> %r", scene, normalized_scene)
+    return normalized_mode, normalized_scene
+
+
 async def start_interview(db: Session, user: User, payload: InterviewStartRequest) -> InterviewResponse:
     """POST /interview/start（11.9 第 1-2 步）。"""
-    mode = payload.mode if payload.mode in MODE_QUESTION_COUNT else "小测试"
-    scene = payload.scene or "HR"
+    mode, scene = _normalize_start_params(payload.mode, payload.scene)
 
     resume = _pick_resume(db, user, payload.resume_id)
     target_job = payload.target_job or (resume.target_job if resume else None) or "未指定"
     tags = profile_service.serialize_tags(profile_service.list_tags(db, user.id))
     resume_json = json.dumps((resume.parsed_data if resume else None) or {}, ensure_ascii=False)
+
+    expected = MODE_QUESTION_COUNT.get(mode, 3)
+
+    # 真实题库检索：先把「目标岗位（用户自由填写）-> 方向」匹配上，再按场景捞候选真题。
+    # 出题从“模型凭空编”改为“从真题里挑 + 贴合简历改写”，见 ai/prompts/interview_question.txt。
+    bank = question_bank_service.retrieve(target_job, scene)
+    candidates = question_bank_service.format_candidates(bank["questions"])
+    logger.info(
+        "面试出题：target_job=%s -> direction=%s，候选 %s 题",
+        target_job, bank["direction"] or "(未匹配)", len(bank["questions"]),
+    )
 
     result: InterviewQuestionResult = await deepseek_client.chat_prompt_json(
         prompt_name="interview_question",
@@ -95,12 +138,15 @@ async def start_interview(db: Session, user: User, payload: InterviewStartReques
             "mode": mode,
             "scene": scene,
             "target_job": target_job,
+            "direction": bank["direction"] or "未匹配（用通用题库）",
             "resume_json": resume_json,
             "profile_tags": tags,
+            "candidates": candidates or "（题库未匹配到候选题，请严格基于简历与画像出题）",
         },
         schema=InterviewQuestionResult,
         default=InterviewQuestionResult(),
         temperature=STRUCTURED_TEMPERATURE,
+        max_tokens=2048,
     )
 
     interviews = Interview(user_id=user.id, mode=mode, scene=scene, status="进行中")
@@ -110,11 +156,14 @@ async def start_interview(db: Session, user: User, payload: InterviewStartReques
 
     questions = result.questions or []
     if not questions:
-        # 7.6 兜底：AI 出题失败时用内置题目
-        logger.warning("面试出题为空，使用内置兜底题目 user_id=%s", user.id)
-        questions = InterviewQuestionResult.model_validate({"questions": FALLBACK_QUESTIONS}).questions
+        # 7.6 兜底：**优先用真实题库兜底**（比通用兜底题更贴岗位），题库也没有才用内置题目
+        logger.warning("面试出题为空，使用题库兜底 user_id=%s direction=%s", user.id, bank["direction"])
+        bank_fallback = question_bank_service.pick_fallback(target_job, scene, expected)
+        if bank_fallback:
+            questions = InterviewQuestionResult.model_validate({"questions": bank_fallback}).questions
+        else:
+            questions = InterviewQuestionResult.model_validate({"questions": FALLBACK_QUESTIONS}).questions
 
-    expected = MODE_QUESTION_COUNT.get(mode, 3)
     for index, question in enumerate(questions[:expected], start=1):
         db.add(
             InterviewQuestion(
@@ -143,6 +192,49 @@ def get_questions(db: Session, user: User, interview_id: UUID) -> InterviewQuest
         questions=[to_question_response(q) for q in questions],
         current_index=current,
     )
+
+
+def list_history(db: Session, user: User, limit: int = 20) -> List[InterviewHistoryItem]:
+    """GET /interview/history：当前用户已完成的面试，最近完成的在前。
+
+    为什么只返回已完成：进行中的那一场由「继续上次面试」入口负责；
+    历史列表的用途是**重复查看复盘**，把进行中的混进来只会让入口变乱。
+
+    只取 report 里的总分，不把整份报告塞进列表：报告可能很长，
+    列表只需要「哪一场 + 多少分 + 点进去」。
+    """
+    statement = (
+        select(Interview)
+        .where(Interview.user_id == user.id, Interview.status == "已完成")
+        .order_by(Interview.updated_at.desc())  # type: ignore[union-attr]
+        .limit(limit)
+    )
+    interviews = list(db.exec(statement).all())
+
+    items: List[InterviewHistoryItem] = []
+    for interview in interviews:
+        report = interview.report if isinstance(interview.report, dict) else {}
+        dimensions = report.get("dimension_scores") or {}
+        raw_score = report.get("overall_score")
+        # 兜底复盘没有维度分，overall_score=0 不代表“考了 0 分”，列表不展示这个 0
+        score = (
+            float(raw_score)
+            if dimensions and isinstance(raw_score, (int, float))
+            else None
+        )
+        items.append(
+            InterviewHistoryItem(
+                id=interview.id,
+                mode=interview.mode,
+                scene=interview.scene,
+                status=interview.status,
+                created_at=interview.created_at,
+                updated_at=interview.updated_at,
+                overall_score=score,
+                has_review=bool(report),
+            )
+        )
+    return items
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +368,7 @@ async def _maybe_followup(
             schema=InterviewFollowupResult,
             default=InterviewFollowupResult(should_followup=False),
             temperature=STRUCTURED_TEMPERATURE,
+            max_tokens=512,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("追问判断失败 interview_id=%s err=%s", interview.id, sanitize(exc))
@@ -291,8 +384,24 @@ async def _maybe_followup(
 # ---------------------------------------------------------------------------
 
 async def finish_interview(db: Session, user: User, interview_id: UUID) -> InterviewFinishResponse:
-    """POST /interview/{id}/finish：生成复盘报告。"""
+    """POST /interview/{id}/finish：生成复盘报告（**幂等**，已有报告则原样返回）。"""
     interview = get_interview(db, user, interview_id)
+
+    # 幂等保护：已经跑完的面试**直接回已有报告**，不再调 AI、不动 updated_at。
+    # 为什么必须挡：
+    # 1. 复盘是一次付费 AI 调用（实测 ~8s），重复调用纯烧钱；
+    # 2. 重算出的分数是"重新随机"的（实测同一份作答综合分 27.5 -> 25.5），
+    #    会覆盖用户已经看过的报告，用户只会觉得"我什么都没重答，分数怎么变了"；
+    # 3. 下面 7.8 的画像回流会把同一场面试的 tags **再记一遍**，等于白送一次画像加分。
+    # report 为空（历史上 AI 失败、或半途中断）时不算完成，仍走原逻辑补生成。
+    if interview.status == "已完成" and interview.report:
+        logger.info("面试复盘已存在，直接返回，未重算 interview_id=%s", interview.id)
+        return InterviewFinishResponse(
+            interview_id=interview.id,
+            status=interview.status,
+            report=interview.report,
+        )
+
     questions = list_questions(db, interview.id)
     if not questions:
         raise BusinessException(ErrorCode.PARAM_ERROR, "该面试还没有题目")
@@ -372,7 +481,7 @@ async def _build_review(
             schema=InterviewReviewResult,
             default=empty_interview_review(),
             temperature=STRUCTURED_TEMPERATURE,
-            max_tokens=3000,
+            max_tokens=4096,
         )
     except Exception as exc:  # noqa: BLE001 - 7.6：AI 挂了也必须有一份复盘可看
         logger.warning(

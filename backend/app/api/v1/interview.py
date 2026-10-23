@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
 from app.core.api_response import ApiResponse
@@ -14,6 +15,7 @@ from app.schemas.interview import (
     InterviewAnswerRequest,
     InterviewAnswerResponse,
     InterviewFinishResponse,
+    InterviewHistoryItem,
     InterviewQuestionsResponse,
     InterviewResponse,
     InterviewReviewResponse,
@@ -32,6 +34,20 @@ async def start(
 ) -> ApiResponse[InterviewResponse]:
     """11.9：选模式与场景 -> 基于简历出题。"""
     return ApiResponse.ok(await interview_service.start_interview(db, current_user, payload))
+
+
+@router.get(
+    "/history",
+    response_model=ApiResponse[List[InterviewHistoryItem]],
+    summary="面试历史",
+)
+def history(
+    limit: int = Query(default=20, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ApiResponse[List[InterviewHistoryItem]]:
+    """当前用户已完成的面试，最近完成的在前；用于重复查看复盘。"""
+    return ApiResponse.ok(interview_service.list_history(db, current_user, limit))
 
 
 @router.get(

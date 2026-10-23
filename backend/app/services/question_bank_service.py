@@ -196,8 +196,15 @@ def retrieve(target_job: Optional[str], scene: str, limit: int = CANDIDATE_LIMIT
     if general:
         add(_by_scene(general, scene))
 
+    if not pool and scene == "技术":
+        # 技术面、且没有任何方向/通用候选 -> 退到「通用技术」计算机基础题，
+        # 而不是拿 HR 题去填技术面（那会答非所问）。
+        general_tech = _direction_by_id("general-tech")
+        if general_tech:
+            add(_by_scene(general_tech, "技术"))
+
     if not pool and general:
-        # 该方向在这个场景下没有题（如"运营"没有技术题）——退到通用的全部场景
+        # 仍为空（如非技术场景在该方向没有题）——退到通用的全部场景
         add(general["questions"])
 
     if not pool:

@@ -19,6 +19,7 @@ import type {
   InterviewAnswerPayload,
   InterviewAnswerResponse,
   InterviewFinishResponse,
+  InterviewHistoryItem,
   InterviewQuestionsResponse,
   InterviewReview,
   InterviewSession,
@@ -28,6 +29,13 @@ import type {
 export const interviewApi = {
   start: (payload: InterviewStartPayload) =>
     post<InterviewSession>('/interview/start', payload),
+
+  /** 已完成面试列表（最近完成的在前），用于重复查看复盘 */
+  history: (limit = 20) =>
+    get<InterviewHistoryItem[]>('/interview/history', {
+      params: { limit },
+      silent: true,
+    }),
 
   /** 一次拿全部题目；前端按 current_index 定位当前题 */
   questions: (interviewId: string) =>

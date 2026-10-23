@@ -10,10 +10,16 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class InterviewStartRequest(BaseModel):
-    """POST /interview/start 入参。"""
+    """POST /interview/start 入参。
 
-    mode: str = Field(default="小测试", description="小测试 / 全真（5.3）")
-    scene: str = Field(default="HR", description="HR / 项目 / 技术（5.3）")
+    ``mode`` / ``scene`` **故意不加 Literal 白名单校验**：合法值域由服务端
+    ``interview_service._normalize_start_params`` 统一收敛（非法值回落默认值 + 日志），
+    而不在这里 422 拦住用户 —— 这两个字段只决定"按什么方式出题"，写歪了应该让面试
+    照常开始，而不是把已经点了"开始"的用户挡回来。schema 层只声明形状。
+    """
+
+    mode: str = Field(default="小测试", description="小测试 / 全真（5.3）；非法值服务端回落为默认")
+    scene: str = Field(default="HR", description="HR / 项目 / 技术（5.3）；非法值服务端回落为默认")
     resume_id: Optional[UUID] = Field(default=None, description="基于哪份简历出题；为空则用最新简历")
     target_job: Optional[str] = Field(default=None, max_length=100)
 
@@ -76,6 +82,24 @@ class InterviewResponse(BaseModel):
     report: Optional[Dict[str, Any]] = None
 
 
+class InterviewHistoryItem(BaseModel):
+    """GET /interview/history 的一条已完成面试。
+
+    只给列表需要的字段：复盘页仍然按 id 调 ``GET /interview/{id}/review``，
+    这里不把整份 report 搬进列表（报告很长，列表只需要一个分数和入口）。
+    """
+
+    id: UUID
+    mode: str
+    scene: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    # 有 AI 评分时才有值；兜底复盘（没有维度分）返回 None
+    overall_score: Optional[float] = None
+    has_review: bool = False
+
+
 class InterviewQuestionsResponse(BaseModel):
     """GET /interview/{id}/questions 出参。"""
 
@@ -88,7 +112,11 @@ class InterviewQuestionsResponse(BaseModel):
 
 
 class InterviewFinishResponse(BaseModel):
-    """结束面试的返回。"""
+    """结束面试的返回。
+
+    **幂等**：对已经生成过复盘的面试重复调用 ``finish``，服务端直接回已有报告，
+    不重跑 AI、不更新 ``updated_at``；出参结构保持不变，前端无需区分首调/重调。
+    """
 
     interview_id: UUID
     status: str = "已完成"

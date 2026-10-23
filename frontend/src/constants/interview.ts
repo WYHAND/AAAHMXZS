@@ -40,6 +40,14 @@ export const DEFAULT_INTERVIEW_MODE = INTERVIEW_MODES[0].value
 export const DEFAULT_INTERVIEW_SCENE = INTERVIEW_SCENES[0].value
 
 /**
+ * 「跳过这题」写进 answer 的占位文本。
+ *
+ * 后端 interview_service.SKIP_ANSWER 与此一致：复盘时会把这条当成“跳过”，
+ * 不会当成认真回答。语音/文字两条提交路径共用它，避免两处各写一份。
+ */
+export const INTERVIEW_SKIP_ANSWER = '（跳过这题）'
+
+/**
  * 出题失败时的兜底题数 —— 后端 `interview_service.FALLBACK_QUESTIONS` 是 **3 条**，
  * 所以这里从 INTERVIEW_MODES 派生（小测试 = 3 题），不再手写。
  *

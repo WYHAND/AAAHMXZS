@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Sparkles } from 'lucide-react'
+import {
+  Briefcase,
+  GraduationCap,
+  Lightbulb,
+  Newspaper,
+  Sparkles,
+  TrendingUp,
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import { AIThinking } from '@/components/AIThinking'
@@ -8,11 +15,14 @@ import { AnimatedNumber } from '@/components/AnimatedNumber'
 import { EmptyState } from '@/components/EmptyState'
 import { Reveal } from '@/components/Motion'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Panel } from '@/components/Panel'
 import { PageShell } from '@/components/PageShell'
 import { Stat, StatGroup } from '@/components/StatGroup'
 import { interviewApi } from '@/api/interview'
+import {
+  EMPLOYMENT_NEWS,
+  EMPLOYMENT_NEWS_UPDATED_AT,
+} from '@/constants/employmentNews'
 import { interviewDimensionLabel } from '@/constants/interview'
 import type { InterviewQuestionReview, InterviewReview, ProfileRadarItem } from '@/types'
 import { cn } from '@/lib/utils'
@@ -33,7 +43,8 @@ import { cn } from '@/lib/utils'
  *     复盘很长，钉在页尾等于永远看不见，进页头才在第一屏兑现「唯一的实心按钮」；
  *   - 两列 7/5：左列是 AI 点评主角卡（一句总评 + 逐题点评），
  *     右列是评分（StatGroup，琥珀只给「综合得分」一个数字）；
- *   - 一句总评用 text-headline-xl 当主角那句人话，和页头同级但不抢页头的 h1；
+ *   - 一句总评用 text-headline-md（20，卡内标题统一档）：这一屏唯一的主角是右卡那个
+ *     34px 的综合得分；总评不再和页头 h1（30）同大，两列因此只有一个"最大的东西"；
  *   - 评分翻译成人话：一句判断 + 一个分数，不堆成成绩单表格；
  *   - 「下次可以改」这类 AI 输出统一成 `ai-inset + <Panel inset> + 正文色`
  *     （浅桃只留给小面积强调，正文色必须是 `text-on-surface`）；
@@ -172,19 +183,25 @@ export default function InterviewReviewPage() {
         {/* 左列（7）：AI 点评主角卡 —— 一句总评 + 逐题点评。大块进场用 rise-in-lg */}
         <Reveal lg className="lg:col-span-7">
           <Panel data-print="card" className="gap-6">
-            <div className="flex items-center gap-2 text-primary">
-              <Sparkles className="size-[18px]" aria-hidden />
-              <span className="text-headline-sm">AI 点评</span>
+            {/*
+              栏目名退成 13px 的 eyebrow（方案 A：卡内标题必须是结论句，栏目名只配做分组小标题）；
+              这张卡真正的标题是下面那句 AI 原话。
+            */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-caption-foreground">
+                <Sparkles className="size-[18px]" aria-hidden />
+                <span className="text-caption tracking-wide">AI 点评</span>
+              </div>
+              {/* 一句总评：AI 的原话直接当结论（卡内标题统一 20）。
+                  这一屏唯一的主角是右卡那个 34px 的综合得分，总评不抢它的位置 */}
+              {review.summary ? (
+                <h2 className="text-headline-md text-primary">{review.summary}</h2>
+              ) : null}
             </div>
-
-            {/* 一句总评：AI 的原话直接当结论，用主角字号，不包进"成绩单"里 */}
-            {review.summary ? (
-              <p className="text-headline-xl text-primary">{review.summary}</p>
-            ) : null}
 
             {/* 答得好的地方 */}
             <div className="flex flex-col gap-2">
-              <span className="text-body-sm text-on-surface-variant">答得好的地方</span>
+              <span className="text-headline-sm text-primary">答得好的地方</span>
               {review.strengths?.length ? (
                 <ul className="flex list-disc flex-col gap-1.5 pl-5 text-body-md text-on-surface">
                   {review.strengths.map((item, i) => (
@@ -198,7 +215,7 @@ export default function InterviewReviewPage() {
 
             {/* 下次可以改：AI 输出的唯一写法（ai-inset + Panel inset + 正文色） */}
             <Panel inset className="ai-inset">
-              <span className="text-body-sm text-secondary">下次可以改</span>
+              <span className="text-headline-sm text-secondary">下次可以改</span>
               {review.improvements?.length ? (
                 <ul className="flex list-disc flex-col gap-1.5 pl-5 text-body-md text-on-surface">
                   {review.improvements.map((item, i) => (
@@ -236,29 +253,33 @@ export default function InterviewReviewPage() {
                         <h3 className="text-body-md font-semibold text-primary">
                           {index + 1}. {item.question}
                         </h3>
-                        {/* 得分用 Badge 表达，不再是彩色大数字（颜色语义保留：≥80 绿 / ≥60 常规 / <60 destructive）。
-                            单位跟右卡一致：不带 /100（满分的口径只在右卡卡头说一次）。 */}
+                        {/* 得分用一枚描边小标签表达，不用彩色大数字。颜色只表示"要注意"：
+                            ≥80 走克制绿（通过）/ ≥60 主墨 / <60 走 attention（需要注意），
+                            用方案 A 的 token，不用 destructive 那种刺眼红。
+                            单位跟右卡一致：不带 /100（满分的口径只在右卡卡头说一次）。
+                            ⚠️ 这里不用共享的 <Badge>：它基类里写死 text-xs，而 .text-xs 在
+                            产物 CSS 里排在自定义字号之后，会把这里传的 14 顶掉 ——
+                            分数是承载信息的字，不能落在 12px（见报告"共享层问题"）。 */}
                         {hasScore ? (
-                          <Badge
-                            variant="outline"
+                          <span
                             className={cn(
-                              'mt-0.5 shrink-0 px-2 py-0.5 text-label-md',
+                              'mt-0.5 inline-flex shrink-0 items-center justify-center rounded-full border px-2 py-0.5 text-label-md tabular-nums whitespace-nowrap',
                               score >= 80
-                                ? 'border-success/40 text-success'
+                                ? 'border-settled/40 text-settled'
                                 : score >= 60
                                   ? 'text-on-surface'
-                                  : 'border-destructive/40 text-destructive',
+                                  : 'border-attention/40 text-attention',
                             )}
                           >
                             {Math.round(score)} 分
-                          </Badge>
+                          </span>
                         ) : null}
                       </div>
 
                       {/* ① 我的回答：原文一份，浅底 inset，不加任何评语和装饰 */}
                       {yourAnswer ? (
                         <div className="flex flex-col gap-1.5">
-                          <span className="text-caption text-on-surface-variant">我的回答</span>
+                          <span className="text-label-md text-on-surface-variant">我的回答</span>
                           <Panel inset className="text-body-md text-on-surface">
                             {yourAnswer}
                           </Panel>
@@ -271,13 +292,13 @@ export default function InterviewReviewPage() {
                           <span className="text-label-md font-semibold text-primary">AI 反馈</span>
                           {item.comment ? (
                             <div className="flex flex-col gap-1">
-                              <span className="text-caption text-on-surface-variant">点评</span>
+                              <span className="text-label-md text-on-surface-variant">点评</span>
                               <p className="text-body-md text-on-surface">{item.comment}</p>
                             </div>
                           ) : null}
                           {item.better_answer ? (
                             <div className="flex flex-col gap-1">
-                              <span className="text-caption text-on-surface-variant">更好的答法</span>
+                              <span className="text-label-md text-on-surface-variant">更好的答法</span>
                               <p className="text-body-md text-on-surface">{item.better_answer}</p>
                             </div>
                           ) : null}
@@ -303,14 +324,17 @@ export default function InterviewReviewPage() {
             这里的副句**不重复左卡的总评**（以前它写的是同一句结论的改写版，
             等于把"整体在及格线以上"说了两遍），改成只说"下一步补哪一项"，
             这句话是从 dimension_scores 算出来的，不是新结论。 */}
-        <Reveal delay={160} className="lg:col-span-5">
+        <Reveal
+          delay={160}
+          className="flex flex-col gap-6 lg:sticky lg:top-20 lg:col-span-5 lg:self-start"
+        >
           <Panel data-print="card" className="gap-5">
             <div className="flex flex-col gap-1.5">
               <div className="flex items-baseline justify-between gap-3">
-                <span className="text-headline-sm text-primary">这次考得怎么样</span>
+                <h2 className="text-headline-md text-primary">这次考得怎么样</h2>
                 {/* 单位只在卡头说一次：卡里的数字（71 / 74 / 66 …）一律不带 /100 */}
                 {hasScores ? (
-                  <span className="shrink-0 text-caption text-caption-foreground">满分 100</span>
+                  <span className="shrink-0 text-body-sm text-on-surface-variant">满分 100</span>
                 ) : null}
               </div>
               {hasScores && weakest ? (
@@ -325,6 +349,7 @@ export default function InterviewReviewPage() {
                 <Stat
                   value={<AnimatedNumber value={Math.round(review.overall_score)} />}
                   label="综合得分"
+                  size="display"
                   accent
                 />
                 {dimensions.map((dimension) => (
@@ -341,8 +366,134 @@ export default function InterviewReviewPage() {
               </p>
             )}
           </Panel>
+
+          <EmploymentNewsCard />
+          <InterviewTipsCard />
         </Reveal>
       </div>
     </PageShell>
+  )
+}
+
+const NEWS_ICON = {
+  policy: Newspaper,
+  recruiting: GraduationCap,
+  industry: TrendingUp,
+  market: Briefcase,
+} as const
+
+/**
+ * 右栏的「就业形势」补充块。
+ *
+ * 目的不是给复盘页塞广告，而是把右栏剩下的空白变成**可行动的求职信息**：
+ * 招聘活动、政策、行业方向。所有条目都带来源和日期，内容为静态整理；
+ * 不接实时抓取，避免新闻源不稳定或把旧闻当新闻。
+ */
+function EmploymentNewsCard() {
+  return (
+    <Panel className="gap-4">
+      <div className="flex flex-col gap-1">
+        <span className="text-caption tracking-wide text-caption-foreground">就业形势</span>
+        <h2 className="text-headline-sm text-primary">现在市场在发生什么</h2>
+        <p className="text-body-sm text-on-surface-variant">
+          公开报道整理，最后更新 {EMPLOYMENT_NEWS_UPDATED_AT}。
+        </p>
+      </div>
+
+      <ul className="flex flex-col gap-1">
+        {EMPLOYMENT_NEWS.map((item) => {
+          const Icon = NEWS_ICON[item.kind]
+          return (
+            <li key={item.href}>
+              <a
+                href={item.href}
+                target="_blank"
+                rel="noreferrer"
+                className="motion-press group flex gap-3 rounded-lg p-2 transition-colors hover:bg-surface-container-low"
+              >
+                <span
+                  className="grid size-9 shrink-0 place-items-center rounded-lg bg-surface-container text-primary"
+                  aria-hidden
+                >
+                  <Icon className="size-4" />
+                </span>
+                <span className="flex min-w-0 flex-col gap-1">
+                  <span className="text-body-md font-medium text-on-surface group-hover:text-primary">
+                    {item.title}
+                  </span>
+                  <span className="line-clamp-2 text-body-sm text-on-surface-variant">
+                    {item.summary}
+                  </span>
+                  <span className="text-caption text-caption-foreground">
+                    {item.source} · {item.date}
+                  </span>
+                </span>
+              </a>
+            </li>
+          )
+        })}
+      </ul>
+
+      <a
+        href="https://www.ncss.cn/"
+        target="_blank"
+        rel="noreferrer"
+        className="text-body-sm font-medium text-primary underline-offset-4 hover:underline"
+      >
+        去国家大学生就业服务平台看更多
+      </a>
+    </Panel>
+  )
+}
+
+/**
+ * 右栏的第二块补充：把复盘结论翻译成三条下一次能直接用的准备。
+ *
+ * 它不是“更多新闻”，而是把上面的 AI 点评落到行动上；
+ * 和就业形势卡一起，右栏在长报告滚动时保持有内容可看（配合 sticky）。
+ */
+function InterviewTipsCard() {
+  const tips = [
+    '回答先给结论，再补一个项目例子，最后说结果。',
+    '准备一个能讲 3 分钟的核心项目，按“情境—任务—行动—结果”拆开。',
+    '面试最后准备 2 个反问：团队怎么协作、岗位前三个月最重要的目标。',
+  ]
+
+  return (
+    <Panel className="gap-3">
+      <div className="flex items-center gap-2.5">
+        <span
+          className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-container text-primary"
+          aria-hidden
+        >
+          <Lightbulb className="size-4" />
+        </span>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <h2 className="text-headline-sm text-primary">把复盘变成下一次的表现</h2>
+          <p className="text-body-sm text-on-surface-variant">三条能立刻用上的准备</p>
+        </div>
+      </div>
+
+      <ul className="flex flex-col gap-2">
+        {tips.map((tip, index) => (
+          <li key={tip} className="flex gap-2.5 text-body-sm text-on-surface">
+            <span
+              className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-primary-soft text-caption font-semibold text-primary"
+              aria-hidden
+            >
+              {index + 1}
+            </span>
+            <span>{tip}</span>
+          </li>
+        ))}
+      </ul>
+
+      <Link
+        to="/task"
+        className="text-body-sm font-medium text-primary underline-offset-4 hover:underline"
+      >
+        去成长任务挑一个练习
+      </Link>
+    </Panel>
   )
 }
