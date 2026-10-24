@@ -121,17 +121,18 @@ let pass = true
   const row = page.getByRole('button', { name: '会话一', exact: true })
   const trash = page.getByRole('button', { name: '删除会话「会话一」' })
 
-  // A1 不 hover：图标存在但不可见（opacity 0）
+  // A1 不 hover：图标常显（2026-10-24 起由「hover 才浮出」改为「常态半透明」，
+  //    原先 opacity-0 时用户根本找不到删除入口，且行被 table 包层撑宽后图标落在可视区外）
   const opacityIdle = await opacityOf(trash)
-  const a1 = opacityIdle === '0'
+  const a1 = Number(opacityIdle) > 0
 
   await page.screenshot({ path: 'shots/qa-chat-delete-1-idle.png' })
 
-  // A2 hover 会话项：图标浮出
+  // A2 hover 会话项：图标保持可见
   await row.hover()
   await page.waitForTimeout(250)
   const opacityHover = await opacityOf(trash)
-  const a2 = opacityHover === '1'
+  const a2 = Number(opacityHover) > 0
 
   await page.screenshot({ path: 'shots/qa-chat-delete-2-hover.png' })
 
@@ -163,8 +164,8 @@ let pass = true
 
   console.log('========== 场景 A：删除成功 ==========')
   console.log(`  A0 初始列表有两条会话          : ${a0 ? '通过 ✔' : '失败 ✘'}`)
-  console.log(`  A1 未 hover 时图标 opacity=${opacityIdle}   : ${a1 ? '通过 ✔' : '失败 ✘'}（预期 0）`)
-  console.log(`  A2 hover 后图标 opacity=${opacityHover}     : ${a2 ? '通过 ✔' : '失败 ✘'}（预期 1）`)
+  console.log(`  A1 未 hover 时图标 opacity=${opacityIdle}      : ${a1 ? '通过 ✔' : '失败 ✘'}（预期 >0）`)
+  console.log(`  A2 hover 后图标仍可见 opacity=${opacityHover}  : ${a2 ? '通过 ✔' : '失败 ✘'}（预期 >0）`)
   console.log(`  A3 弹窗出现且文案正确          : ${a3 ? '通过 ✔' : '失败 ✘'}`)
   console.log(`     弹窗文案: ${dialogText.replace(/\s+/g, ' ').slice(0, 80)}`)
   console.log(`  A4 发出 DELETE 请求            : ${a4 ? '通过 ✔' : '失败 ✘'}  ${JSON.stringify(deletes)}`)

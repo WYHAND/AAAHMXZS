@@ -178,7 +178,6 @@ export interface Conversation {
   created_at: string
   updated_at: string
   message_count: number
-  conclusion?: Record<string, unknown> | null
 }
 
 /** 后端 schemas/chat.MessageResponse */
@@ -207,8 +206,6 @@ export interface ChatResponse {
   user_message: ChatMessage
   assistant_message: ChatMessage
   extracted_tags: Record<string, unknown>[]
-  /** 该会话是否已有可拉取的结论卡片 */
-  conclusion_ready: boolean
 }
 
 /* ------------------------- 对话 SSE（POST .../stream） -------------------------
@@ -257,7 +254,6 @@ export interface ChatStreamDoneEvent {
   type: 'done'
   message_id: string
   conversation_id: string
-  conclusion_ready: boolean
 }
 
 /**
@@ -272,16 +268,6 @@ export interface ChatStreamPendingEvent {
   user_message_id?: string
   replay_message_id?: string
   pending?: boolean
-}
-
-/** 后端 schemas/chat.ChatConclusionCard（11.11） */
-export interface ChatConclusionCard {
-  conversation_id: string
-  summary: string
-  pain_points: string[]
-  suggestions: string[]
-  next_actions: string[]
-  generated_at?: string | null
 }
 
 /* ------------------------------- 任务 ------------------------------- */
@@ -794,7 +780,7 @@ export interface GrowthReportContent {
 export interface GrowthReport {
   id: string
   user_id: string
-  /** growth / conclusion / resume */
+  /** growth / resume */
   type: string
   content?: GrowthReportContent | null
   created_at: string

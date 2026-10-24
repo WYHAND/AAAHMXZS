@@ -58,7 +58,7 @@ import { STORAGE_KEY, storage } from '@/utils/storage'
  * 而不是把本文件拆成几份散在各处的 reset。
  */
 export function resetUserScopedStores(): void {
-  /** 会话列表 / 当前会话 / 消息 / 结论卡片 / 开场白簿记（含两个模块级 Set/Map）+ 中断在途流 */
+  /** 会话列表 / 当前会话 / 消息 / 开场白簿记（含两个模块级 Set/Map）+ 中断在途流 */
   useChatStore.getState().reset()
   /** 画像 / 标签 / 阶段 / tested / 下一步建议 / fetched / failed */
   useProfileStore.getState().reset()

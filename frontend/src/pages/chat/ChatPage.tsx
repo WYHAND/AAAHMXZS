@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileText, Plus, Send, Trash2 } from 'lucide-react'
-import { toast } from 'sonner'
 
 import { ChatBubble, ChatTypingBubble } from '@/components/ChatBubble'
 import { Panel } from '@/components/Panel'
@@ -17,18 +16,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
 import { ROUTES } from '@/constants/routes'
 import { useResponsive } from '@/hooks/useResponsive'
 import { useStage } from '@/hooks/useStage'
 import { resolveHistoryOutcome, shouldEnsureOpening } from '@/store/chatHistory'
-import { isOpeningMessage, loadConclusion, openingSettled, useChatStore } from '@/store/chatStore'
+import { isOpeningMessage, openingSettled, useChatStore } from '@/store/chatStore'
 import { useProfileStore } from '@/store/profileStore'
 import type { Conversation } from '@/types'
 import { cn } from '@/lib/utils'
@@ -61,7 +55,6 @@ import { cn } from '@/lib/utils'
  *   只显示"在干什么"，**不显示**模型思维链原文；正文第一个 delta 到达即让位给气泡。
  * - 悬浮输入框叠在对话区底部之上（底部留白 + 渐隐，内容可以滚到它后面）。
  * - AI 气泡渲染 Markdown 但不允许 HTML 注入（components/ChatBubble）
- * - 结论卡片：回复带回 conclusion_ready=true 时浮出可折叠卡片
  * - 中文输入法组合期间回车不发送（compositionstart/end）
  */
 
@@ -123,8 +116,6 @@ export default function ChatPage() {
     messages,
     replyingIds,
     streams,
-    conclusionReady,
-    conclusion,
     openingFor,
     openingFailedFor,
     historyLoad,
@@ -326,16 +317,6 @@ export default function ChatPage() {
     handleSend()
   }
 
-  const handleGenerateConclusion = () => {
-    if (!activeId) {
-      toast.info('先选一个会话')
-      return
-    }
-    void loadConclusion(activeId)
-      .then(() => toast.success('结论卡片已生成'))
-      .catch(() => toast.error('还差一点信息，再多聊两句'))
-  }
-
   /**
    * 确认删除。store 内部已经 catch 了失败（toast 报错且不改列表），不会抛，
    * 所以这里 finally 一定能关弹窗。
@@ -423,8 +404,20 @@ export default function ChatPage() {
           <Panel padded={false} className="min-h-0 flex-1 overflow-hidden bg-surface-container-low py-2 shadow-none">
             <p className="px-4 pt-2 pb-2 text-caption tracking-wide text-caption-foreground">历史会话</p>
             {/* px/py：给列表项留出余量 —— 选中态是外描边(ring)，ScrollArea 的 Viewport 会
-                裁掉溢出，贴边时圆角和描边就会被切平（实拍踩过）。 */}
-            <ScrollArea className="min-h-0 flex-1 px-2 py-1">
+                裁掉溢出，贴边时圆角和描边就会被切平（实拍踩过）。
+                右侧 pr-3.5(14px) 是给滚动条留的专用窄道（滚动条 w-2.5=10px）：
+                两栏挤在同一像素列上时，滚动条会盖住行尾的删除按钮，点不到（实拍踩过）。
+
+                `[&>div>div]:block!` 不是装饰，是这条列表能截断的前提：
+                Radix 在 Viewport 里多塞了一层 `<div style="min-width:100%;display:table">`
+                （见 @radix-ui/react-scroll-area/dist/index.mjs）。结构是 Root > Viewport > 这层 div，
+                所以选择器要写成 `>div>div` 才命中；table 宽度按内容撑开，
+                而标题是 whitespace-nowrap，最小宽度=整句标题 → 整行被撑得比侧栏还宽：
+                选中底/描边溢出面板被裁、标题省略号落在容器外（等于不截断）、
+                删除按钮 `right-1` 跟着跑到可视区右边之外，怎么调透明度都看不见。
+                内联 style 只能用 !important 压住；压成 block 后行宽=可视宽，
+                truncate 与按钮定位才都回到面板内。 */}
+            <ScrollArea className="min-h-0 flex-1 py-1 pr-3.5 pl-2 [&>div>div]:block!">
               {conversations.length ? (
                 conversations.map((conversation) => (
                   /*
@@ -458,13 +451,17 @@ export default function ChatPage() {
                         setDeleteTarget(conversation)
                       }}
                       className={cn(
-                        'absolute top-1/2 right-1 -translate-y-1/2 rounded-sm p-1 text-caption-foreground',
-                        'opacity-0 transition-opacity group-hover:opacity-100',
+                        'absolute top-1/2 right-1 z-10 -translate-y-1/2 rounded-sm p-1',
+                        // 常显：原先 opacity-0 + group-hover 才出现，鼠标没停在行上时
+                        // 用户根本看不到删除入口（截图里整行只有标题）。现在常态半透明，
+                        // hover / 键盘聚焦时加深并转红，既不抢标题又随时可点。
+                        'text-caption-foreground/60 transition-colors',
+                        'hover:bg-surface-inset hover:text-destructive active:text-destructive',
                         // 键盘 Tab 到它时也要看得见
-                        'focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
-                        // 触摸设备没有 hover：常显，否则用户根本看不到入口
-                        'pointer-coarse:opacity-100',
-                        'hover:text-destructive disabled:pointer-events-none disabled:opacity-50',
+                        'focus-visible:bg-surface-inset focus-visible:text-destructive focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
+                        // 触摸设备没有 hover：直接给足对比度
+                        'pointer-coarse:text-caption-foreground',
+                        'disabled:pointer-events-none disabled:opacity-50',
                       )}
                     >
                       <Trash2 className="size-3.5" />
@@ -578,65 +575,6 @@ export default function ChatPage() {
             </div>
           ) : null}
 
-          {/* 结论卡片（回复带回 conclusion_ready=true 才浮出）：放在对话区上方，不挡输入 */}
-          {conclusionReady ? (
-            <Collapsible className="shrink-0 border-b border-outline-variant/50 px-1 pb-3">
-              <div className="flex items-center justify-between gap-2">
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="sm">
-                    {conclusion ? '收起结论卡片' : '展开结论卡片'}
-                  </Button>
-                </CollapsibleTrigger>
-                <Button variant="outline" size="sm" onClick={handleGenerateConclusion}>
-                  生成结论卡片
-                </Button>
-              </div>
-              <CollapsibleContent className="pt-3">
-                {conclusion ? (
-                  <div className="flex min-w-0 flex-col gap-3 text-body-md break-words">
-                    {conclusion.summary ? (
-                      <p className="text-primary">{conclusion.summary}</p>
-                    ) : null}
-                    {conclusion.pain_points.length ? (
-                      <div>
-                        <p className="font-medium text-primary">痛点</p>
-                        <ul className="list-disc pl-5 text-on-surface-variant">
-                          {conclusion.pain_points.map((item, i) => (
-                            <li key={i}>{item}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-                    {conclusion.suggestions.length ? (
-                      <div>
-                        <p className="font-medium text-primary">建议</p>
-                        <ul className="list-disc pl-5 text-on-surface-variant">
-                          {conclusion.suggestions.map((item, i) => (
-                            <li key={i}>{item}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-                    {conclusion.next_actions.length ? (
-                      <div>
-                        <p className="font-medium text-primary">下一步可以直接做</p>
-                        <ul className="list-disc pl-5 text-on-surface-variant">
-                          {conclusion.next_actions.map((item, i) => (
-                            <li key={i}>{item}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : (
-                  <p className="text-body-sm text-on-surface-variant">
-                    点「生成结论卡片」，我会把这几轮聊的内容收成几条。
-                  </p>
-                )}
-              </CollapsibleContent>
-            </Collapsible>
-          ) : null}
-
           {/*
             对话区 + 输入框：输入框**浮在对话区之上**，消息从它后面滚过 ——
             输入区那一条用画布色实底（不是渐隐），滚过去的文字被整块盖住，不会露头。
@@ -741,15 +679,14 @@ export default function ChatPage() {
                 </div>
               ) : openingFailed ? (
                 /*
-                 * 开场白拉取失败（例如后端 /opening 路由还没上线）：才回落到静态提示，
+                 * 开场白拉取失败（后端不可用 / 网络故障 / 路由未上线）：才回落到静态提示，
                  * 并且**允许用户直接输入**（输入框任何时候都可用），不把人卡在等待态。
+                 * 文案必须说清楚是「服务没连上」，不能含糊成"AI 不想说话"。
                  */
                 <div className="flex min-h-full flex-col items-center justify-center gap-3 pt-4 pb-24 text-center">
-                  <p className="text-body-md text-primary">
-                    先别急着定方向，跟我说说你现在最纠结的事。
-                  </p>
+                  <p className="text-body-md text-primary">AI 服务暂时没连上。</p>
                   <p className="text-body-sm text-on-surface-variant">
-                    比如「我不知道自己适合什么」「投了几家没回音」
+                    你可以先说说自己的情况，也可以点下面的按钮让 AI 重新开口。
                   </p>
                   <Button variant="outline" size="sm" onClick={() => void retryOpening()}>
                     让 AI 先开口

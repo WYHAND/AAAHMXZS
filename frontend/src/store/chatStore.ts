@@ -11,7 +11,6 @@ import {
 } from '@/store/chatHistory'
 import { useProfileStore } from '@/store/profileStore'
 import type {
-  ChatConclusionCard,
   ChatMessage,
   ChatStreamStage,
   Conversation,
@@ -31,7 +30,6 @@ import { track } from '@/utils/track'
  * - 幂等：同一 client_msg_id 重试复用，后端不会重复生成
  * - 正文草稿：逐块累积在 `streams`（临时展示态），done 时才落成一条 assistant 消息
  * - 失败：在消息列表末尾放一个「回答中断，点击重试」气泡（interrupted），重试复用同一 client_msg_id
- * - conclusion_ready：回复里带上，结论卡片入口
  *
  * 不持久化。
  */
@@ -124,8 +122,6 @@ interface ChatState {
    * 流结束（done / 中断 / 回退非流式收尾）后必须清掉对应条目。
    */
   streams: Record<string, ChatStream>
-  conclusionReady: boolean
-  conclusion: ChatConclusionCard | null
   loading: boolean
   /**
    * 正在拉开场白的会话 id；null 表示没有在途请求。
@@ -397,8 +393,6 @@ function dropGoneConversation(conversationId: string): void {
     conversations: rest,
     activeId: next?.id ?? null,
     messages: [],
-    conclusion: null,
-    conclusionReady: false,
     // 开场白状态是会话级的：换到"下一条"必须一起重置，
     // 否则会把"这个不存在的会话正在拉开场白"的等待态继续画在屏幕上
     openingFor: null,
@@ -457,8 +451,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   replyingIds: [],
   streams: {},
-  conclusionReady: false,
-  conclusion: null,
   loading: false,
   openingFor: null,
   openingFailedFor: null,
@@ -492,8 +484,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         set({
           activeId: null,
           messages: [],
-          conclusion: null,
-          conclusionReady: false,
           openingFor: null,
           openingFailedFor: null,
           // 会话都没了，它那份"历史拉到了没有"的结论一并作废
@@ -534,8 +524,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({
       activeId: id,
       messages: [],
-      conclusion: null,
-      conclusionReady: false,
       // 开场白状态是**会话级**的：换会话必须一起重置，
       // 否则会把「A 会话正在拉开场白」的等待态画到 B 会话上
       openingFor: null,
@@ -585,8 +573,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       conversations: rest,
       activeId: next?.id ?? null,
       messages: [],
-      conclusion: null,
-      conclusionReady: false,
       // 开场白状态同样是会话级的（"下一条"若为空会话，它会自己再拉一次开场白）
       openingFor: null,
       openingFailedFor: null,
@@ -629,8 +615,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       activeId: conversation.id,
       conversations: [conversation, ...state.conversations],
       messages: [],
-      conclusion: null,
-      conclusionReady: false,
       openingFor: null,
       openingFailedFor: null,
       // 新建的会话还什么都没拉过：结论作废，等 ChatPage 拉完再决定要不要开口
@@ -1002,7 +986,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
      * 所以先记住 done 的 content，等揭示追上（revealed === streamed）再落库。
      * 落库后由 commitStream 用**完整正文**建消息，每一段此前都已显示过，视觉无缝。
      */
-    let pendingCommit: { messageId: string; conclusionReady: boolean } | null = null
+    let pendingCommit: { messageId: string } | null = null
     let answered = false
     /** 幂等命中：交回非流式路径处理（见下方 finally 前的收尾判断） */
     let duplicated = false
@@ -1053,7 +1037,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
 
     /** done：把草稿落成一条真正的 assistant 消息（正文不再逐块重渲染） */
-    const commitStream = (messageId: string, conclusionReady: boolean) => {
+    const commitStream = (messageId: string) => {
       markLocalWrite()
       set((state) => {
         const isActive = state.activeId === convId
@@ -1072,7 +1056,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
             isActive && !alreadyThere
               ? [...state.messages, { ...assistant, interrupted: false }]
               : state.messages,
-          conclusionReady: isActive && conclusionReady ? true : state.conclusionReady,
           streams: clearStream(state.streams, convId),
         }
       })
@@ -1122,9 +1105,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         // done 已经到过（挂起中）→ 此刻才真正落库。因为每一段都已经显示过，
         // 提交那一刻界面上的文字**一个都不会多**（见 pendingCommit 的注释）。
         if (pendingCommit) {
-          const { messageId, conclusionReady } = pendingCommit
+          const { messageId } = pendingCommit
           pendingCommit = null
-          commitStream(messageId, conclusionReady)
+          commitStream(messageId)
           finishStream()
         }
       }
@@ -1182,13 +1165,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
                */
               pendingCommit = {
                 messageId: event.message_id,
-                conclusionReady: event.conclusion_ready,
               }
               ensureTicker()
               advanceReveal()
               return
             }
-            commitStream(event.message_id, event.conclusion_ready)
+            commitStream(event.message_id)
           },
         },
         controller.signal,
@@ -1262,7 +1244,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
           nextRevealAt = 0
           pendingCommit = {
             messageId: reply.assistant_message.id,
-            conclusionReady: reply.conclusion_ready,
           }
           publishDraft(streamed, revealed)
           ensureTicker()
@@ -1346,8 +1327,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       replyingIds: [],
       // 流式临时态（正文草稿）同样是按用户的，一并清掉
       streams: {},
-      conclusionReady: false,
-      conclusion: null,
       // loading 也是按用户的：上一个账号在途的请求不该让新账号停在加载态
       loading: false,
       openingFor: null,
@@ -1356,9 +1335,3 @@ export const useChatStore = create<ChatState>((set, get) => ({
     })
   },
 }))
-
-/** 「生成结论卡片」按钮：后端 conclusion_ready 才可点 */
-export async function loadConclusion(conversationId: string): Promise<void> {
-  const data = await chatApi.conclusion(conversationId)
-  useChatStore.setState({ conclusion: data ?? null })
-}
