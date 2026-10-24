@@ -157,8 +157,7 @@ backend/
 │   │       ├── interview_question.txt  interview_followup.txt
 │   │       ├── interview_review.txt  task_generate.txt  daily_question.txt
 │   │       ├── profile_summary.txt  # ★新增（9.24「我的画像」顶部人物速写，见 §4.7）
-│   │       └── chat_conclusion.txt # ★新增（11.11 结论卡片用）
-│   │           chat_opening.txt    # ★新增（新会话 AI 先开口，见 §4.16）
+│   │       └── chat_opening.txt     # ★新增（新会话 AI 先开口；纯文本 + thinking，见 §4.16.16）
 │   │   ├── question_bank/           # ★新增：真实面试题库（按岗位方向分 JSON 文件；出题只从中挑选 + 贴合简历改写）
 │   │   └── career_content/          # ★新增：就业内容素材库（general / software 2 个方向 / 31 条，含 market 行业现状；见 §4.16.13 / §4.16.14 / 勘误 9.40）
 │   ├── tasks/
@@ -366,7 +365,7 @@ data: [DONE]
 | 1 | `start` | `{"type":"start","conversation_id":"<uuid>"}` | 流已建立，前端切「生成中」态 |
 | 2..n | `delta` | `{"type":"delta","content":"增量文本","conversation_id":"<uuid>"}` | 追加到当前气泡；可能 0..n 次 |
 | n+1 | `tag` | `{"type":"tag","data":{"tags":[{"dimension":"痛点","label":"缺项目","weight":0.8,...}]}}` | 仅当本轮抽到新画像标签时出现，可能没有 |
-| n+2 | `done` | `{"type":"done","message_id":"<uuid>","conversation_id":"<uuid>","conclusion_ready":false}` | 本轮结束 |
+| n+2 | `done` | `{"type":"done","message_id":"<uuid>","conversation_id":"<uuid>"}` | 本轮结束 |
 | n+3 | `end` | 字面量 `[DONE]`（非 JSON） | 流结束标记；前端据此关闭 ReadableStream |
 
 各事件的完整线上样例（含信封）：
@@ -382,7 +381,7 @@ event: tag
 data: {"code":0,"message":"success","data":{"type":"tag","data":{"tags":[{"dimension":"痛点","label":"缺项目","weight":0.8}]}}}
 
 event: done
-data: {"code":0,"message":"success","data":{"type":"done","message_id":"a1b2...","conversation_id":"5c0f...","conclusion_ready":false}}
+data: {"code":0,"message":"success","data":{"type":"done","message_id":"a1b2...","conversation_id":"5c0f..."}}
 
 event: end
 data: [DONE]
@@ -392,7 +391,7 @@ data: [DONE]
 
 | 场景 | 事件 | data |
 |---|---|---|
-| AI 中断（7.6 兜底） | `error`（随后 `end`） | `{"code":3001,"message":"AI回复中断，已切换兜底话术","data":null}`；正文里已经吐了兜底话术 |
+| AI 中断（7.6 兜底） | `error`（随后 `end`） | `{"code":3001,"message":"AI 服务中断了，这条没说完。你重发一次，我接着聊。","data":null}`；正文里已经吐了如实说明 |
 | 服务端未捕获异常 | `error`（随后 `end`） | `{"code":5000,"message":"服务器内部错误","data":null}` |
 | 幂等命中（**另起一条流**） | `pending`（随后 `end`） | 上一轮已完成：`{"code":0,"message":"该消息已提交过，未重复生成","data":{"type":"pending","replay_message_id":"<uuid>"}}`；上一轮还在生成：`{"code":0,...,"data":{"type":"pending","pending":true}}` |
 | 未登录 / 会话不属于自己 / 会话不存在 | **不开流**，直接返回 JSON 错误 | `401 {code:1002}` / `404 {code:2001}`（见 §4.1，FIX 3 后是真状态码） |
@@ -408,8 +407,7 @@ data: [DONE]
 | `type` | string | 所有事件 | `start`/`delta`/`tag`/`done`/`error`/`pending` |
 | `content` | string | `delta` | 增量文本，直接追加 |
 | `conversation_id` | uuid | `start`/`delta`/`done`/`pending` | 便于前端校验是否串了会话 |
-| `message_id` | uuid | `done` | 本轮 assistant 消息 id，用于对齐消息列表 / 触发「结论卡片」拉取 |
-| `conclusion_ready` | bool | `done` | 本轮结束后是否已有结论卡片。`true` 时前端调 `GET /chat/conversations/{id}/conclusion` 直接命中缓存（否则该接口会现生成一次，较慢） |
+| `message_id` | uuid | `done` | 本轮 assistant 消息 id，用于对齐消息列表 |
 | `data.tags` | array | `tag` | 本轮新抽到的画像标签（已写库） |
 
 > ⚠️ **已移除的字段：`followup_round` / `followup_direction`（7.7 追问计数器）**。
@@ -889,7 +887,7 @@ DATABASE_URL=sqlite:///./data/app.db
 
 #### 4.13.2 JSONB → 跨方言 JSON（**最容易翻车的地方**）
 
-手册 5.3 有 9 个 JSONB 列（`profile_tags.extra`、`conversations.conclusion`、
+手册 5.3 有 9 个 JSONB 列（`profile_tags.extra`、`conversations.conclusion`（**已废弃、仅保留列**）、
 `resumes.parsed_data`、`interviews.report`、`interview_questions.followups` / `extra`、
 `daily_questions.options`、`reports.content`、`badges.condition`、`test_results.answers`）。
 `postgresql.JSONB` 在 SQLite 上**建表直接失败**。
@@ -1163,6 +1161,11 @@ body: { "user_note": "可选，最多 500 字" }      # 超长 -> 400 + code 100
 
 ### 4.16 让 AI 先开口：`POST /chat/conversations/{id}/opening`
 
+> ⚠️ **2026-11 已大胆重构：当前实现以 §4.16.16 为准。**
+> 下面 4.16.1 / 4.16.2 的接口与落库契约仍然有效；
+> **4.16.3 – 4.16.15 是历史演进记录**（"只聊日常 / ≤60 字 / 8 条话题池 / `used=[]` / 48 条禁词 / 结论卡片"等），
+> **这些内容限制和结论卡片均已删除**，不要再按它们实现或验收。
+
 > **[已决策：用户提出]** 原来的流程是「AI 被动应答」：新建会话 → 空白输入框 →
 > 用户先说话 → AI 才回复。问题出在**空白输入框**上：本系统的主要用户恰恰是
 > "还没想清楚方向"的学生，面对一个空框最容易卡住，要么随便打一句、要么直接退出。
@@ -1218,7 +1221,7 @@ POST /api/v1/chat/conversations/{conversation_id}/opening     （需鉴权）
 > ⚠️ **2026-11 已被 §4.16.12 取代**：下面第 1 条（"有标签或有任务 → 必须引用背景"）、
 > 第 5 条（"像人回忆起上次的事"）以及 `{stage}`/`{profile_tags}`/`{ongoing_tasks}` 三个占位符
 > **都已经删除** —— 第一句话**只聊日常**，画像素材从第 2 轮起才可以用。
-> 保留本节作为决策痕迹；当前语义以 §4.16.12 为准。
+> 保留本节作为决策痕迹；**当前语义以 §4.16.16 为准**（下面 4.16.3 – 4.16.15 均已废弃）。
 
 > ⚠️ **v2（用户否掉了 v1 的调性）**：v1 的开场白要求"必要给 2-3 个选项"，用户反馈
 > **"这和让用户做选择题有什么区别"** —— 要的是**活人感**、**循序渐进**。
@@ -1270,6 +1273,10 @@ Prompt 模板 `app/ai/prompts/chat_opening.txt`（占位符 `{stage}` / `{profil
 
 #### 4.16.5 AI 不可用时：用**开场专用**的模板兜底（7.6）
 
+> ⚠️ **2026-11 已废弃（见 §4.16.16）**：三档本地开场模板已全部删除。
+> 模型不可用时接口直接返回 `code 3001`，前端明确提示"AI 服务暂时没连上"，不再假装说话。
+> 下面记的是历史实现。
+
 > ⚠️ **2026-11 已被 §4.16.12 取代**：下面的"按有任务 / 有标签 / 全新用户三档"已经**不存在**了
 > —— 三档模板现在**全是日常搭话**（不再引用任务标题/标签），`opening_fallback()` 也不再接受素材参数。
 > 保留本节是为了留下"为什么曾经这么做"的决策痕迹。
@@ -1291,6 +1298,10 @@ Prompt 模板 `app/ai/prompts/chat_opening.txt`（占位符 `{stage}` / `{profil
 且引用的任务标题/标签与库里一致（见 §5.1.1 的上一轮记录）。
 
 #### 4.16.6 新会话不许重问同一件事（跨会话信息 = **禁止清单**，不是素材）
+
+> ⚠️ **2026-11 已废弃（见 §4.16.16）**：开场白不再用"禁止清单"这套语义；
+> 跨会话信息改为**记忆块**（背景，不是台词），用来避免重复问，而不是"一个字都不许提"。
+> 下面记的是历史实现；对话正文侧的跨会话禁止清单仍然保留。
 
 > ⚠️ **2026-11 修订（见 §4.16.12）**：开场白路径**不再注入**这份禁止清单了（它含**用户原话**，
 > 与"第一句不许出现任何旧内容"直接冲突），开场白 Prompt 现在什么都不接收。
@@ -1349,6 +1360,9 @@ Prompt 侧（`chat_opening.txt`）第二步已改写为「**新会话 = 用户�
 > 所以 `tags_text`/`tasks_text` 变"暂无"时走日常是**正确**行为，不是退化。
 
 #### 4.16.7 反杜撰：开场白必须**声明依据**，服务端逐字核对（机械保证）
+
+> ⚠️ **2026-11 已废弃（见 §4.16.16）**：`used` / JSON / `_validate_opening` / 48 条禁词已删除；
+> 只保留「你之前 / 你上次」这类窄检查。下面记的是历史实现。
 
 > ⚠️ **2026-11 修订（见 §4.16.12）**：本节描述的"素材清单 + 三条校验"里，
 > **素材清单现在恒为空**，`used` 也**必须是空数组**；`_validate_opening` 的 ③ 从
@@ -1766,6 +1780,76 @@ L1 原话证据、任务/标签候选全部不再进 Prompt）：
 - **结构化任务不变**：出题 / 抽标签 / 生成任务 / 复盘 / 每日一问仍 `thinking: disabled`、`max_tokens` 原值 —— 同一个模型关思考，避免思考挤掉 JSON 预算。
 - **⚠️ 以官方文档为准，不按名字猜**：`deepseek-v4.1-flash` 这类按版本号拼的名字会 **HTTP 400**（报错列出 `deepseek-flash, deepseek-v4-pro`）；官方 `/models` 只有这两个名字，而 `deepseek-flash` 就是 V4.1 Flash（§4.16.14 的"没有 V4.1"表述已由勘误 9.32 更正）。
 - **验证**：专项校验 9/9；真调一次 3.4s / 117 字；**未真机跑完整对话**（需重启后端）。
+
+#### 4.16.16 🆕 2026-11（当前实现）：对话链路大胆重构 —— 去掉模板、放开模型、记忆连续
+
+> **[已决策：用户拍板]** 用户原话：
+> 「如果模型挂了就直接跟他说模型挂了，不要搞这些虚头巴脑的兜底」「开场白不要给限制，
+> 只要足够温和、足够有吸引力，想聊点什么都可以」「不要固定并且框死」「我已经换成 V4.1 Flash 了，
+> 它是可以思考的，能不能尽量多给它一些空间」「删除结论卡这个说法，没有什么聊得深聊得浅的，
+> 只要用户得到了提升就是好聊天」「要大胆重构，你要相信 DeepSeek 的思考能力」。
+>
+> **追加（第二次迭代）**：「这个账号对应的 AI 不能问出重复的问题……我开一个新对话只是想讨论
+> 一个新的话题，而不是直接把你删掉。」→ 新对话 = 新话题，**不是新用户**；记忆连续，
+> 但话题不延续。
+
+**这一版删掉了什么（都是"模板感"的来源）：**
+
+| 删除项 | 原位置 |
+|---|---|
+| 8 条固定话题池、`topic_seed` 随机种子 | `chat_service.OPENING_TOPIC_SEEDS` |
+| 开场白 ≤60 字硬闸 | `OPENING_MAX_CHARS` + `truncate(text, 60)` |
+| 强制 JSON `{text, used}` + `used=[]` 自证 | `OpeningResult` / `_validate_opening` |
+| 48 条用户事实引导语拦截、`_opening_context`、跨会话硬剔除 | `chat_service` 开场白段 |
+| 3 条本地假开场模板 | `fallbacks.OPENING_FALLBACK_VARIANTS` / `opening_fallback()` |
+| 结论卡片整条链路（接口 / Prompt / schema / 前端卡片 / `conclusion_ready` / `reports.type="conclusion"`） | `chat_conclusion.txt` 等 |
+| 空转探测 + 带反馈重试 + 服务端硬塞素材 | `looks_like_empty_turn` / `material_fallback_text` |
+| 最后一句问句压 1.4 秒再发 | `QUESTION_HOLD_SECONDS` |
+| 正文 3-4 句 / 200 字、纯闲聊最多 2 轮、一次只问一件事、爱好只问一层、每轮必须有干货 | `chat_system.txt` |
+| 每轮强制塞一条 `market`（行业现状） | `chat_director.brief_turn` |
+| 「新对话 = 失忆 / 别的会话一个字都不许提」 | `CrossSessionContext.as_prompt_block` |
+
+**这一版现在的行为：**
+
+1. **开场白**：同一个 AI 主动开一个新话题。
+   - 不再是"盲开"：Prompt 拿到一份**记忆块**（基本信息 / 画像 / 最近任务 / 他告诉过你的 / 你之前问过的）；
+   - 话题由 AI 带来，**不问"你想聊什么"**；它会说明"为什么想聊这个"，只问一个具体问题，并给一个出口；
+   - **不问已经知道答案的基本事实**（大几、专业、学校、周末、在忙什么、新鲜事）；命中会重试一次；
+   - 全新用户（记忆为空）可以直接问大的、具体的人生问题，比如"你以后想过什么样的生活"；
+   - 纯文本 + `thinking=True`，不设字数上限；失败直接返回 `code 3001`。
+2. **记忆**：`_memory_block()` 把"已知 / 已问"压缩成 6-8 行注入 Prompt。
+   - 语义是**背景，不是台词**：只用来避免重复问、把下一句问得更准；不许念出来、不许为了证明记得而回述；
+   - 事实型问题答过就不再问；感受型问题可以问"现在还是这样吗"。
+   - **账号级长期记忆**：新表 `user_memories`（一个用户一行，JSON），存
+     “想要的生活 / 不想过的生活 / 在意什么 / 愿意付出什么 / 绝不接受什么 / 为什么而努力 /
+     对不确定性的态度 / 榜样与反例 / 还没想清楚的问题 / 已知事实”；
+   - 提炼 Prompt `memory_extract.txt`：只读**用户原话**，每条都必须带 `evidence`；
+     `memory_service` 会把 evidence 放回用户消息里核对，**搜不到就整条丢掉**；
+   - 节流：每 2 条用户消息后台提炼一次（第 4、6、8… 条），不阻塞回复；失败只留日志；
+   - 首次使用需建表：`python -m app.db.init_db`（或 `create_all()`），否则记忆功能自动降级为空。
+3. **模型空间**：`DEEPSEEK_CHAT_MAX_TOKENS=8192`、`DEEPSEEK_THINKING_TIMEOUT=180`、
+   `CHAT_REASONING_EFFORT="medium"`、`HISTORY_LIMIT=20`、`MAX_ASSISTANT_CHARS=4000`（只防跑飞）。
+4. **正文**：`chat_system.txt` 的身份改成"**帮人听清自己内心的人**"，不是"就业方向的引导者"；
+   就业/专业/行业是后面的事，不是入口。只保留事实底线（不编事实/数字、不把 AI 的话安到用户头上、
+   不演真人身份）和风格底线（不油腻、不打官腔、不给 A/B/C 选项）；说多长、问几个、聊几轮由模型判断。
+   总纲：*他聊完比聊之前更清楚一点、更想动一点，就是好聊天。*
+5. **供料层**：`chat_director` 只给素材和两条硬边界（不编数字、讲过的别再讲）；
+   不再强制 `market`，也仍然不注入"走到哪一步 / 他这句话什么状态"。
+6. **模型挂了**：统一如实说明 —— 非流式「AI 服务这会儿没连上，这条没回成。你稍后再发一次」；
+   流式中断「AI 服务中断了，这条没说完。你重发一次，我接着聊」；开场白直接报错。
+7. **结论卡片已删除**：不再有 `GET /chat/conversations/{id}/conclusion`、`conclusion_ready`、
+   `conversations.conclusion` 的读写。数据库列保留（避免迁移），但代码不再碰它。
+
+**仍然保留的底线（用户明确要求保留）：**
+
+- 不编造用户没说过的事实、数字、经历、结果；
+- 不把 AI 自己的话 / 画像结论 / 别的会话的内容安到用户头上；
+- 不演真人身份（不编"我当年 / 我大学时"）；
+- `sys:opening` 幂等：一个会话最多一条开场白。
+
+**验证（本轮）：** `compileall` 通过、`import app.main` 通过（46 routes）；
+开场白逻辑 mock 冒烟三组通过（正常 / 命中旧事重试 / 连续命中报错）；
+前端 `npm run build` 通过。**真机完整对话尚未跑**（需重启后端 + 真 Key）。
 
 ---
 
@@ -2346,7 +2430,7 @@ nginx 与 docker-compose 里对应的静态 location / 卷挂载也已删除。
 | ~~`resume_service.get_resume()`~~ | ~~`GET /resume/{id}`、`PUT /resume/{id}`、`POST /{id}/optimize`、`GET /{id}/report`、`GET /{id}/file`~~ | **该函数已移除**（2026-11 随老简历链路删除，见 §4.10）；当年这里的改动是 `1003` → `2001` 并删掉临时的 `get_owned_resume_or_not_found()`。现行简历端点（`/resume/mine`、`/resume/polish`）按 `user_id` 取"唯一一份"，不做按 id 的归属查询 |
 | `task_service.get_task()` | `GET /task/{id}`、`POST /{id}/steps/{step_id}/complete`、`POST /{id}/abandon` | `1003` → `2001` |
 | `interview_service.get_interview()` | `GET /{id}/questions`、`POST /{id}/answer`、`POST /{id}/finish`、`GET /{id}/review` | `1003` → `2001` |
-| `chat_service.get_conversation()` | `GET/POST /conversations/{id}/messages`、`GET/POST /conversations/{id}/stream`、`GET /{id}/conclusion` | `1003` → `2001` |
+| `chat_service.get_conversation()` | `GET/POST /conversations/{id}/messages`、`GET/POST /conversations/{id}/stream` | `1003` → `2001` |
 
 顺带把 `interview_service.submit_answer()` 里「题目不属于本场面试」也统一成
 `BusinessException.not_found("题目不存在")`（原来已经是 2001，只是改用 helper 语义一致）。
@@ -2392,8 +2476,9 @@ nginx 与 docker-compose 里对应的静态 location / 卷挂载也已删除。
 `docker-compose.yml` 里 app 服务的 command 先 `alembic upgrade head` 再起 uvicorn，
 并额外提供了 `migrate` 服务；这属于对 16.2 的补充。
 
-㉔ **7.4 的 Prompt 清单缺结论卡片模板**：11.4 第 5 步与 11.11 都要求"结论卡片"，
-但 7.4 表格里没有对应 Prompt。本实现新增了 `chat_conclusion.txt`。
+㉔ **7.4 的 Prompt 清单缺结论卡片模板**：11.4 第 5 步与 11.11 曾要求"结论卡片"，
+本实现当时新增了 `chat_conclusion.txt`。**2026-11 结论卡片已整体删除**（见 §4.16.16），
+该 Prompt 文件也已删除，此条仅作历史记录。
 
 ㉕ **12.2「数据清理」没有对应文件**：4.1 的 `tasks/` 只列了 3 个 job 文件，
 12.2 却有 4 条任务。本实现新增 `cleanup_job.py`。
@@ -2563,7 +2648,8 @@ PostgreSQL 分支不需要（天生强制）。
 
 > ⚠️ **2026-11 修订（见 §4.16.12）**：本节末尾"内容由背景信息驱动"那一串已经**全部作废** ——
 > 开场白只聊日常、不给画像素材；"有背景仍然必须真的引用背景"这条**已按用户要求推翻**。
-> 幂等 / `sys:opening` / ≤60 字 / 绝不 500 / 不写画像标签这些契约仍然有效。
+> **2026-11 再次推翻**：连"只聊日常 / ≤60 字 / 话题池 / used 校验"也全部删除，
+> 当前实现见 §4.16.16；幂等 / `sys:opening` / 不写画像标签 仍然有效。
 
 原流程是"用户先说话 → AI 才回复"，而本系统的主要用户恰恰是**还没想清楚方向**的学生，
 面对空白输入框最容易卡住。现在：
@@ -2571,25 +2657,19 @@ PostgreSQL 分支不需要（天生强制）。
 - 新增 `POST /api/v1/chat/conversations/{id}/opening`，返回一条 `MessageResponse`；
 - 开场白**落库成真正的 `assistant` 消息**（不是前端假气泡）——因此它进历史、
   进 LLM 上下文、也计入 `message_count`（实测开场白会话 `message_count = 1`）；
-- 内容由背景驱动（阶段/画像标签/进行中的任务），Prompt 里硬约束
-  "**一句人话 ≤60 字、只问一件事、绝不出现选项、全新用户只聊日常**"；
-  ⚠️ v1 曾是"≤120 字 + 必要给 2-3 个选项"，被用户否掉（"这和让用户做选择题有什么区别"），
-  v2 已按"活人感 + 循序渐进"重写（见 §4.16.3）；
+- **内容由模型自由生成**（2026-11 重构，见 §4.16.16）：不设话题池、不设字数上限、
+  不做 `used=[]` 校验，日常/未来/焦虑/动力/就业形势都可以聊；
+  只保留一条窄检查：第一次说话不许出现「你之前 / 你上次 / 你说过 / 你提过」；
 - **幂等**：重复调用回放同一条；并发时靠 `messages` 上已有的
   `UniqueConstraint(conversation_id, client_msg_id)` + 保留值 `sys:opening` 挡住，
   第二个请求回滚后回放先落库的那条（实测两个并发请求同 `id`、库里 1 行）；
 - 会话**已有消息**时不补开场白（会变成 AI 自问自答），返回 `data:null` + 说明；
-- AI 不可用时用**开场专用**的兜底模板（不是"我这边刚刚卡了一下"那句中途断线话术），
-  按"有任务 > 有标签 > 全新用户"三档给不同开场（假 Key 实测全部 200 + `code 0`）；
+- **AI 不可用时直接返回 `code 3001`**（不再用本地假开场糊弄用户）；
+  前端显示「AI 服务暂时没连上」并提供重试；
 - ⚠️ 开场白**不写任何画像标签**：AI 单方面说的话没有用户证据（同 ㊳ 的"声称 ≠ 证据"）。
-- **新会话不许重问同一件事 + 新会话 = 用户想换话题**（用户两次报 bug 后补）：
-  注入跨会话信息（其它会话最近 ≤3 条开场白 + 用户最近 ≤6 句话），它**只作禁止清单**，
-  绝不作"可以拿来问的素材"；并在**服务端硬剔除**已经聊过的任务/标签候选
-  （`asked` = 最近开场白 **+ 用户最近说过的话**，不靠模型自觉）；
-  开场白 Prompt **只给点名禁止清单、不给开场白原句**，并新增硬规则
-  「新会话意味着用户想换一个话题：禁止清单里列过的一切不许再提、也不许当铺垫」；
-  生成后再做一次输出自检，碰到已聊过的候选就换模板（不额外调 AI）。
-  详见 §4.16.6，实测记录见 §5.1.1。
+- ~~新会话不许重问同一件事 + 服务端硬剔除跨会话候选~~ —— **2026-11 已重构**：
+  新对话 = 新话题，不是新用户；开场白会拿到**记忆块**（已知/已问），用来避免重复问，
+  但不会把记忆当台词念出来。
 - **偏离手册 7.5**（同一次决策）：`chat_system.txt` 的
   规则 10 由"预判答不上来就给选项"改成**条件性**（只有用户明确答不上来、
   或连续两轮只回"嗯/不知道/还好"才给选项当台阶），规则 11 同步对齐，
@@ -2602,6 +2682,11 @@ PostgreSQL 分支不需要（天生强制）。
 详见 §4.16，实测记录见 §5.1.1。
 
 ㊵ **[已决策：用户提出] 严厉反杜撰：开场白改成"声明依据 + 服务端逐字核对"**：
+
+> ⚠️ **2026-11 再次修订（见 §4.16.16）**：`used` / `_validate_opening` / 48 条禁词
+> **已全部删除**。开场白现在是纯文本自由生成，只保留一条窄检查：
+> 「你之前 / 你上次 / 你说过 / 你提过 / 我们上次」命中后重试一次，仍命中则报错。
+> 下面记的是当时（已废弃）的形态，反杜撰**原则**仍然有效。
 
 > ⚠️ **2026-11 修订（见 §4.16.12）**：`used` 现在**必须是空数组**（开场白没有素材），
 > 素材清单恒为空，校验改成"任何用户事实无条件判违规"；`used` 的作用从"申报依据"
@@ -2732,7 +2817,6 @@ PostgreSQL 分支不需要（天生强制）。
 | **Chat** | **POST** | `/api/v1/chat/conversations/{id}/opening`（**生成/获取 AI 开场白**，幂等，见 §4.16） |
 | Chat | **POST** | `/api/v1/chat/conversations/{id}/stream`（SSE，**前端使用**） |
 | Chat | GET | `/api/v1/chat/conversations/{id}/stream?content=...`（SSE，**调试用，前端不调用**） |
-| Chat | GET | `/api/v1/chat/conversations/{id}/conclusion` |
 | Resume | GET | `/api/v1/resume/template`（**学生简历模板**："要问用户哪些字段"的唯一来源，纯静态配置不查库） |
 | **Resume** | **POST** | `/api/v1/resume/polish`（**AI 只润色用户已填内容**：服务端机械校验"数字子集 + 空字段不许被填"，越界字段回退成用户原文） |
 | **Resume** | **GET** | `/api/v1/resume/mine`（唯一一份简历；**没有就 `data=null`，不 404**） |

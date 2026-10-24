@@ -18,10 +18,15 @@ backend/
 
 ## 为什么 `versions/` 现在是空的
 
-本机**没有 Python**（`python -V` 返回 9009，`py` 不存在），无法执行
-`alembic revision --autogenerate`，因此没有提交任何迁移脚本。
-`app/models/` 下 16 张表的定义是完整的，第一个迁移文件请在装有 Python 3.12 的
-机器上按下节命令生成。
+骨架早期本机没有 Python，无法执行 `alembic revision --autogenerate`；后来虽然
+有了 venv，但运行时一直走 `SQLModel.metadata.create_all` + `init_db` 的自愈路径，
+所以**至今没有提交 baseline 迁移**。`app/models/` 下 17 张表的定义是完整的
+（5.2 的 16 张 + 5.4 要求的 `test_questions`）。
+
+> ⚠️ 现状：`alembic upgrade head` 在空库上**不会建任何表**。
+> 生产 compose 默认走 `python -m app.db.init_db`，所以能跑；但如果你按本文档
+> 直接执行 `alembic upgrade head`，会得到一张空库。先按下面「现有库接入 Alembic」
+> 生成 baseline。
 
 ## 生成并执行迁移（需要在 backend/ 目录下，且已激活 venv）
 
@@ -35,10 +40,10 @@ cd backend
 alembic revision --autogenerate -m "init"
 
 # 3. 检查生成的 migrations/versions/xxxx_init.py
-#    - 确认 16 张表都在：users / profiles / profile_tags / test_results /
-#      conversations / messages / resumes / interviews / interview_questions /
-#      tasks / task_steps / daily_questions / daily_answers / reports /
-#      badges / user_badges
+#    - 确认 17 张表都在：users / profiles / profile_tags / test_questions /
+#      test_results / conversations / messages / resumes / interviews /
+#      interview_questions / tasks / task_steps / daily_questions /
+#      daily_answers / reports / badges / user_badges
 #    - JSONB 字段应生成 postgresql.JSONB；UUID 主键应生成 sa.Uuid()
 #    - 如自动生成漏了外键或唯一索引，手工补齐
 
@@ -51,6 +56,32 @@ alembic history --verbose           # 迁移历史
 alembic downgrade -1                # 回退一步
 alembic revision --autogenerate -m "add xxx"   # 后续变更
 ```
+
+## 现有库接入 Alembic（重要，避免 "table already exists"）
+
+已经用 `create_all` / `init_db` 建过表的库，**不要**直接 `alembic upgrade head`：
+baseline 迁移会尝试再建一次表，直接报 `table already exists`。正确顺序：
+
+```bash
+cd backend
+
+# 1) 先让现有库与模型对齐（补列 / 索引 / 唯一约束，幂等）
+python -m app.db.init_db --no-seed
+
+# 2) 在**空库**上生成 baseline（不要指向现有库，否则 autogenerate 什么都不生成）
+$env:DATABASE_URL="sqlite:///./data/_baseline.db"   # PowerShell
+alembic revision --autogenerate -m "baseline"
+# 检查 migrations/versions/xxxx_baseline.py 后删除 data/_baseline.db
+
+# 3) 现有库标记为 baseline（只写 alembic_version，不动数据/表）
+alembic stamp head
+
+# 4) 以后新增变更才走 upgrade
+alembic revision --autogenerate -m "描述"
+alembic upgrade head
+```
+
+新库/新环境则直接 `alembic upgrade head`。
 
 ## 在 Docker 里执行
 

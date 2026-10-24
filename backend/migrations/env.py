@@ -44,7 +44,7 @@ if _sqlite_path is not None:
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# autogenerate 的目标元数据（16 张表，见 app/models/__init__.py）
+# autogenerate 的目标元数据（17 张表，见 app/models/__init__.py）
 target_metadata = SQLModel.metadata
 
 

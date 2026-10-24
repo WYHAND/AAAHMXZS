@@ -99,7 +99,6 @@ def main() -> int:
     # ---------- 4. 越权矩阵：B 碰 A 的会话，必须 404（不是 403，避免存在性泄露） ----------
     cases = [
         ("B 读 A 会话的消息", client.get(f"/chat/conversations/{conv_id}/messages", headers=auth(token_b))),
-        ("B 读 A 会话的结论", client.get(f"/chat/conversations/{conv_id}/conclusion", headers=auth(token_b))),
         ("B 删 A 的会话", client.delete(f"/chat/conversations/{conv_id}", headers=auth(token_b))),
         ("B 向 A 会话发消息", client.post(f"/chat/conversations/{conv_id}/messages", json={"content": "hi"}, headers=auth(token_b))),
     ]

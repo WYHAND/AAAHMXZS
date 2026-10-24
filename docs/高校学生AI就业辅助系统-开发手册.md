@@ -16,7 +16,7 @@
 2. **数据库由 PostgreSQL 改为 SQLite**（2.3 / 3.4 / 3.5 / 5.1 / 5.5 / 16.2 / 16.5）：默认 `sqlite:///./data/app.db`，PostgreSQL 路径保留为生产可选项（连接串一换即切回）。
 3. **UI 规范与主题定稿**（8.5）：近白画布 `#fbf9f6` + 主墨 `#091426`（标题/正文/主按钮/强调/进度条）+ 浅桃 `#ffdbca`（小面积强调底）；**全站删除琥珀色**——原 `--secondary`（琥珀 `#9b4500`）及其「AI / 强调」角色一并移除，强调改由主墨承担。替代原「主色蓝紫 `#6366f1` + 白灰辅色」，以及过渡期的「浅米黄 + 克制蓝」。
 4. **奖章由 1 枚扩到 3 枚**（1.5 / 5.4 / 11.12）：`first_task` 起步行动家 / `five_steps` 坚持打卡者 / `profile_shape` 方向初现，条件必须由真实行为证据驱动。这是用户验收界面后对「砍掉奖章墙」的正式推翻。
-5. **接口契约补齐**（10.2 / 10.3）：新增 `POST /chat/conversations/{id}/opening`（AI 先开口）、`DELETE /chat/conversations/{id}`、`POST /report/save`、`GET /home/summary`、`POST /events`；`GET /badge` 由裸数组改为 `{total, obtained_count, items[]}` 总览；`POST /task/generate` 增加 `reused`。（另有 `GET /resume/{id}/file`、`POST /resume/upload` 等简历端点，**已于 2026-11 随老简历链路删除**，见要点 11 与 9.17。）
+5. **接口契约补齐**（10.2 / 10.3）：新增 `POST /chat/conversations/{id}/opening`（AI 先开口）、`DELETE /chat/conversations/{id}`、`POST /report/save`、`GET /home/summary`、`POST /events`；`GET /badge` 由裸数组改为 `{total, obtained_count, items[]}` 总览；`POST /task/generate` 增加 `reused`。（**2026-11 变更**：结论卡片及 `GET /chat/conversations/{id}/conclusion` 已删除；开场白改为模型自由生成，见 11.4。另有 `GET /resume/{id}/file`、`POST /resume/upload` 等简历端点，**已于 2026-11 随老简历链路删除**，见要点 11 与 9.17。）
 6. **统一信封与错误分层定案**（6.2 / 6.5 / 6.6 / 10.1）：所有 JSON 接口统一 `{code,message,data}`（失败时 `data` 恒为 `null`）；HTTP 状态码由 `CODE_TO_HTTP_STATUS` 唯一推导，`3001` 刻意保持 200。
 7. **私有资源「不存在」与「不属于你」统一 `code 2001`**（6.6 / 6.8 / 10.4）：禁止用 `1003` 区分归属，避免错误码本身成为可枚举的 oracle。
 8. **SSE 流式对话改为 `POST` + `fetch/ReadableStream`**（7.2 / 8.4）：`EventSource` 既不能带 `Authorization` 头也不能带 body；事件仍是具名事件，每个事件的 `data` 是完整信封。
@@ -148,7 +148,7 @@
 **保留的辅助项（P1）：**
 
 1. 简单成长报告（画像变化 + 完成任务数）
-2. 对话结论卡片
+2. ~~对话结论卡片~~（**2026-11 已删除**，见 11.11）
 3. 三枚奖章（起步行动家 / 坚持打卡者 / 方向初现）
 4. 基础站内提醒
 
@@ -262,7 +262,7 @@
 | 流式输出 | SSE | 对话流式返回；事件具名 `start/delta/tag/pending/done/error`，`end` 收尾 |
 | 结构化输出 | Pydantic + JSON Schema | 画像标签、诊断卡、面试评分等 |
 | Prompt管理 | 本地模板文件（`.txt`） | 版本化管理；`load_prompt` 带 `lru_cache`，**改动后必须重启进程**（见 3.6） |
-| 兜底策略 | 模板回复 + 重试 | 调用失败不报错；开场白另有专用的分档模板（见 11.4） |
+| 兜底策略 | 如实说明 + 重试 | 调用失败不报错，但**明确告诉用户服务不可用**；开场白失败直接返回错误，不再用本地假开场模板（见 11.4） |
 
 ### 2.5 明确不引入的依赖及原因
 
@@ -561,11 +561,10 @@ backend/
 │   ├── ai/                     # AI集成
 │   │   ├── deepseek_client.py
 │   │   ├── schemas.py          # AI 输出模型 + 岗位关键词库
-│   │   ├── fallbacks.py        # 兜底话术（含开场白三档模板）
+│   │   ├── fallbacks.py        # 兜底话术（模型不可用时如实说明，不再有假开场模板）
 │   │   ├── prompts/
 │   │   │   ├── chat_system.txt
-│   │   │   ├── chat_opening.txt        # AI 开场白（11.4）
-│   │   │   ├── chat_conclusion.txt     # 结论卡片（11.11）
+│   │   │   ├── chat_opening.txt        # AI 开场白（11.4，纯文本 + thinking，无话题池）
 │   │   │   ├── profile_extract.txt
 │   │   │   ├── profile_summary.txt     # 人物速写（9.24）
 │   │   │   ├── resume_polish.txt
@@ -600,7 +599,7 @@ backend/
 └── .env
 ```
 
-> **与手册 V1.0 的差异**：`layouts/`、`router/guards.tsx`、`constants/`、`lib/`、`components/ui/` 属于前端（见 4.2）；后端新增了 `utils/similarity.py`、`utils/stage.py`、`tasks/cleanup_job.py`、`services/home_service.py`、`services/event_service.py`、`services/idempotency.py`、`db/seed_data.py`、`prompts/chat_opening.txt`、`prompts/chat_conclusion.txt`、`migrations/`、`scripts/`。
+> **与手册 V1.0 的差异**：`layouts/`、`router/guards.tsx`、`constants/`、`lib/`、`components/ui/` 属于前端（见 4.2）；后端新增了 `utils/similarity.py`、`utils/stage.py`、`tasks/cleanup_job.py`、`services/home_service.py`、`services/event_service.py`、`services/idempotency.py`、`db/seed_data.py`、`prompts/chat_opening.txt`、`migrations/`、`scripts/`。（`prompts/chat_conclusion.txt` 已于 2026-11 随结论卡功能删除。）
 
 ### 4.2 前端目录
 
@@ -770,7 +769,7 @@ electron/                       # 桌面端（2026-10 落地；用法见 README-
 | id | UUID | 主键 |
 | user_id | UUID | 外键 |
 | title | VARCHAR(200) | 对话标题（创建时确定，未传则服务端取 `新对话 N`） |
-| conclusion | JSONB / JSON | 结论卡片 |
+| conclusion | JSONB / JSON | **已废弃**：旧结论卡片遗留列，代码不再读写（2026-11 删除结论卡功能） |
 | created_at | TIMESTAMP | 创建时间 |
 | updated_at | TIMESTAMP | 更新时间 |
 
@@ -877,7 +876,7 @@ electron/                       # 桌面端（2026-10 落地；用法见 README-
 |---|---|---|
 | id | UUID | 主键 |
 | user_id | UUID | 外键 |
-| type | VARCHAR(50) | 报告类型：`growth` / `conclusion` / `resume` |
+| type | VARCHAR(50) | 报告类型：`growth` / `resume`（`conclusion` 已随结论卡删除） |
 | content | JSONB / JSON | 报告快照内容（成长报告 = 实时算出的字段 + `user_note` + `saved_at`） |
 | created_at | TIMESTAMP | 创建（保存）时间；它同时是下一次 `score_delta` 的基线时间 |
 
@@ -1086,7 +1085,7 @@ logger.info("...")
 > 查私有资源时，「不存在」与「不属于你」必须返回**同一个**错误码 `2001`；禁止用 `1003` 区分，否则错误码本身就是可枚举的 oracle。
 
 - 实现落点：`app/core/errors.py::not_found_unless_owner()`，所有私有资源端点都走它；
-- 适用范围：`task`（`{id}` / `abandon` / `steps/{id}/complete`）、`interview`（`questions` / `answer` / `finish` / `review`）、`chat`（`conversations/{id}` 下的 `messages` / `stream` / `conclusion` / `opening`，以及 `DELETE`）；`resume` **没有**需要归属校验的 `{id}` 端点（只有 `/resume/template`、`/resume/mine`、`/resume/polish`，老链路的 `{id}` / `optimize` / `report` / `file` 已随链路删除）；
+- 适用范围：`task`（`{id}` / `abandon` / `steps/{id}/complete`）、`interview`（`questions` / `answer` / `finish` / `review`）、`chat`（`conversations/{id}` 下的 `messages` / `stream` / `opening`，以及 `DELETE`）；`resume` **没有**需要归属校验的 `{id}` 端点（只有 `/resume/template`、`/resume/mine`、`/resume/polish`，老链路的 `{id}` / `optimize` / `report` / `file` 已随链路删除）；
 - 归属不符时**不记日志**（避免探测行为刷日志），排查时看 404 计数；
 - 文件类资源还要做目录穿越校验：规范化后的路径必须仍在 `UPLOAD_DIR` 内。
 
@@ -1193,8 +1192,7 @@ tag = ProfileTag.model_validate_json(content)
 | Prompt | 用途 |
 |---|---|
 | chat_system.txt | 职业指导对话系统提示 |
-| chat_opening.txt | AI 开场白（11.4） |
-| chat_conclusion.txt | 结论卡片（11.11） |
+| chat_opening.txt | AI 开场白（11.4；2026-11 起纯文本自由生成，无话题池/字数上限） |
 | profile_extract.txt | 从对话中抽取画像标签 |
 | resume_polish.txt | 简历润色（**只改写用户填过的内容，一个字的事实都不许新增**） |
 | interview_question.txt | 面试出题 |
@@ -1212,7 +1210,7 @@ tag = ProfileTag.model_validate_json(content)
 你是高校学生的AI职业指导助手，像学长学姐一样亲切。
 规则：
 1. 每轮用户回答后，必须回应并主动抛出下一个问题或方向。
-2. 篇幅按内容分档：**默认短** —— 一般 3-4 句、约 200 字以内，一段只讲一个重点；只有用户明确要求「详细讲讲」才展开。硬上限 800 字（勘误 9.35，原 1500 已下调），超出分段（见 7.7）。
+2. 篇幅由模型自己判断：**不再规定"3-4 句 / 200 字"**；硬上限 4000 字（只防跑飞，2026-11 重构，见 9.46）。
 3. 语气平等，不说教，可适当使用语气词。
 4. 用户表达迷茫或焦虑时，先共情，再引导到兴趣、经历。
 5. 用户拒绝回答时，立即跳过并切换话题。
@@ -1237,7 +1235,7 @@ tag = ProfileTag.model_validate_json(content)
 - 结构化输出解析失败：重试1次，仍失败则使用默认值。
 - 用户拒绝回答：**已修订（勘误 9.31）—— 不再用本地模板短路，交回模型处理**（Prompt 要求不逼问、换一个更小的切口）。
 - 用户答不上来：**已修订（勘误 9.31）—— 不再用本地 `STUCK_REPLY` 模板，交回模型处理**（该给内容 / 台阶时给内容，而不是换一道题再问一遍）。
-- **开场白有专用的分档兜底模板**（按背景丰度分三档），不能复用「中途断线」那句兜底话术 —— 它放在会话第一句非常突兀（见 11.4）。
+- **模型不可用时如实说明**：对话正文返回「AI 服务这会儿没连上，这条没回成」；开场白直接返回 `code 3001`，前端提示「AI 服务暂时没连上」。不再用「嗨，今天过得咋样？」这类假开场模板（2026-11）。
 
 ### 7.7 对话边界控制
 
@@ -1249,11 +1247,12 @@ tag = ProfileTag.model_validate_json(content)
   全部不再存在（`chat_system.txt` 里对应那条规则也已删除，其余规则重新编号保持连续）；
   真实库里的那两个字段也已物理删除。
   **前端不应再实现「追问进度 1/3」这类进度环，SSE 事件里没有这两个字段。**
-- ~~输出≤300字：Prompt约束+后端截断。~~ **已修订（勘误 9.31 / 9.32 / 9.35）**：字数上限先是放开到 1500，随后按用户反馈「说的有点多了，要提炼重点」**下调到 800**（默认口径是"一般 3-4 句、约 200 字以内、一段只讲一个重点"）。仍由 Prompt 约束 + 后端截断兜住；出题 / 复盘等结构化任务不受此限。
+- ~~输出≤300字：Prompt约束+后端截断。~~ **已修订（2026-11 重构）**：不再规定"3-4 句 / 200 字"，
+  篇幅由模型判断；服务端只保留 4000 字安全阈（见 9.46）。出题 / 复盘等结构化任务不受此限。
 - 过渡语模板：本地维护，随机选择。
 - **面试追问另有一套上限**：`MAX_FOLLOWUP_PER_QUESTION = 2`（每题最多 1-2 轮追问，见 11.9）。
   它与上面被移除的聊天计数器**完全无关**，属于模拟面试的核心功能，保留不变。
-- 开场白**禁止给选项**、**≤60 字**、一次只问一件事（见 11.4）。
+- 开场白由模型自由生成：**不设话题池、不设字数上限、不强制选项**（见 11.4；2026-11 重构）。
 
 ### 7.8 AI数据回流画像
 
@@ -1302,7 +1301,7 @@ tag = ProfileTag.model_validate_json(content)
 Zustand store（`src/store/`），**除 `authStore.token`（localStorage）外均不持久化**：
 
 - `authStore`：token、user、bootstrapped、loading；并在模块初始化时把 `getToken` / `onUnauthorized` 反向注入 api 层（避免 store↔api 循环依赖）
-- `chatStore`：会话列表、当前会话、消息、流式状态、追问轮次、结论卡片
+- `chatStore`：会话列表、当前会话、消息、流式状态、追问轮次
 - `profileStore`：画像、标签、阶段、`tested`、`nextAction`、`version`
 - `taskStore` / `interviewStore`：各自的列表与当前对象（**没有 `resumeStore`**：简历只有 `/resume` 一个页面、一份数据，状态就放在页面组件内，`store/resumeStore.ts` 已随老链路删除）
 
@@ -1529,7 +1528,6 @@ linux:
 | POST | /chat/conversations/{id}/opening | **获取/生成 AI 开场白**（幂等，见 11.4） |
 | POST | /chat/conversations/{id}/stream | **SSE 流式对话（前端使用）**，body 含 `content` + `client_msg_id` |
 | GET | /chat/conversations/{id}/stream?content=... | SSE 流式（**调试用，前端不调用**） |
-| GET | /chat/conversations/{id}/conclusion | 结论卡片 |
 
 #### Resume
 
@@ -1652,7 +1650,7 @@ linux:
 2. **获取 AI 开场白**：`POST /chat/conversations/{id}/opening`（见下）。
 3. 用户发消息 → 后端调用DeepSeek流式返回（`POST .../stream`，见 7.2）。
 4. 每轮抽取画像标签。
-5. 对话结束生成结论卡片。
+5. ~~对话结束生成结论卡片~~ **已删除**（见 11.11）。
 
 > 原来还有一条「维护追问计数器，超过 3 轮换维度」——该计数器**已移除**，见 7.7。
 
@@ -1669,15 +1667,22 @@ linux:
 
 - **开场白就是一条普通 assistant 消息**，形状与 `/messages` 里的一致，`client_msg_id` 是系统保留值 `sys:opening`。必须落库（而不是前端自己拼一句）：否则刷新/换设备就没了、模型不知道自己说过这句会重复问、会话列表里 `message_count` 还是 0。
 - 「已有消息就不补」的理由：开场白是对话的第一句，用户已经说过话之后再插一句会排在用户消息**后面**，变成 AI 在自问自答。所以前端应在**创建会话后立刻**调用本接口。
-- 内容硬约束：**一句人话、≤60 字、一次只问一件事、绝不出现 A/B/C 这类选项**；有画像标签或进行中任务时必须引用背景，**全新用户从日常小事切入**。它不写任何画像标签 —— 没有任何用户输入，就没有可回流的证据。
-- **新会话 = 用户想换一个话题**（硬性规格）：
-  - 开场白**禁止**顺着最近会话里出现过的任何话题 / 关键词发问 —— 既包括用户刚说过的话（例如"我平时健身，刷视频，看短句"），也包括刚刚从这些对话里新抽出来的画像标签；
-  - 也**禁止**用"你之前说……""上次那个……还在弄吗"这类承接式措辞把旧话题当铺垫；
-  - 跨会话信息（其它会话最近几条开场白 + 用户最近说过的话）**只能当"已经聊过"的禁止清单用，绝不能当"可以拿来问的素材"**；
-  - 因此开场白要么换一个画像维度（用**没有被聊过**的标签 / 任务），要么聊一件与它们都无关的日常小事；
-  - 与服务端保证配套：候选（画像标签 / 进行中任务）在生成前会被**硬剔除** —— 剔的依据是"最近几条开场白 **+ 用户最近说过的话**"，所以即使模型想顺着问也没有素材；剔完候选为空时回到"全新用户 → 聊日常"，这是**预期行为**；
-  - 但**不许把"有背景就引用背景"搞死**：全新用户照旧只聊日常；有背景且背景**没有**刚聊过时，仍然必须真的引用该背景，不许退化成"最近在忙什么"这种通用问候。
-- AI 不可用时走**开场专用**的三档本地模板（有进行中任务 → 引用任务标题；有画像标签 → 引用标签；都没有 → 聊日常），不会退化成空白、报错或一张选择题。
+- 内容由模型自由生成（2026-11 重构 + 第二次迭代）：
+  - **不设话题池、不设字数上限、不强制 JSON**；日常、未来、焦虑、动力、就业形势、想过的生活都可以聊；
+  - **同一个 AI 主动开一个新话题**，不问“你想聊什么”；它会说明“为什么想聊这个”，只问一个具体问题，并给一个出口；
+  - 开场白拿到一份**记忆块**（基本信息 / 画像 / 最近任务 / 他告诉过你的 / 你之前问过的），
+    用来**避免重复问**；记忆是背景，不是台词，不许念出来、不许 recap；
+  - **不问已经知道答案的基本事实**（大几、专业、学校、周末、在忙什么、新鲜事）；命中会重试一次；
+  - 全新用户（记忆为空）可以直接问大的、具体的人生问题，比如“你以后想过什么样的生活”；
+  - 只保留一条窄检查：不要回述「你之前 / 你上次 / 你说过 / 你提过 / 我们上次」；
+  - 模型不可用时**直接返回 `code 3001`**（前端提示「AI 服务暂时没连上」），不再用本地假开场模板；
+  - 它不写任何画像标签 —— 没有任何用户输入，就没有可回流的证据。
+- **新对话 = 新话题，不是新用户**：记忆是连续的（同一个账号），换的只是这一段话题。
+  事实型问题答过就不再问；感受型问题可以问“现在还是这样吗”。
+- **账号级长期记忆 `user_memories`**：存“想要的生活 / 不想过的生活 / 在意什么 / 愿意付出什么 /
+  绝不接受什么 / 为什么而努力 / 对不确定性的态度 / 榜样与反例 / 还没想清楚的问题 / 已知事实”。
+  由 `memory_extract.txt` 从用户原话提炼，每条必须带 evidence，服务端核对不到就丢弃；
+  每 2 条用户消息后台提炼一次，不阻塞回复。首次使用需建表（`python -m app.db.init_db`）。
 - 前端消费时要注意：`data: null` 是**预期行为**（说明用户已经先说话了），不是错误，不要弹提示。
 
 **删除会话（`DELETE /chat/conversations/{id}`）**
@@ -1739,8 +1744,8 @@ linux:
 
 - 模板提问：`GET /resume/template` 下发"简历要问的每一项"（每项一句人话问题），前端一个问题一个输入框地问用户。
 - 用户填写：前端提交前把空字段剔掉（**用户没写的字段绝不发给 AI**）。
-- 润色：`POST /resume/polish` 调 `resume_polish.txt`，**只改写用户写过的内容**（口语 → 简历口吻 / 按 STAR 重组），一个字的事实都不许新增；**唯一的例外是技能栏** —— 用户在那里写的通常只是关键词，要展开成简历上的能力表述（「Java」→「熟悉 Java 基础语法、面向对象编程、集合框架与异常处理。能使用 Java 独立完成控制台程序开发。」），但**不许加用户没写过的其它技术名、不许加任何数字、不许写"精通/资深"**（这条边界与它的机械缺口见 9.20）；服务端另做机械校验（数字必须是用户原文数字的子集、用户没填的字段不许被填、技能条目**一一对应且每条必须留着原技术名**），命中就把那个字段回退成用户原文。
-- 技能的填写方式：**一项一行**（模板下发 `lines: true`，前端渲染成多行输入框）。因为展开后的一句话自带顿号逗号，用顿号分隔的单行输入框会把一句话切成好几项假技能；展示态也只对短词条用「、」拼接，展开成句子的技能一条一行。
+- 润色：`POST /resume/polish` 调 `resume_polish.txt`，**只改写用户写过的内容**（口语 → 简历口吻 / 按 STAR 重组），一个字的事实都不许新增；**唯一的例外是技能栏** —— 用户在那里写的通常只是关键词，要展开成简历上的能力表述（「Java」→「熟悉 Java 基础语法、面向对象编程、集合框架与异常处理。能使用 Java 独立完成控制台程序开发。」），但**不许加用户没写过的其它技术名、不许加任何数字、不许写"精通/资深"**（这条边界与它的机械缺口见 9.20）；**同一项里补写多个技术点时（如已写好的句子后面加「会C++」），每个技术点都要各自展开，不许照抄半句或丢掉任何一个**（见 9.44）；服务端另做机械校验（数字必须是用户原文数字的子集、用户没填的字段不许被填、技能条目**一一对应且每条必须留着原技术名**），命中就把那个字段回退成用户原文。
+- 技能的填写方式：**一项一行**（模板下发 `lines: true`，前端渲染成多行输入框）。因为展开后的一句话自带顿号逗号，用顿号分隔的单行输入框会把一句话切成好几项假技能；展示态也只对短词条用「、」拼接，展开成句子的技能一条一行。输入框里存的是**原始多行文本**（按回车就是真的换行，提交时才按行切开）—— 每次按键都"切数组再拼回去"会把行尾换行吃掉，导致回车无效、第二个技能叠到上一行（见 9.45）。
 - 展示 / 保存 / 导出：点「润色」立刻先按用户原文排出一份完整简历（顶上提示"正在润色"），AI 回来后原地换成润色版；可编辑、可 `PUT /resume/mine` 保存、可导出 PDF（桌面端 `printToPDF` 直接落盘，网页端退回系统打印窗口）。
 - 画像回流：完整度（`calculate_completeness`，权重 25/10/20/10/20/10/5 合计 100）、项目经验、技能栈。
 - 老链路的「上传 PDF → 解析 → ATS 评分 → 优化报告 → 下载」已**整体删除**，本节的标题与编号沿用，内容以上面这几条为准（见 9.17）。
@@ -1782,10 +1787,14 @@ linux:
 
 > 实现注意：组装响应时不要写成 `GrowthReportResponse(**content, score_delta=...)` —— `content` 里已有同名键会抛 `TypeError: got multiple values for keyword argument`。
 
-### 11.11 结论卡片
+### 11.11 结论卡片（**已删除**）
 
-- 对话结束生成结构化诊断卡（`chat_conclusion.txt`）。
-- 首次调用时生成并缓存到 `conversations.conclusion`；`done` 事件带 `conclusion_ready` 供前端决定是否去拉取。
+> **2026-11 用户拍板删除**：「删除结论卡这个说法，没有什么聊得深聊得浅的，只要用户得到了提升就是好聊天。」
+>
+> - 不再生成结论卡片，`chat_conclusion.txt` 已删除；
+> - `GET /chat/conversations/{id}/conclusion`、`conclusion_ready`、`reports.type="conclusion"` 全部移除；
+> - `conversations.conclusion` 列保留（避免迁移），但代码不再读写；
+> - 不再对对话做任何"聊得深 / 聊得浅"的判断。
 
 ### 11.12 奖章触发
 

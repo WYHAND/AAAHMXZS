@@ -4,7 +4,7 @@
 
 - ``app.services.career_content_service``：素材载入 / 方向匹配 / 检索与剔除；
 - ``app.services.chat_director``（**已从"导演"降级为"供料"**，见勘误 9.31）：状态与进度判定、
-  素材去重（按要点判、且不许误伤同组）、空转校验、兜底文案；
+  素材去重（按要点判、且不许误伤同组）、随机抽样的多样性；
   以及一条**反向回归**：TurnBrief 里**不该再出现** intent / angle / must_deliver 这类指令式字段。
 
 用法（必须用 venv 的解释器；脚本自己把 ``backend/`` 插进 sys.path）::
@@ -170,10 +170,12 @@ def main() -> int:
     )
     block_stuck = brief_stuck.as_prompt_block()
     check(
-        "4.4 供料块带三条硬边界 + 目的地",
-        "只有这三条是硬的" in block_stuck and "目的地" in block_stuck,
-        f"块内是否含'只有这三条是硬的'={'只有这三条是硬的' in block_stuck}；"
-        f"是否含'目的地'={'目的地' in block_stuck}",
+        "4.4 供料块只给两条硬边界，不再注入目的地/进度",
+        "只有这两条是硬的" in block_stuck
+        and "目的地" not in block_stuck
+        and "走到" not in block_stuck,
+        f"含'只有这两条是硬的'={'只有这两条是硬的' in block_stuck}；"
+        f"含'目的地'={'目的地' in block_stuck}；含'走到'={'走到' in block_stuck}",
     )
     print()
 
@@ -246,34 +248,6 @@ def main() -> int:
     print()
 
     # ------------------------------------------------------------------
-    # 8. 空转判定
-    # ------------------------------------------------------------------
-    empty_materials = content.retrieve("计算机", limit=3)["items"]
-    ask_text = "那你平时做小组作业，最愿意主动揽哪一块？"
-    empty_flag = director.looks_like_empty_turn(ask_text, empty_materials)
-
-    anchor = empty_materials[0]
-    long_reply = (
-        f"关于「{anchor['title']}」，先说我的看法：{anchor['text']}"
-        "你不用一下子把它想明白，挑一个最小的切口先动手做出来，"
-        "做完再回头看：卡在哪、为什么卡、后来怎么绕过去的，这三件事比进度条重要。"
-    )
-    long_flag = director.looks_like_empty_turn(long_reply, empty_materials)
-
-    check(
-        "8.1 纯提问（没沾素材）→ 空转 True",
-        empty_flag is True,
-        f"looks_like_empty_turn={empty_flag}；文本长 {len(ask_text)} 字；"
-        f"materials={ids_of(empty_materials)}",
-    )
-    check(
-        "8.2 沾了素材要点的长回复（≥100 字）→ 空转 False",
-        len(long_reply) >= 100 and long_flag is False,
-        f"looks_like_empty_turn={long_flag}；文本长 {len(long_reply)} 字（要求 ≥100）",
-    )
-    print()
-
-    # ------------------------------------------------------------------
     # 9. 随机性确实存在（同一个输入 30 次真随机 → 抽到的素材组合 ≥2 种）
     # ------------------------------------------------------------------
     combos: set = set()
@@ -288,24 +262,7 @@ def main() -> int:
     print()
 
     # ------------------------------------------------------------------
-    # 10. 兜底文案非空、无数字型薪资 / 就业率字样
-    # ------------------------------------------------------------------
-    fallback = director.material_fallback_text(brief_stuck.materials)
-    banned = [token for token in ("%", "薪资", "万") if token in fallback]
-    check(
-        "10.1 兜底文案非空",
-        bool(fallback and fallback.strip()),
-        f"长度={len(fallback)}；开头={fallback[:60]!r}",
-    )
-    check(
-        "10.2 兜底文案不含 % / 薪资 / 万",
-        not banned,
-        f"命中禁词={banned or '无'}；全文={fallback}",
-    )
-    print()
-
-    # ------------------------------------------------------------------
-    # 11. 行业/就业现状（market）：检索里有、供料会强制带、讲完就退场（勘误 9.40）
+    # 11. 行业/就业现状（market）：检索里有，但**供料不再强制每轮带**
     # ------------------------------------------------------------------
     market_pool = [i for i in content.retrieve("计算机", limit=999)["items"] if i["kind"] == "market"]
     check(
@@ -314,22 +271,17 @@ def main() -> int:
         f"market 条数={len(market_pool)}；ids={[i['id'] for i in market_pool][:4]}",
     )
 
-    fresh_brief = director.brief_turn(
-        "我不知道", [("assistant", "嗨，今天过得咋样？"), ("user", "我不知道")], profile_text="计算机"
-    )
+    no_market_runs = 0
+    for _ in range(20):
+        b = director.brief_turn(
+            "我不知道", [("assistant", "嗨，今天过得咋样？"), ("user", "我不知道")], profile_text="计算机"
+        )
+        if not any(i["kind"] == "market" for i in b.materials):
+            no_market_runs += 1
     check(
-        "11.2 方向已知 + 没讲过 → 本轮素材里必须有 market",
-        any(i["kind"] == "market" for i in fresh_brief.materials),
-        f"materials={[(i['id'], i['kind']) for i in fresh_brief.materials]}",
-    )
-
-    all_market_probes = "；".join(content.item_probe(i) for i in market_pool)
-    said_history = [("assistant", f"我之前跟你说过：{all_market_probes}"), ("user", "我不知道")]
-    after_brief = director.brief_turn("我不知道", said_history, profile_text="计算机")
-    check(
-        "11.3 market 全讲过后不再硬塞（不会每轮都念行业现状）",
-        not any(i["kind"] == "market" for i in after_brief.materials),
-        f"materials={[(i['id'], i['kind']) for i in after_brief.materials]}",
+        "11.2 不再强制每轮带 market（20 次里至少一次不含）",
+        no_market_runs >= 1,
+        f"不含 market 的次数={no_market_runs}/20",
     )
     print()
 

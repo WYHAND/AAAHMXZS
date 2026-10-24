@@ -18,7 +18,9 @@
 | 后端（FastAPI） | ✅ 统一 `{code,message,data}` 信封、SSE 流式对话、APScheduler 定时任务 |
 | 数据库 | ✅ 默认 SQLite（零安装）；PostgreSQL 可切换（`--profile postgres`） |
 | AI 能力 | ✅ DeepSeek 流式对话 + 结构化输出；无 Key 时自动走兜底话术，不阻塞演示 |
+| 评委自填 Key | ✅ 右上角钥匙图标 → 填自己的 DeepSeek / 百炼 Key；只存本机浏览器 |
 | 语音面试 | ✅ 阿里云百炼 ASR/TTS；未配置 Key 时前端自动隐藏语音入口 |
+| 演示账号 | ✅ `demo / demo123456`（`init_db` 自动创建；`--no-demo` 可关闭） |
 | 桌面端 | ✅ Electron 可打包（构建产物不入库） |
 | 自动化测试 | ⚠️ 尚未补齐（当前为手工冒烟清单，见 §6.3） |
 | 数据库迁移 | ⚠️ 建表走 `create_all`，Alembic 版本脚本待补（见 §9） |
@@ -127,8 +129,9 @@ python -m venv venv
 Copy-Item .env.example .env
 #    按需填写 SECRET_KEY、DEEPSEEK_API_KEY、DASHSCOPE_API_KEY
 
-# 3) 建表 + 灌入 30 道测评题（幂等，可重复执行）
+# 3) 建表 + 灌入 30 道测评题 + 演示账号（幂等，可重复执行）
 .\venv\Scripts\python.exe -m app.db.init_db
+#    不想创建 demo 账号：加 --no-demo
 
 # 4) 启动后端
 .\venv\Scripts\python.exe -m uvicorn app.main:app --reload --reload-include "*.txt" --host 0.0.0.0 --port 8000
@@ -142,7 +145,12 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-打开 <http://localhost:5173>，注册一个账号 → 完成 30 题测评（约 3 分钟）→ 进入首页即看到画像与今日任务。
+打开 <http://localhost:5173>：
+
+- **看完整效果（推荐）**：用 `demo / demo123456` 登录，画像、3 个任务、1 段对话、1 场面试复盘、简历和成长报告都已预置；
+- **走真实流程**：注册一个新账号 → 完成 30 题测评（约 3 分钟）→ 进入首页。
+
+> 评委想用自己的 Key：点右上角钥匙图标，填 DeepSeek / 百炼 Key 即可。Key 只存在本机浏览器，不写数据库；提交的源码包不包含 `.env`。不填也能跑，AI 走兜底话术。
 
 服务地址：
 
@@ -243,6 +251,7 @@ docker compose --profile postgres up -d
 | 前端设计说明书 | `docs/前端设计说明书-高校学生AI就业辅助系统.md` | 路由、守卫、store 划分、API 层 |
 | 设计系统 | `docs/设计系统-页面规范.md` | 颜色、字号阶、卡片与页头规范 |
 | 页面任务书 T01–T13 | `docs/任务书/` | 交给 AI 的逐页施工说明（含「只改哪些文件」边界） |
+| AI 对话历史快照 | `docs/prompt-history/` | 4 个核心功能、5 条会话的完整 Prompt 链与导出脚本 |
 | 渲染检查报告 | `tools/render-check/REPORT.md` | 逐路由渲染、截图与未捕获异常记录 |
 
 提交约定：一个提交对应一个可独立描述的功能点或一次 AI 协作，不使用「更新」「修复一下」这类无信息量信息；涉及规格变更时同步更新决策记录。
@@ -283,7 +292,7 @@ Vite preview 默认只监听 IPv6，改用 <http://localhost:4173>。
 2. **无 Alembic 版本脚本**：建表使用 `create_all`，适合演示与单机部署，生产迁移需补齐；
 3. **SQLite 为默认库**：单机写入足够，多人并发建议切换 PostgreSQL；
 4. **语音链路依赖外部服务**：ASR/TTS 不可用时只降级为文字面试；
-5. **未预置演示账号**：首次使用需注册并完成测评（约 3 分钟），数据从零开始。
+5. **演示账号是公开的**：`demo / demo123456` 只用于评审演示；正式部署请用 `--no-demo` 或改密码。
 
 ---
 
