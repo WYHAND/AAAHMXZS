@@ -80,6 +80,122 @@ def ensure_columns() -> None:
         logger.info("ensure_columns：无缺失列")
 
 
+def ensure_indexes() -> None:
+    """给**已有表**补建模型里声明、但库里缺失的索引（含 unique index）。
+
+    为什么需要：``create_all`` 只建缺失的**表**，对已存在的表完全跳过 ——
+    连后来在模型里新加的 ``index=True`` 都不会补。老库/打包后的 exe 因此会
+    悄悄退化成全表扫描，且没有任何报错。这里按列集合判断是否已存在，
+    再调 ``Index.create(checkfirst=True)``，对 SQLite / PostgreSQL 都成立。
+    """
+    import app.models  # noqa: F401 - 确保所有表已注册
+    from sqlalchemy import inspect
+    from sqlmodel import SQLModel
+
+    from app.db.session import engine
+
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    created: list[str] = []
+
+    for table in SQLModel.metadata.sorted_tables:
+        if table.name not in tables:
+            continue
+        existing = {
+            tuple(index.get("column_names") or ())
+            for index in inspector.get_indexes(table.name)
+        }
+        for index in table.indexes:
+            columns = tuple(column.name for column in index.columns)
+            if columns in existing:
+                continue
+            try:
+                index.create(bind=engine, checkfirst=True)
+                created.append(f"{table.name}({', '.join(columns)})")
+                existing.add(columns)
+            except Exception as exc:  # noqa: BLE001 - 单个索引失败不应阻止启动
+                logger.error(
+                    "补建索引失败（该索引可能没建成，请手工检查） %s(%s): %s",
+                    table.name,
+                    ", ".join(columns),
+                    exc,
+                )
+
+    if created:
+        logger.info("ensure_indexes：已补索引 %s", ", ".join(created))
+    else:
+        logger.info("ensure_indexes：无缺失索引")
+
+
+def ensure_unique_constraints() -> None:
+    """给已有表补建模型里声明的唯一约束（以唯一索引的形式落地）。
+
+    ``UniqueConstraint`` 无法像 ``Index`` 一样 ``create(checkfirst=True)``，
+    只能显式 ``CREATE UNIQUE INDEX``。这里先按**列集合**判断（兼容 SQLite 的
+    ``sqlite_autoindex`` 与 PG 的约束名差异），缺失才建。
+
+    失败**不自动删数据**：如果库里已经有重复行，建索引会失败。此时只打一条
+    可执行的 error（含排查 SQL），让部署者决定保留哪一条 —— 静默删用户数据
+    比缺一个约束更危险。
+    """
+    import app.models  # noqa: F401 - 确保所有表已注册
+    from sqlalchemy import UniqueConstraint, inspect, text
+    from sqlmodel import SQLModel
+
+    from app.db.session import engine
+
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    created: list[str] = []
+
+    for table in SQLModel.metadata.sorted_tables:
+        if table.name not in tables:
+            continue
+
+        existing: set[tuple[str, ...]] = set()
+        for constraint in inspector.get_unique_constraints(table.name):
+            existing.add(tuple(constraint.get("column_names") or ()))
+        for index in inspector.get_indexes(table.name):
+            if index.get("unique"):
+                existing.add(tuple(index.get("column_names") or ()))
+
+        for constraint in table.constraints:
+            if not isinstance(constraint, UniqueConstraint):
+                continue
+            columns = tuple(column.name for column in constraint.columns)
+            if columns in existing:
+                continue
+
+            name = constraint.name or f"uq_{table.name}_{'_'.join(columns)}"
+            columns_sql = ", ".join(f'"{column}"' for column in columns)
+            ddl = (
+                f'CREATE UNIQUE INDEX IF NOT EXISTS "{name}" '
+                f'ON "{table.name}" ({columns_sql})'
+            )
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(ddl))
+                created.append(f"{table.name}({', '.join(columns)})")
+                existing.add(columns)
+            except Exception as exc:  # noqa: BLE001 - 见 docstring：不自动删重复数据
+                logger.error(
+                    "补建唯一约束失败（表里可能已有重复行，系统未自动删除）%s(%s): %s。"
+                    " 排查：SELECT %s, COUNT(*) FROM %s GROUP BY %s HAVING COUNT(*) > 1；"
+                    " 处理完重复行后重新执行 `python -m app.db.init_db` 即可补上。",
+                    table.name,
+                    ", ".join(columns),
+                    exc,
+                    ", ".join(columns),
+                    table.name,
+                    ", ".join(columns),
+                )
+
+    if created:
+        logger.info("ensure_unique_constraints：已补唯一约束 %s", ", ".join(created))
+    else:
+        logger.info("ensure_unique_constraints：无缺失唯一约束")
+
+
 def init_db(create_tables: bool = False, drop_first: bool = False) -> None:
     """初始化数据库。
 
@@ -94,8 +210,11 @@ def init_db(create_tables: bool = False, drop_first: bool = False) -> None:
     if create_tables:
         logger.info("目标数据库：%s", describe_database())
         create_all()
-        # create_all 之后：补齐「后加的列」（老库/打包产物自愈，见 ensure_columns）
+        # create_all 之后：补齐「后加的列 / 索引 / 唯一约束」
+        # （老库与打包产物自愈；create_all 不会 ALTER 已存在的表）
         ensure_columns()
+        ensure_indexes()
+        ensure_unique_constraints()
         logger.info("提示：生产 PostgreSQL 请改用 `alembic upgrade head`（手册 5.5）")
         return
 
@@ -277,13 +396,19 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="不建表，只打提示/只灌种子",
     )
     parser.add_argument("--no-seed", dest="seed", action="store_false", help="只建表，不灌种子")
+    parser.add_argument(
+        "--no-demo",
+        dest="demo",
+        action="store_false",
+        help="不创建 demo 演示账号（默认创建，账号 demo / demo123456）",
+    )
     parser.add_argument("--drop", dest="drop_first", action="store_true", help="【危险】先删表再建")
-    parser.set_defaults(create_tables=True, seed=True, drop_first=False)
+    parser.set_defaults(create_tables=True, seed=True, demo=True, drop_first=False)
     return parser.parse_args(argv)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    """CLI 入口：``python -m app.db.init_db [--no-seed] [--no-create-tables] [--drop]``。"""
+    """CLI 入口：``python -m app.db.init_db [--no-seed] [--no-demo] [--drop]``。"""
     configure_logging()
     args = _parse_args(argv)
 
@@ -294,6 +419,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     init_db(create_tables=args.create_tables, drop_first=args.drop_first)
     if args.seed:
         seed_all()
+        if args.demo:
+            from app.db.seed_demo import seed_demo_user
+
+            if seed_demo_user():
+                logger.info("演示账号：demo / demo123456（登录后直接看完整闭环）")
 
     logger.info("完成。下一步：uvicorn app.main:app --reload --port 8000（手册 3.6）")
     return 0

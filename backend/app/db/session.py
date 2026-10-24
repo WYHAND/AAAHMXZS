@@ -109,9 +109,14 @@ def _build_engine_kwargs() -> Dict[str, Any]:
         else:
             # 文件库：pre_ping 便宜，能躲开"库文件被替换/删掉"的偶发问题
             kwargs["pool_pre_ping"] = True
+        # 并发写（SSE 落消息 + 定时任务 + 请求线程）下 SQLite 会返回
+        # "database is locked"；默认只等 5 秒，长一点的写事务就会变成 500。
+        # 30 秒给持锁方足够时间完成，而不是把并发问题暴露成用户可见错误。
+        connect_args: Dict[str, Any] = {"timeout": 30}
         if settings.SQLITE_CHECK_SAME_THREAD_FALSE:
             # FastAPI 线程池 + SSE 生成器复用连接，必须关掉同线程检查
-            kwargs["connect_args"] = {"check_same_thread": False}
+            connect_args["check_same_thread"] = False
+        kwargs["connect_args"] = connect_args
         return kwargs
 
     # PostgreSQL（或其它服务型数据库）
