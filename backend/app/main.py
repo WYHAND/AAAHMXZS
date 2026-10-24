@@ -30,6 +30,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.router import API_V1_PREFIX, api_router
+from app.core.api_keys import ApiKeyHeaderMiddleware
 from app.core.api_response import ApiResponse
 from app.core.config import get_settings
 from app.core.errors import (
@@ -38,6 +39,7 @@ from app.core.errors import (
     ErrorCode,
     http_status_to_code,
 )
+from app.core.rate_limit import check as check_rate_limit
 from app.utils.logger import configure_logging, get_logger, sanitize
 
 settings = get_settings()
@@ -205,6 +207,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 # ---------------------------------------------------------------------------
 
 def create_app() -> FastAPI:
+    # /docs、/redoc、/openapi.json 默认只在 DEBUG 开放；
+    # 生产要临时排查时显式设 ENABLE_API_DOCS=true，避免默认把整套接口描述裸露。
+    docs_enabled = settings.DEBUG or settings.ENABLE_API_DOCS
     application = FastAPI(
         title="高校学生AI就业辅助系统 API",
         description=(
@@ -215,19 +220,9 @@ def create_app() -> FastAPI:
         ),
         version="0.1.0",
         lifespan=lifespan,
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url="/openapi.json",
-    )
-
-    # 3.10：后端配置 CORS，允许 http://localhost:5173
-    application.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origin_list,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-        expose_headers=["X-Process-Time"],
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
     )
 
     register_exception_handlers(application)
@@ -255,6 +250,57 @@ def create_app() -> FastAPI:
     )
 
     @application.middleware("http")
+    async def limit_request_body(request: Request, call_next):
+        """按 Content-Length 拒绝过大的请求体（413）。
+
+        只做"声明长度"的早拒绝：chunked/伪造 Content-Length 的请求仍可能很大，
+        语音接口另有一层**分块累计**上限（见 voice.py::_read_audio_body）。
+        两层叠加后，JSON 接口不会因为一个超大 body 先把内存吃掉。
+        """
+        if request.method in {"POST", "PUT", "PATCH"}:
+            declared = request.headers.get("content-length")
+            if declared:
+                try:
+                    length = int(declared)
+                except ValueError:
+                    length = 0
+                if length > settings.MAX_REQUEST_BODY_BYTES:
+                    return JSONResponse(
+                        status_code=413,
+                        content=ApiResponse.fail(
+                            ErrorCode.PARAM_ERROR, "请求体过大"
+                        ).model_dump(),
+                    )
+        return await call_next(request)
+
+    @application.middleware("http")
+    async def rate_limit_requests(request: Request, call_next):
+        """进程内限流：登录爆破 / AI 与语音成本接口。
+
+        单 worker 部署下有效；多 worker 需要 Redis/网关层限流（见 rate_limit.py）。
+        """
+        if settings.RATE_LIMIT_ENABLED:
+            decision = check_rate_limit(request)
+            if decision is not None:
+                rule, allowed = decision
+                if not allowed:
+                    logger.warning(
+                        "请求被限流 %s %s（%s 次/%ss）",
+                        request.method,
+                        request.url.path,
+                        rule.limit,
+                        int(rule.window),
+                    )
+                    return JSONResponse(
+                        status_code=429,
+                        content=ApiResponse.fail(
+                            ErrorCode.PARAM_ERROR, "请求过于频繁，请稍后再试"
+                        ).model_dump(),
+                        headers={"Retry-After": str(int(rule.window))},
+                    )
+        return await call_next(request)
+
+    @application.middleware("http")
     async def add_process_time_header(request: Request, call_next):
         """简单耗时统计（6.7 日志）。"""
         started = time.perf_counter()
@@ -274,10 +320,34 @@ def create_app() -> FastAPI:
                 "name": "高校学生AI就业辅助系统",
                 "version": "0.1.0",
                 "api_prefix": API_V1_PREFIX,
-                "docs": "/docs",
+                "docs": "/docs" if docs_enabled else None,
                 "health": f"{API_V1_PREFIX}/health",
             },
         }
+
+    # 3.10：后端配置 CORS，允许 http://localhost:5173
+    #
+    # ⚠️ 必须**最后添加**：Starlette 的中间件是"后添加的在外层"，放最后才能让
+    # CORS 头也盖住限流 429 / 请求体 413 / 异常 500 —— 否则浏览器只会看到
+    # CORS 错误，前端拿不到真正的错误信封。
+    #
+    # ⚠️ 通配来源与凭证不能同时开：`cors_origin_list` 在 DEBUG 下会追加 "*"，
+    # 而 Starlette 在 allow_credentials=True 时会把请求的 Origin 原样反射回去 ——
+    # 等价于"任何网站都能带凭证跨域调本 API"。本项目的鉴权走
+    # `Authorization: Bearer`，不依赖 Cookie，所以出现通配来源时直接关掉
+    # credentials 即可，不影响前端登录。
+    cors_origins = settings.cors_origin_list
+    # 评委自填 Key：只放在本次请求的上下文里，SSE 流式响应期间也不会丢
+    application.add_middleware(ApiKeyHeaderMiddleware)
+
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_credentials="*" not in cors_origins,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["X-Process-Time"],
+    )
 
     return application
 

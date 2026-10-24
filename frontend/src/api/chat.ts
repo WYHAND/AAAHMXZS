@@ -8,7 +8,6 @@
  *   POST   /chat/conversations/{id}/messages             发送消息（非流式，**SSE 的兜底**）
  *   POST   /chat/conversations/{id}/stream               发送消息（SSE 流式，前端首选）
  *   POST   /chat/conversations/{id}/opening              AI 主动开场白（幂等，见下）
- *   GET    /chat/conversations/{id}/conclusion           结论卡片
  *
  * SSE 契约（后端 `_to_sse_payload`，解析见本文件 streamMessage）：
  *   每帧 `event: <type>` + `data: {"code","message","data":{"type":...}}`，
@@ -32,8 +31,8 @@
  */
 
 import { API_BASE, client, get, getAuthToken, post } from '@/api/client'
+import { getApiKeyHeaders } from '@/lib/apiKeys'
 import type {
-  ChatConclusionCard,
   ChatMessage,
   ChatRequest,
   ChatResponse,
@@ -95,9 +94,6 @@ export const chatApi = {
       undefined,
       { silent: true },
     ),
-
-  conclusion: (conversationId: string) =>
-    get<ChatConclusionCard>(`/chat/conversations/${conversationId}/conclusion`),
 }
 
 /* =============================== SSE 流式对话 ===============================
@@ -226,6 +222,7 @@ export async function streamMessage(
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...getApiKeyHeaders(),
     },
     body: JSON.stringify(payload),
     signal,
@@ -338,7 +335,6 @@ export async function streamMessage(
           message_id: typeof body.message_id === 'string' ? body.message_id : '',
           conversation_id:
             typeof body.conversation_id === 'string' ? body.conversation_id : conversationId,
-          conclusion_ready: body.conclusion_ready === true,
         })
         break
       }

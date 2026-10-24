@@ -32,5 +32,8 @@ RUN mkdir -p /app/uploads/resumes
 EXPOSE 8000
 
 # 16.2 / 3.6：uvicorn 启动
-# 生产建议去掉 --reload，并设置 workers（单机 2核4G，手册 16.1）
+#
+# ⚠️ 刻意保持**单 worker**：APScheduler 在每个进程里各注册一份定时任务，
+# 加 --workers 会让每日一问/任务提醒/奖章结算重复执行 N 次。
+# 要扩容必须先给定时任务加跨进程锁（见 app/tasks/scheduler.py 顶部约束）。
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

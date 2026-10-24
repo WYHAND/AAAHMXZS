@@ -12,6 +12,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import List
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -63,16 +64,15 @@ class Settings(BaseSettings):
     # ★ 全项目统一一个模型（勘误 9.32，用户拍板"不要分配模型"）。
     # 2026-10-19 按用户要求换成 V4.1 Flash（API 名就是 ``deepseek-flash``）。
     DEEPSEEK_MODEL: str = "deepseek-flash"
-    # 思考强度**固定 low**（用户拍板，勘误 9.36）：实测 low 已经会认真想
-    # （363-490 reasoning tokens），high 是同题的 2 倍多（930）。不设成配置项 ——
-    # 少一个旋钮，少一处会和"够用"打架的地方（硬编码在 ``deepseek_client.CHAT_REASONING_EFFORT``）。
+    # 思考强度在 ``deepseek_client.CHAT_REASONING_EFFORT``：现在用 medium。
+    # 2026-11 用户明确要求"多给它一些空间"：低档位会把思考压得太短。
     DEEPSEEK_TIMEOUT: float = 60.0
-    # 开着思考的调用更慢（实测 5-10s 常见），但 120s 已经足够；再长的基本是异常。
-    DEEPSEEK_THINKING_TIMEOUT: float = 120.0
-    # 对话正文的 max_tokens（勘误 9.36，实测定的"够用"值）：
-    # 思考 low ≈ 400-500 + 正文 ≤800 字 ≈ 700 → 实测总用量 447-602，
-    # 2000 留了约 3 倍余量，同时把"官方默认 64K"那种跑飞彻底堵住。
-    DEEPSEEK_CHAT_MAX_TOKENS: int = 2000
+    # 开着思考的调用更慢；给足时间，别把正在认真想的请求掐掉。
+    DEEPSEEK_THINKING_TIMEOUT: float = 180.0
+    # 对话正文的 max_tokens：思考 token 也算在这份额度里。
+    # 以前是 2000（思考 low + 800 字正文刚好够），现在思考更充分、也不再硬限正文长度，
+    # 给到 8192，只防跑飞，不参与"该说多少"的判断。
+    DEEPSEEK_CHAT_MAX_TOKENS: int = 8192
     DEEPSEEK_MAX_RETRIES: int = 1
 
     # ---------- 云端语音（面试语音对话，2026-10-22 切到阿里云百炼） ----------
@@ -110,10 +110,50 @@ class Settings(BaseSettings):
 
     # ---------- 应用（3.5） ----------
     APP_ENV: str = "development"
-    DEBUG: bool = True
+    # 默认改为 False：不读 .env 直接 `uvicorn app.main:app` 时不应自动暴露
+    # /docs、也不应把 CORS 放开成 "*"。本地开发脚本 dev-backend.ps1 会显式设 true。
+    DEBUG: bool = False
+
+    # 生产是否也开放 /docs /redoc /openapi.json（默认仅 DEBUG 开放）
+    ENABLE_API_DOCS: bool = False
+    # 请求体硬上限（字节）：语音上限 10MB，这里 12MB 留余量；超限直接 413
+    MAX_REQUEST_BODY_BYTES: int = 12 * 1024 * 1024
+    # 进程内限流：单 worker 部署下有效；多 worker 需要网关/Redis 限流
+    RATE_LIMIT_ENABLED: bool = True
+    # 只有确定部署在可信反向代理（Nginx）后面时才置 true，
+    # 否则客户端可以伪造 X-Forwarded-For 绕过按 IP 的限流。
+    RATE_LIMIT_TRUST_PROXY_HEADERS: bool = False
 
     # ---------- 派生配置（不在 3.5 清单中，CORS 需要，见 README 待确认） ----------
     CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
+
+    @model_validator(mode="after")
+    def _guard_production_secret(self) -> "Settings":
+        """生产环境禁止用默认/过短的 JWT 密钥启动。
+
+        为什么在配置层拦：``SECRET_KEY`` 决定 token 能否被伪造，而它的默认值
+        是公开的。只在 README 里写"记得改"没有任何强制力 —— 复制 .env.example
+        直接上线就会带着公开密钥跑。这里让进程**启动失败**，把问题暴露在部署时，
+        而不是等某天有人自己签一个 token 进来。
+        """
+        env = self.APP_ENV.strip().lower()
+        if env in {"development", "dev", "local", "test"}:
+            return self
+        secret = (self.SECRET_KEY or "").strip()
+        weak = {
+            "",
+            "your-secret-key",
+            "your-secret-key-change-me",
+            "change-me",
+            "changeme",
+            "secret",
+        }
+        if secret in weak or len(secret) < 16:
+            raise ValueError(
+                "生产环境必须配置独立的 SECRET_KEY（当前为空、仍是默认值或短于 16 字符）；"
+                "请在 .env 中设置一个随机串，例如 `python -c \"import secrets;print(secrets.token_urlsafe(48))\"`"
+            )
+        return self
 
     @property
     def cors_origin_list(self) -> List[str]:

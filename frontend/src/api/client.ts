@@ -22,6 +22,7 @@ import {
   TIMEOUT_ERROR_TEXT,
   errorText,
 } from '@/constants/errorCode'
+import { getApiKeyHeaders } from '@/lib/apiKeys'
 import type { ApiEnvelope } from '@/types'
 
 /** 业务层可以按 code 分支 */
@@ -127,6 +128,8 @@ client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  // 评委在「API 设置」里填的 Key：只随本机后端请求发送
+  Object.assign(config.headers, getApiKeyHeaders())
   return config
 })
 

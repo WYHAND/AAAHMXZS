@@ -35,6 +35,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.ai.fallbacks import FALLBACK_CHAT_REPLY, DEFAULT_TEMPERATURE
 from app.ai.parser import extract_json, load_prompt
+from app.core.api_keys import get_deepseek_key
 from app.core.config import settings
 from app.core.errors import BusinessException, ErrorCode
 from app.utils.logger import get_logger, sanitize
@@ -43,10 +44,11 @@ logger = get_logger(__name__)
 
 TModel = TypeVar("TModel", bound=BaseModel)
 
-# 对话正文的思考强度（勘误 9.36）：用户拍板**固定 low**，所以不做成配置项。
-# 实测依据（deepseek-flash，同一道复杂题）：low = 490 reasoning tokens / 4.8s，
-# high = 930 / 7.5s —— 对话场景 low 够用，再高的档位只是更慢更贵。
-CHAT_REASONING_EFFORT = "low"
+# 对话正文的思考强度。
+# 2026-11 用户明确要求："我已经换成 V4.1 Flash 了，它是可以思考的，多给它一些空间"。
+# 原来是 low（实测 490 reasoning tokens / 4.8s），现在用 medium：
+# 先看质量与延迟的平衡，不够再往上调 high。
+CHAT_REASONING_EFFORT = "medium"
 
 # 7.1 常量：不写成模块级 f-string，方便测试时改配置后立即生效
 def _api_url() -> str:
@@ -54,8 +56,9 @@ def _api_url() -> str:
 
 
 def _headers() -> Dict[str, str]:
+    # 评委在页面「API 设置」里填的 Key 优先；没有则回落到 backend/.env
     return {
-        "Authorization": f"Bearer {settings.DEEPSEEK_API_KEY}",
+        "Authorization": f"Bearer {get_deepseek_key()}",
         "Content-Type": "application/json",
     }
 
@@ -150,8 +153,15 @@ async def chat_text(
     model: Optional[str] = None,
     retries: Optional[int] = None,
     thinking: bool = False,
+    raise_on_error: bool = False,
 ) -> str:
-    """非流式取文本；7.6 失败重试 ``DEEPSEEK_MAX_RETRIES`` 次后返回模板回复。
+    """非流式取文本。
+
+    ``raise_on_error=False``（默认）：重试耗尽后返回一条**明确说明服务不可用**的话术，
+    绝不假装成 AI 正常说话。
+
+    ``raise_on_error=True``：直接把 ``BusinessException(AI_ERROR)`` 抛给调用方，
+    由接口层返回错误（开场白路径用这个 —— 生成不出来就如实告诉用户，不编一句假开场）。
 
     只返回**正文**：开着思考时那段 ``reasoning_content`` 会被丢掉
     （要把它显示给用户请用 :func:`stream_chat_events`）。
@@ -168,7 +178,9 @@ async def chat_text(
             logger.warning("chat_text 第 %s/%s 次失败: %s", attempt + 1, attempts, sanitize(exc))
             if attempt + 1 < attempts:
                 await asyncio.sleep(0.5 * (attempt + 1))
-    logger.error("chat_text 全部重试失败，使用兜底模板回复: %s", sanitize(last_error))
+    logger.error("chat_text 全部重试失败: %s", sanitize(last_error))
+    if raise_on_error:
+        raise BusinessException(ErrorCode.AI_ERROR, "AI 服务暂时不可用，请稍后重试") from last_error
     return FALLBACK_CHAT_REPLY
 
 
@@ -230,12 +242,12 @@ async def stream_chat_events(
                     if piece:
                         emitted_content = True
                         yield {"type": "content", "text": piece}
-    except Exception as exc:  # noqa: BLE001 - 流式过程中任何异常都走兜底
+    except Exception as exc:  # noqa: BLE001 - 流式过程中任何异常都如实说明
         logger.error("DeepSeek 流式调用失败: %s", sanitize(exc))
         if not emitted_content:
             yield {"type": "content", "text": FALLBACK_CHAT_REPLY}
         else:
-            yield {"type": "content", "text": "\n\n（网络似乎断了一下，我们接着聊。）"}
+            yield {"type": "content", "text": "\n\n（连接断了，这条没说完。你再发一次，我接着聊。）"}
 
 
 async def stream_chat(

@@ -42,6 +42,7 @@ import dashscope
 from dashscope.audio.asr import Recognition, RecognitionCallback
 from dashscope.audio.tts_v2 import AudioFormat, SpeechSynthesizer
 
+from app.core.api_keys import get_dashscope_key
 from app.core.config import settings
 from app.core.errors import BusinessException
 from app.utils.logger import get_logger, sanitize
@@ -84,6 +85,11 @@ _TTS_CONNECT_TIMEOUT_S = 15
 # 这里给一个"足够但不至于挂死"的上限。
 _ASR_REQUEST_TIMEOUT_S = 120
 
+# 外层兜底（秒）：SDK 自己也有超时，但历史上出现过"SDK 内部重连卡住、call 一直
+# 不返回"的情况。HTTP 请求不能无限期等一个线程，超过这个值直接返回 3001。
+# 取值要大于内部最坏耗时：ASR 120s；TTS 最多 2 次 × 60s = 120s。
+_VOICE_OUTER_TIMEOUT_S = 150
+
 # SDK 的 DEBUG 日志会打印 WebSocket 请求头（含 Authorization），必须压掉。
 logging.getLogger("dashscope").setLevel(logging.WARNING)
 logging.getLogger("websocket").setLevel(logging.WARNING)
@@ -103,13 +109,14 @@ class _RelaxedConnectSynthesizer(SpeechSynthesizer):
 
 
 def _api_key() -> str:
-    """优先 ``DASHSCOPE_API_KEY``，兼容旧的 ``VOICE_API_KEY``。"""
-    return settings.voice_api_key
+    """优先当前请求的「API 设置」Key，其次 ``DASHSCOPE_API_KEY`` / 旧 ``VOICE_API_KEY``。"""
+    return get_dashscope_key()
 
 
 def is_configured() -> bool:
     """是否具备调用云端语音的条件（key + 受支持的 provider）。"""
-    return settings.voice_configured
+    provider = settings.VOICE_PROVIDER.strip().lower()
+    return bool(_api_key()) and provider in SUPPORTED_PROVIDERS
 
 
 def status() -> Dict[str, object]:
@@ -131,8 +138,8 @@ def _require_configured() -> None:
         )
     if not _api_key():
         raise BusinessException.ai_error(
-            "语音服务还没配置：请在 backend/.env 填写 DASHSCOPE_API_KEY"
-            "（阿里云百炼控制台可创建）"
+            "语音服务还没配置：请点页面右上角「API 设置」填入百炼 Key，"
+            "或在 backend/.env 填写 DASHSCOPE_API_KEY（阿里云百炼控制台可创建）"
         )
 
 
@@ -351,8 +358,11 @@ async def transcribe(audio: bytes, content_type: str) -> str:
     )
 
     try:
-        text = await asyncio.to_thread(
-            _transcribe_blocking, audio, audio_format, sample_rate
+        text = await asyncio.wait_for(
+            asyncio.to_thread(
+                _transcribe_blocking, audio, audio_format, sample_rate
+            ),
+            timeout=_VOICE_OUTER_TIMEOUT_S,
         )
     except BusinessException:
         raise
@@ -431,7 +441,10 @@ async def synthesize(text: str) -> Tuple[str, str]:
     logger.info("语音合成开始：%s 字", len(clean))
 
     try:
-        audio_bytes = await asyncio.to_thread(_synthesize_blocking, clean)
+        audio_bytes = await asyncio.wait_for(
+            asyncio.to_thread(_synthesize_blocking, clean),
+            timeout=_VOICE_OUTER_TIMEOUT_S,
+        )
     except BusinessException:
         raise
     except Exception as exc:  # noqa: BLE001 - 兜底，别把 SDK 异常漏成 500

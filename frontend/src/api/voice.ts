@@ -45,6 +45,11 @@ export interface VoiceText {
 let statusCache: { at: number; promise: Promise<VoiceStatus> } | null = null
 const STATUS_CACHE_MS = 30_000
 
+/** 评委保存/清除 Key 后调用：下次进面试页会重新问后端“语音能不能用”。 */
+export function invalidateVoiceStatusCache(): void {
+  statusCache = null
+}
+
 export const voiceApi = {
   /** 语音服务状态；失败（未登录/未配置/网络）由调用方静默处理 */
   status: (): Promise<VoiceStatus> => {

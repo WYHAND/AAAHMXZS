@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import {
   Bell,
   ChevronDown,
+  KeyRound,
   LogOut,
   Maximize2,
   Minus,
@@ -11,6 +12,8 @@ import {
   User as UserIcon,
   X,
 } from 'lucide-react'
+
+import { ApiKeyDialog } from '@/components/ApiKeyDialog'
 
 import {
   DropdownMenu,
@@ -56,6 +59,7 @@ export function AppLayout() {
   const version = useProfileStore((s) => s.version)
   const fetchProfile = useProfileStore((s) => s.fetchProfile)
   const navigate = useNavigate()
+  const [apiKeyOpen, setApiKeyOpen] = useState(false)
 
   const items = orderNav(navOrder)
 
@@ -116,6 +120,16 @@ export function AppLayout() {
             <span className="text-label-md font-medium">{label}</span>
             <ChevronDown className="size-3.5 text-on-surface-variant" aria-hidden />
           </NavLink>
+
+          <button
+            type="button"
+            aria-label="API Key 设置"
+            title="API Key 设置"
+            onClick={() => setApiKeyOpen(true)}
+            className="flex size-7 items-center justify-center rounded-lg text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface"
+          >
+            <KeyRound className="size-[18px]" />
+          </button>
 
           <button
             type="button"
@@ -188,6 +202,8 @@ export function AppLayout() {
           ) : null}
         </div>
       </header>
+
+      <ApiKeyDialog open={apiKeyOpen} onOpenChange={setApiKeyOpen} />
 
       {/* ------------------------------ 左侧 240px 侧栏 ------------------------------ */}
       {!isMobile ? (
