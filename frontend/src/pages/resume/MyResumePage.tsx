@@ -46,7 +46,6 @@ import {
   readSections,
   resumeHasContent,
   sectionEntryCount,
-  splitLines,
   splitMultiple,
   wirePath,
   writeEmptyEntry,
@@ -1194,8 +1193,12 @@ function FieldList({
         {field.lines ? (
           /*
            * 「一项一行」的字段（技能）：它经润色后是一句带顿号逗号的能力表述，
-           * 用顿号分隔的单行输入框会把一句话切成好几项假技能，所以换成多行输入框、
-           * 只按换行切（splitLines）。
+           * 用顿号分隔的单行输入框会把一句话切成好几项假技能，所以换成多行输入框。
+           *
+           * ⚠️ 这里存的是**原始多行文本**，不是 `splitLines()` 切好的数组：
+           * 每次按键都 split→join 会把行尾换行"收敛"掉，用户按回车换不到下一行，
+           * 接着写的第二个技能就叠在同一行（见 resumeForm.writeField 的说明）。
+           * 提交时由 `buildResumeData` 统一按换行切开。
            */
           <Textarea
             id={id}
@@ -1204,7 +1207,7 @@ function FieldList({
             aria-invalid={invalid || undefined}
             placeholder={field.example ?? ''}
             value={joinLines(value)}
-            onChange={(event) => onField(key, splitLines(event.target.value))}
+            onChange={(event) => onField(key, event.target.value)}
           />
         ) : long ? (
           <Textarea

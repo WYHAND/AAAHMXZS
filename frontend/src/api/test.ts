@@ -1,7 +1,7 @@
 /**
  * 测试（职业测评）接口 —— 路径对齐后端 app/api/v1/test.py（prefix="/test"）
  *
- *   GET  /test/questions   题目列表（后端**不要求登录**；返回裸数组）
+ *   GET  /test/questions   题目列表（**需登录**；返回裸数组）
  *   POST /test/submit      提交答案 -> 计算初始画像
  *   GET  /test/result      最近一次结果（**没测过时 data 为 null**）
  *

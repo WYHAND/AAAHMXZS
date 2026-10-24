@@ -27,7 +27,7 @@ import type { ResumeData, ResumeField, ResumeResponse, ResumeSection } from '@/t
  *   FormData → ResumeData（提交给润色 / 保存）
  */
 
-/** 键一律用字符串；空值一律是 ''（multiple 字段用 []）—— 便于判空与受控输入 */
+/** 键一律用字符串；空值一律是 ''（multiple 字段用 []；`lines` 字段存原始多行文本）—— 便于判空与受控输入 */
 export type FormValue = string | string[]
 export type FormData = Record<string, FormValue>
 
@@ -138,7 +138,8 @@ export function wirePath(sectionKey: string, fieldKey: string): string[] | null 
 /* ------------------------------- 空表单 / 预填 ------------------------------- */
 
 export function emptyValue(field: ResumeField): FormValue {
-  return field.multiple ? [] : ''
+  // `lines` 字段（技能）在表单里存**原始多行文本**：空值是一个空串，不是空数组
+  return field.multiple && !field.lines ? [] : ''
 }
 
 function writeFields(
@@ -152,7 +153,14 @@ function writeFields(
   }
 }
 
-/** 单个字段的受控值：multiple → 字符串数组；其余 → 字符串（模板说是什么类型就用什么类型） */
+/**
+ * 单个字段的受控值：`lines` → **原始多行文本**；multiple → 字符串数组；其余 → 字符串。
+ *
+ * 为什么 `lines` 字段在表单里存原始文本而不是拆好的数组：多行输入框如果把每次按键都
+ * `split` 再 `join` 回去，行尾那个换行会被"去掉空行"的收敛吃掉 —— 用户按回车想换到
+ * 下一行，光标却弹回上一行末尾，接着写的第二个技能就**叠在同一行**（实际踩过）。
+ * 存原始文本 = 输入框所见即所得；真正提交时再由 `buildResumeData` 按换行切开。
+ */
 function writeField(
   target: FormData,
   section: ResumeSection,
@@ -161,7 +169,11 @@ function writeField(
   raw: unknown,
 ): void {
   const key = formKey(section, index, field)
-  // 两种形状都过收敛层：非数组 → []，非字符串 → ''（绝不产出 [object Object]）
+  // 三种形状都过收敛层：非数组 → []，非字符串 → ''（绝不产出 [object Object]）
+  if (field.lines) {
+    target[key] = asTextList(raw).join('\n')
+    return
+  }
   target[key] = field.multiple ? asTextList(raw) : asText(raw)
 }
 
@@ -228,7 +240,12 @@ export function formFromResumeData(sections: ResumeSection[], data: unknown): Fo
       const items = asTextList(value)
       for (const field of section.fields) {
         const key = formKey(section, 0, field)
-        form[key] = field.multiple ? items : items.join('、')
+        // `lines` 字段在表单里是**原始多行文本**（见 writeField 的说明）
+        form[key] = field.lines
+          ? items.join('\n')
+          : field.multiple
+            ? items
+            : items.join('、')
       }
       continue
     }

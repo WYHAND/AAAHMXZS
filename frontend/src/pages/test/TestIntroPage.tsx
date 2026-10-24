@@ -6,6 +6,7 @@ import { Reveal, staggerDelay } from '@/components/Motion'
 import { Panel } from '@/components/Panel'
 import { Button } from '@/components/ui/button'
 import { testApi } from '@/api/test'
+import { useAuthStore } from '@/store/authStore'
 import { useProfileStore } from '@/store/profileStore'
 import { normalizeList } from '@/utils/list'
 import { STORAGE_KEY, storage } from '@/utils/storage'
@@ -63,6 +64,7 @@ export default function TestIntroPage() {
    */
   const fromPath = searchParams.get('from') ?? ''
   const fromInterview = !retest && fromPath.startsWith('/interview')
+  const token = useAuthStore((s) => s.token)
   const fetched = useProfileStore((s) => s.fetched)
   const loading = useProfileStore((s) => s.loading)
   const failed = useProfileStore((s) => s.failed)
@@ -81,10 +83,19 @@ export default function TestIntroPage() {
   /*
    * 题量从接口取（`GET /test/questions`）：文案要说清「要答几道题」，
    * 而题库条数只有接口知道（30 题是种子数据，前端没有常量可依赖）。
-   * 拿不到（题库未初始化 / 网络失败）就保持 null，文案自动退回不带数字的说法 —— 绝不编造。
+   * 拿不到（未登录 / 题库未初始化 / 网络失败）就保持 null，文案自动退回
+   * 不带数字的说法 —— 绝不编造。
+   *
+   * 2026-10 后端已把 `/test/questions` 改为必须登录（历史遗留的匿名端点）。
+   * 本页在 BlankLayout 里是**公开页**，所以未登录时直接不发请求：否则会吃一个
+   * 401，拦截器会触发 logout + 全局 toast，把"公开引导页"变成"登录失效"体验。
    * active 标记防卸载后 setState；本页不再发其它请求，这一次只读、不改任何业务行为。
    */
   useEffect(() => {
+    if (!token) {
+      setQuestionCount(null)
+      return
+    }
     let active = true
     testApi
       .questions()
@@ -97,7 +108,7 @@ export default function TestIntroPage() {
     return () => {
       active = false
     }
-  }, [])
+  }, [token])
 
   /*
    * ⚠️ 本页现在挂在 router/index.tsx 的 **BlankLayout 段（不带守卫）**，所以必须自己补一次取数：
@@ -108,10 +119,12 @@ export default function TestIntroPage() {
    *    所以不会造成请求风暴。实测取证：tools/render-check/regression.mjs 的 N5 五条 + 第 3 条。
    */
   useEffect(() => {
+    // 未登录时不要打 /profile：公开引导页吃 401 会触发 logout + 全局 toast。
+    if (!token) return
     if (!fetched && !loading && !failed) {
       void fetchProfile()
     }
-  }, [fetched, loading, failed, fetchProfile])
+  }, [token, fetched, loading, failed, fetchProfile])
 
   // 已测评 + 不是显式重测 → 静默回首页（避免误入重复测评）
   useEffect(() => {
