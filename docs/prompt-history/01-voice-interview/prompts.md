@@ -117,7 +117,7 @@
 ## Prompt 20
 
 ```text
-sk-ws-H.PXXHPLP.S3zb.MEUCIQDwdSXILc9FrBk5v3IC6wyWS1_GVRrcFswH8r7xIV0yDAIgViMeW2awQ9DJOTAeXxVyUZsDYtrtaCVFN2W0woNSkIk
+sk-***REDACTED***
 这是我的apik语音直接选择男HR，开始搞
 ```
 

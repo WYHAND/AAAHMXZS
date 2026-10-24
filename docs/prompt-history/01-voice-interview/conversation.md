@@ -8469,7 +8469,7 @@ wss://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference
 ## 第 20 轮 · 用户 · 2026-10-22 10:16:32
 
 ```text
-sk-ws-H.PXXHPLP.S3zb.MEUCIQDwdSXILc9FrBk5v3IC6wyWS1_GVRrcFswH8r7xIV0yDAIgViMeW2awQ9DJOTAeXxVyUZsDYtrtaCVFN2W0woNSkIk
+sk-***REDACTED***
 这是我的apik语音直接选择男HR，开始搞
 ```
 
@@ -8556,7 +8556,7 @@ Succ
 
 ```json
 {
-  "command": "$env:DASHSCOPE_API_KEY='sk-ws-H.PXXHPLP.S3zb.MEUCIQDwdSXILc9FrBk5v3IC6wyWS1_GVRrcFswH8r7xIV0yDAIgViMeW2awQ9DJOTAeXxVyUZsDYtrtaCVFN2W0woNSkIk'; & backend/venv/Scripts/python.exe -c \"import os, dashscope; from dashscope.audio.tts_v2 import SpeechSynthesizer, ResultCallback, AudioFormat; dashscope.api_key=os.environ['DASHSCOPE_API_KEY']; out=open(os.path.join(os.environ['TEMP'],'aliyun-tts-test.mp3'),'wb'); class C(ResultCallback):\n def on_data(self,data): out.write(data)\n def on_error(self,msg): print('ERR',msg)\ns=SpeechSynthesizer(model='cosyvoice-v3-flash', voice='longsanshu_v3', format=AudioFormat.MP3_24000HZ_MONO_256KBPS, callback=C()); s.streaming_call('你好，我是今天的面试官。我们开始吧。'); s.streaming_complete(); out.close(); print('SIZE', os.path.getsize(os.path.join(os.environ['TEMP'],'aliyun-tts-test.mp3')))\" 2>&1 | Select-Object -Last 30",
+  "command": "$env:DASHSCOPE_API_KEY='sk-***REDACTED***'; & backend/venv/Scripts/python.exe -c \"import os, dashscope; from dashscope.audio.tts_v2 import SpeechSynthesizer, ResultCallback, AudioFormat; dashscope.api_key=os.environ['DASHSCOPE_API_KEY']; out=open(os.path.join(os.environ['TEMP'],'aliyun-tts-test.mp3'),'wb'); class C(ResultCallback):\n def on_data(self,data): out.write(data)\n def on_error(self,msg): print('ERR',msg)\ns=SpeechSynthesizer(model='cosyvoice-v3-flash', voice='longsanshu_v3', format=AudioFormat.MP3_24000HZ_MONO_256KBPS, callback=C()); s.streaming_call('你好，我是今天的面试官。我们开始吧。'); s.streaming_complete(); out.close(); print('SIZE', os.path.getsize(os.path.join(os.environ['TEMP'],'aliyun-tts-test.mp3')))\" 2>&1 | Select-Object -Last 30",
   "timeout": 120000
 }
 ```
@@ -8695,7 +8695,7 @@ True
 
 ```json
 {
-  "command": "$key = 'sk-ws-H.PXXHPLP.S3zb.MEUCIQDwdSXILc9FrBk5v3IC6wyWS1_GVRrcFswH8r7xIV0yDAIgViMeW2awQ9DJOTAeXxVyUZsDYtrtaCVFN2W0woNSkIk'; $envPath = Join-Path $PWD 'backend\\.env'; $lines = @('', '# ---------- 阿里云百炼语音（本地） ----------', \"DASHSCOPE_API_KEY=$key\", 'VOICE_PROVIDER=aliyun', 'VOICE_REGION=cn-beijing', 'VOICE_ASR_MODEL=paraformer-realtime-v2', 'VOICE_TTS_MODEL=cosyvoice-v3-flash', 'VOICE_TTS_VOICE=longsanshu_v3'); Add-Content -Path $envPath -Value $lines -Encoding UTF8; 'env updated'",
+  "command": "$key = 'sk-***REDACTED***'; $envPath = Join-Path $PWD 'backend\\.env'; $lines = @('', '# ---------- 阿里云百炼语音（本地） ----------', \"DASHSCOPE_API_KEY=$key\", 'VOICE_PROVIDER=aliyun', 'VOICE_REGION=cn-beijing', 'VOICE_ASR_MODEL=paraformer-realtime-v2', 'VOICE_TTS_MODEL=cosyvoice-v3-flash', 'VOICE_TTS_VOICE=longsanshu_v3'); Add-Content -Path $envPath -Value $lines -Encoding UTF8; 'env updated'",
   "timeout": 30000
 }
 ```
