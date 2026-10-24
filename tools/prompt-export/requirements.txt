@@ -1,0 +1,3 @@
+# 仅用于导出 AI 对话历史（tools/prompt-export/*.py）
+# opencode 导出只依赖标准库；dsh 导出需要 zstandard 解压 .jsonl.zstd
+zstandard>=0.25.0
