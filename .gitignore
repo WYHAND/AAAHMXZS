@@ -99,3 +99,5 @@ tools/render-check/audit/
 tools/render-check/tmp-*
 design-preview/*.png
 audit/
+# ---- 发布打包产物（tools/package-release.ps1） ----
+release/
