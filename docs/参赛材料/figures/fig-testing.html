@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>AI 测试工程</title>
+<style>
+  :root{
+    --paper:#F2EBE1; --card:#FFFFFF; --ink:#0B1526; --muted:#5F6470;
+    --ochre:#B4551F; --ochre-soft:#FAEDE3; --line:#E4D8C9; --green:#3F6B45;
+    --inset:#F5EFE6; --red:#B04A3A;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--paper);color:var(--ink);
+    font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .page{width:1500px;padding:54px 58px 48px}
+  .kicker{font-size:18px;letter-spacing:.18em;color:var(--ochre);font-weight:700;margin-bottom:10px}
+  h1{font-size:44px;line-height:1.2;margin:0 0 12px;letter-spacing:-0.5px}
+  .sub{font-size:20px;line-height:1.7;color:var(--muted);margin:0 0 32px;max-width:1200px}
+  .layout{display:grid;grid-template-columns:1.12fr .88fr;gap:24px;align-items:start}
+  .panel{background:var(--card);border-radius:22px;padding:26px 28px;box-shadow:0 12px 30px rgba(11,21,38,.06);border:1px solid rgba(228,216,201,.7)}
+  .panel-title{font-size:16px;font-weight:700;color:var(--muted);letter-spacing:.1em;margin-bottom:18px}
+  .layer{display:grid;grid-template-columns:72px 1fr 100px;gap:16px;align-items:center;padding:14px 16px;border-radius:14px;background:var(--inset);margin-bottom:10px;position:relative}
+  .layer .lv{font-size:20px;font-weight:800;color:var(--ochre);letter-spacing:.02em}
+  .layer .name{font-size:19px;font-weight:700;margin-bottom:3px}
+  .layer .desc{font-size:14px;line-height:1.55;color:var(--muted)}
+  .layer .num{font-size:15px;font-weight:700;text-align:right;color:var(--ink)}
+  .layer .num small{display:block;font-size:12px;color:var(--muted);font-weight:500;margin-top:2px}
+  .metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  .metric{background:var(--inset);border-radius:16px;padding:18px 18px 14px}
+  .metric .v{font-size:34px;font-weight:800;line-height:1.1;letter-spacing:-0.5px}
+  .metric .v span{font-size:16px;font-weight:600;color:var(--muted);margin-left:3px}
+  .metric .l{font-size:14px;color:var(--muted);margin-top:6px;line-height:1.45}
+  .metric.hot .v{color:var(--ochre)}
+  .metric.ok .v{color:var(--green)}
+  .metric.bad .v{color:var(--red)}
+  .roles{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:22px}
+  .role{background:#fff;border-radius:18px;padding:20px 22px;border:1px solid rgba(228,216,201,.7);box-shadow:0 10px 24px rgba(11,21,38,.04)}
+  .role h3{font-size:19px;margin:0 0 10px}
+  .role p{font-size:14px;color:var(--muted);line-height:1.6;margin:0 0 12px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{font-size:13px;padding:6px 10px;border-radius:999px;background:var(--ochre-soft);color:#7A3612;font-weight:600}
+  .role.alt .chip{background:#EDF2F8;color:#274566}
+  .quote{
+    margin-top:22px;background:var(--ink);color:#fff;border-radius:20px;padding:22px 26px;
+    display:flex;align-items:center;justify-content:space-between;gap:20px;
+  }
+  .quote b{font-size:21px;line-height:1.5}
+  .quote span{font-size:15px;color:#D9DEE8;text-align:right;line-height:1.6}
+  .foot{display:flex;justify-content:space-between;align-items:center;margin-top:20px;font-size:14px;color:var(--muted)}
+  .foot .pill{border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 14px}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="kicker">AI-POWERED TEST ENGINEERING</div>
+  <h1>AI 测试工程：五层防线，把“看起来能用”变成“逐条可证”</h1>
+  <p class="sub">AI 既是本项目的<b>被测对象</b>，也是测试的<b>生产力</b>。我们用 98 个探针脚本、456 张审计截图和 35 项服务层断言，把 22 条路由、流式对话、面试状态机与降级链路全部跑成可回归的证据。</p>
+
+  <div class="layout">
+    <section class="panel">
+      <div class="panel-title">五层测试防线 · 从契约到体验</div>
+
+      <div class="layer">
+        <div class="lv">L1</div>
+        <div><div class="name">契约层 · 结构化输出校验</div><div class="desc">JSON Mode + JSON 抠取/修复 + Pydantic 模型校验；失败重试后回退默认值</div></div>
+        <div class="num">11 套<small>Prompt 模板</small></div>
+      </div>
+
+      <div class="layer">
+        <div class="lv">L2</div>
+        <div><div class="name">服务层 · 自检 + 冒烟</div><div class="desc">内存 SQLite + 桩掉 LLM，不联网、不花额度；对话供料、空转兜底、素材加载全断言</div></div>
+        <div class="num">35 项<small>24 + 11 断言</small></div>
+      </div>
+
+      <div class="layer">
+        <div class="lv">L3</div>
+        <div><div class="name">渲染层 · 真实浏览器回归</div><div class="desc">Playwright-core + 本机 Edge；22 条路由全量渲染，白屏 / pageerror / ErrorBoundary / console error 四零判定</div></div>
+        <div class="num">22 / 22<small>路由 PASS</small></div>
+      </div>
+
+      <div class="layer">
+        <div class="lv">L4</div>
+        <div><div class="name">交互层 · 流式与状态机</div><div class="desc">真实 HTTP SSE 逐块验证；面试追问 4 步状态机；401 无整页重载；重测 5 种入口组合</div></div>
+        <div class="num">8 / 8<small>N1–N5 断言</small></div>
+      </div>
+
+      <div class="layer">
+        <div class="lv">L5</div>
+        <div><div class="name">回归层 · 缺陷闭环</div><div class="desc">第一轮 5 个缺陷 → 修复 → 第二轮逐条复验；连“断言写错”的误报也记录在案</div></div>
+        <div class="num">5 / 5<small>缺陷闭环</small></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title">关键结果 · 全部来自真实执行</div>
+      <div class="metrics">
+        <div class="metric ok"><div class="v">22<span>/22</span></div><div class="l">生产构建路由回归通过</div></div>
+        <div class="metric ok"><div class="v">4<span>/4</span></div><div class="l">边界场景 A–D 通过</div></div>
+        <div class="metric hot"><div class="v">98</div><div class="l">探针脚本 / 14,433 行</div></div>
+        <div class="metric hot"><div class="v">456</div><div class="l">审计截图留痕</div></div>
+        <div class="metric ok"><div class="v">0</div><div class="l">白屏 / pageerror / ErrorBoundary</div></div>
+        <div class="metric ok"><div class="v">0</div><div class="l">路由回归 console error</div></div>
+      </div>
+      <div class="quote">
+        <b>“不测感觉，测证据。”</b>
+        <span>每一条结论都能落到<br/>脚本、截图、原始 JSON</span>
+      </div>
+    </section>
+  </div>
+
+  <div class="roles">
+    <section class="role">
+      <h3>AI 作为被测系统</h3>
+      <p>把不确定性关进笼子：输出必须有契约，失败必须有退路。</p>
+      <div class="chips">
+        <span class="chip">JSON 契约测试</span><span class="chip">SSE 逐块断言</span>
+        <span class="chip">超时/限流降级</span><span class="chip">跨会话泄漏检查</span>
+        <span class="chip">Prompt 回归</span><span class="chip">成本/延迟评测</span>
+      </div>
+    </section>
+    <section class="role alt">
+      <h3>AI 作为测试生产力</h3>
+      <p>把重复劳动交给 AI，把判断权留给人。</p>
+      <div class="chips">
+        <span class="chip">任务书生成</span><span class="chip">Playwright 探针</span>
+        <span class="chip">视觉/几何审计</span><span class="chip">缺陷归因</span>
+        <span class="chip">测试数据工厂</span><span class="chip">文档同步</span>
+      </div>
+    </section>
+  </div>
+
+  <div class="foot">
+    <span>证据来源：tools/render-check/REPORT.md · backend/scripts/chat_v3_*.py · report-round2.json</span>
+    <span class="pill">无 Key 可复跑 · 无网络可自检</span>
+  </div>
+</div>
+</body>
+</html>

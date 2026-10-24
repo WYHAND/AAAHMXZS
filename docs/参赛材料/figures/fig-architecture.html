@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>系统架构</title>
+<style>
+  :root{
+    --paper:#F2EBE1; --card:#FFFFFF; --ink:#0B1526; --muted:#5F6470;
+    --ochre:#B4551F; --ochre-soft:#FAEDE3; --line:#E4D8C9; --green:#3F6B45;
+    --inset:#F5EFE6; --blue:#31527A;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--paper);color:var(--ink);
+    font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .page{width:1500px;padding:50px 56px 42px}
+  .kicker{font-size:17px;letter-spacing:.18em;color:var(--ochre);font-weight:700;margin-bottom:8px}
+  h1{font-size:42px;line-height:1.2;margin:0 0 10px;letter-spacing:-0.5px}
+  .sub{font-size:18px;line-height:1.65;color:var(--muted);margin:0 0 24px;max-width:1220px}
+  .wrap{display:grid;grid-template-columns:1fr 246px;gap:20px;align-items:start}
+  .stack{display:flex;flex-direction:column;gap:10px}
+  .row{
+    background:var(--card);border-radius:18px;border:1px solid rgba(228,216,201,.75);
+    box-shadow:0 10px 26px rgba(11,21,38,.05);padding:18px 22px;
+    display:grid;grid-template-columns:120px 1fr;gap:18px;align-items:center;position:relative;
+  }
+  .row .label{font-size:17px;font-weight:800;color:var(--ochre);letter-spacing:.08em}
+  .row .label small{display:block;font-size:13px;color:var(--muted);font-weight:500;letter-spacing:0;margin-top:3px}
+  .row .body{display:flex;flex-wrap:wrap;gap:8px}
+  .box{background:var(--inset);border-radius:12px;padding:10px 14px;font-size:17px;font-weight:600;line-height:1.35}
+  .box small{display:block;font-size:13px;color:var(--muted);font-weight:500;margin-top:2px}
+  .box.hot{background:var(--ochre-soft);color:#7A3612}
+  .box.dark{background:var(--ink);color:#fff}
+  .box.dark small{color:#C9D2E0}
+  .arrowdown{text-align:center;color:#C9B7A3;font-size:16px;line-height:1;margin:-4px 0 -4px;padding-left:120px}
+  .side{display:flex;flex-direction:column;gap:12px}
+  .side .card{background:var(--card);border-radius:18px;padding:18px 20px;border:1px solid rgba(228,216,201,.75);box-shadow:0 10px 26px rgba(11,21,38,.05)}
+  .side h3{font-size:16px;margin:0 0 10px;letter-spacing:.08em;color:var(--muted)}
+  .side ul{margin:0;padding-left:18px;font-size:14px;line-height:1.8;color:var(--ink)}
+  .side li{margin-bottom:3px}
+  .side .big{font-size:30px;font-weight:800;line-height:1.1}
+  .side .big span{font-size:13px;color:var(--muted);font-weight:500;margin-left:4px}
+  .side .cap{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5}
+  .bottom{display:flex;justify-content:space-between;align-items:center;margin-top:18px;font-size:14px;color:var(--muted)}
+  .pill{background:#fff;border:1px solid var(--line);border-radius:999px;padding:8px 14px}
+  .highlight{position:relative}
+  .highlight::after{
+    content:"同一份画像贯穿全链路";position:absolute;right:14px;top:-10px;
+    background:var(--ochre);color:#fff;font-size:12px;font-weight:700;
+    padding:4px 10px;border-radius:999px;letter-spacing:.03em;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="kicker">SYSTEM ARCHITECTURE</div>
+  <h1>系统架构：一个闭环，五层分层，双端交付</h1>
+  <p class="sub">前端只负责展示与交互，后端按“路由 → 服务 → 模型 → 数据”分层；Prompt、题库、就业素材全部内容化，改内容不改代码。</p>
+
+  <div class="wrap">
+    <div class="stack">
+      <div class="row">
+        <div class="label">体验层<small>CLIENT</small></div>
+        <div class="body">
+          <div class="box">React 19 + TypeScript<small>Vite 8 · Tailwind v4</small></div>
+          <div class="box">Web SPA<small>21 条业务路由</small></div>
+          <div class="box">Electron 桌面端<small>内置后端 · 免安装</small></div>
+          <div class="box">响应式布局<small>桌面 / 平板 / 手机</small></div>
+          <div class="box">Zustand 状态<small>auth / profile / chat / interview</small></div>
+        </div>
+      </div>
+      <div class="arrowdown">▼</div>
+
+      <div class="row">
+        <div class="label">接入层<small>GATEWAY</small></div>
+        <div class="body">
+          <div class="box">Nginx<small>SPA fallback · SSE 不缓冲</small></div>
+          <div class="box">JWT 鉴权<small>401 真状态码</small></div>
+          <div class="box">进程内限流<small>按 IP / 路由</small></div>
+          <div class="box">统一信封<small>{code,message,data}</small></div>
+          <div class="box">请求体上限<small>12MB · 防大包</small></div>
+        </div>
+      </div>
+      <div class="arrowdown">▼</div>
+
+      <div class="row">
+        <div class="label">应用层<small>API</small></div>
+        <div class="body">
+          <div class="box">FastAPI 0.115<small>Python 3.12</small></div>
+          <div class="box">45 个 REST 接口<small>13 个路由模块</small></div>
+          <div class="box">SSE 流式端点<small>逐字输出</small></div>
+          <div class="box">APScheduler<small>4 个定时任务</small></div>
+          <div class="box">统一异常处理<small>业务码 + HTTP 状态码分层</small></div>
+        </div>
+      </div>
+      <div class="arrowdown">▼</div>
+
+      <div class="row highlight">
+        <div class="label">领域层<small>DOMAIN</small></div>
+        <div class="body">
+          <div class="box hot">画像引擎<small>6 维标签 · 证据融合 · 阶段判定</small></div>
+          <div class="box hot">对话供料<small>步骤状态 · 素材检索 · 去重</small></div>
+          <div class="box hot">任务闭环<small>生成 · 打卡 · 回写</small></div>
+          <div class="box hot">简历工坊<small>模板问答 · 只润色不编造</small></div>
+          <div class="box hot">模拟面试<small>出题 · 追问 · 复盘</small></div>
+          <div class="box hot">成长报告<small>实时计算 · 快照对比</small></div>
+        </div>
+      </div>
+      <div class="arrowdown">▼</div>
+
+      <div class="row">
+        <div class="label">模型层<small>AI</small></div>
+        <div class="body">
+          <div class="box dark">DeepSeek-V4.1-Flash<small>文本推理 · SSE · JSON Mode</small></div>
+          <div class="box dark">Paraformer-realtime-v2<small>阿里云百炼 · ASR</small></div>
+          <div class="box dark">CosyVoice-v3-flash<small>阿里云百炼 · TTS</small></div>
+          <div class="box">11 套 Prompt<small>内容与代码分离</small></div>
+          <div class="box">185 道真题<small>10 个岗位方向</small></div>
+          <div class="box">31 条就业素材<small>2 个方向 · 含行业现状</small></div>
+        </div>
+      </div>
+      <div class="arrowdown">▼</div>
+
+      <div class="row">
+        <div class="label">数据层<small>DATA</small></div>
+        <div class="body">
+          <div class="box">SQLite / PostgreSQL<small>改一行 DATABASE_URL 切换</small></div>
+          <div class="box">16 张数据表<small>用户 · 画像 · 任务 · 面试 · 报告</small></div>
+          <div class="box">跨方言 JSON 列<small>PG=JSONB / SQLite=JSON</small></div>
+          <div class="box">文件即内容<small>prompt / 题库 / 素材</small></div>
+          <div class="box">Alembic 配置<small>版本脚本待补</small></div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="side">
+      <div class="card">
+        <h3>交付形态</h3>
+        <div class="big">3<span>种</span></div>
+        <div class="cap">Web 本地 / Docker Compose / Windows 免安装桌面端</div>
+      </div>
+      <div class="card">
+        <h3>工程规模</h3>
+        <div class="big">5.8<span>万行</span></div>
+        <div class="cap">后端 1.8 万 + 前端 2.6 万 + 测试 1.4 万（不含依赖与构建产物）</div>
+      </div>
+      <div class="card">
+        <h3>质量保障</h3>
+        <ul>
+          <li>98 个浏览器探针脚本</li>
+          <li>456 张审计截图</li>
+          <li>22/22 路由回归通过</li>
+          <li>0 白屏 / 0 pageerror</li>
+          <li>35 项服务层断言</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>部署拓扑</h3>
+        <ul>
+          <li>app：FastAPI + Uvicorn</li>
+          <li>nginx：静态资源 + /api 反代</li>
+          <li>db：可选 PostgreSQL profile</li>
+          <li>桌面：Electron 拉起内置后端</li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+
+  <div class="bottom">
+    <span>设计原则：分层不穿透 · 响应统一 · 内容与代码分离 · AI 必须可失败 · 状态单一来源</span>
+    <span class="pill">可本地复现 · 可容器部署 · 可桌面交付</span>
+  </div>
+</div>
+</body>
+</html>
