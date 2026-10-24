@@ -402,7 +402,7 @@ OPENING_CLIENT_MSG_ID = "sys:opening"
 # 生成失败**直接报错**（不再用本地假开场糊弄用户）。
 
 # ---------------------------------------------------------------------------
-# 跨会话信息：AI 必须知道"在别的会话里已经问过 / 用户已经答过什么"（**只作禁止清单**）
+# 跨会话信息：AI 必须知道"在别的会话里已经问过 / 用户已经答过什么"
 # ---------------------------------------------------------------------------
 # 用户报的 bug：「新的对话问的问题和旧的一样」——相隔 90 秒的两个新会话，
 # 开场白问的是同一件事；而且用户已经答过"在"、又说了"突然不想搞了"，新会话照样问"还在搞吗"。
@@ -419,10 +419,13 @@ OPENING_CLIENT_MSG_ID = "sys:opening"
 # 用户看到的就是"新建的对话继承了上一个对话"。现在这套信息的语义**只有一个**：
 # **已经聊过、禁止再提**。它绝不能再出现在"素材/候选"的位置上。
 #
-# ⚠️ 2026-11（第三次修正）：开场白路径**连"禁止清单"都不再注入 Prompt**了 ——
-# 第一句话只聊日常（"你今年大几啦？"），它不需要知道前情；而且那段注入块里含
-# **用户原话**，与"第一句不许出现任何旧内容"直接冲突。这里收集到的内容现在只用于
-# 开场白的**生成后自检**（"复述了别的会话"）与对话路径的注入（``as_prompt_block``）。
+# ⚠️ 2026-11（第三次修正 + 9.46.1）：开场白路径**不再注入"禁止清单"**（那段注入块含
+# **用户原话**，与"第一句不许回述旧内容"直接冲突），但会注入 ``_memory_block()`` 的
+# **记忆背景**（已知 / 已问，只用来避免重复，不许念出来）。全新用户（没有历史开场白、
+# 也没有用户原话）的第一个问题走"人生"入口；老用户可以带记忆开新话题，但不许 recap。
+# 这里收集到的内容现在用于：1) 判断是否全新用户（``is_new``）；
+# 2) 开场白的**生成后自检**（复述了别的会话 / 重复问基本事实）；
+# 3) 对话路径的注入（``as_prompt_block``）。
 CROSS_OPENINGS_LIMIT = 3          # 取其它会话里最近 N 条开场白
 CROSS_OPENING_CHARS = 50          # 每条截断长度（Prompt 里只是提示"这事问过了"）
 CROSS_USER_LINES_LIMIT = 6        # 取其它会话里最近 N 条用户消息
@@ -437,7 +440,8 @@ class CrossSessionContext:
     """该用户在**其它会话**里留下、且**本轮一律不许再提**的内容（从新到旧）。
 
     ``openings`` / ``user_lines`` 两个字段的语义完全相同：**禁止清单**，
-    不是候选素材。开场白路径与对话路径的差别只在于"给不给原句"（见下面两个方法）。
+    不是候选素材。开场白路径用它判断"是不是全新用户"并做生成后自检；
+    对话路径用 ``as_prompt_block`` 注入原句（见下面两个方法）。
     """
 
     openings: List[str] = field(default_factory=list)
@@ -653,12 +657,55 @@ def _repeats_basic_fact(text: str, previous_openings: List[str]) -> Optional[str
     return None
 
 
+# 全新用户的开场检查：第一个问题应该问“人生”，不是问“日常习惯/职业”。
+# 只用于新用户；老用户可以从任何角度进。
+_NEW_USER_DAILY_HINTS = (
+    "屏幕", "手机", "作息", "课表", "食堂", "宿舍", "周末",
+    "上课", "课程", "熬夜", "刷手机", "打游戏",
+)
+_NEW_USER_CAREER_HINTS = (
+    "专业", "写代码", "代码", "编程", "计算机", "实习", "简历",
+    "面试", "岗位", "行业", "就业", "程序员",
+)
+_NEW_USER_LIFE_HINTS = (
+    "生活", "以后", "未来", "想要", "怕", "为什么", "意义",
+    "日子", "人生", "奋斗", "努力", "成为",
+)
+
+
+def _new_user_opening_off_track(text: str) -> Optional[str]:
+    # 只看开头 60 字：开场白通常第一句就点题，后半段可能是铺垫或举例。
+    # 这是词表启发式，不做语义判断；否定式（“跟课程、简历都没关系”）仍可能被误判，
+    # 但最坏结果只是多一次重试，不会阻断对话。
+    head = (text or "")[:60]
+    if any(hint in head for hint in _NEW_USER_DAILY_HINTS):
+        return "日常习惯"
+    career = [hint for hint in _NEW_USER_CAREER_HINTS if hint in head]
+    if career and not any(hint in head for hint in _NEW_USER_LIFE_HINTS):
+        return "职业话题"
+    return None
+
+
 async def _compose_opening(db: Session, user: User, conversation_id: UUID) -> str:
     """生成开场白：同一个 AI，带着记忆开一个新话题；失败如实报错。"""
-    previous = _collect_cross_session(db, user.id, conversation_id).openings
+    cross = _collect_cross_session(db, user.id, conversation_id)
+    previous = cross.openings
+    is_new = not previous and not cross.user_lines
     memory = _memory_block(db, user, conversation_id)
+    if is_new:
+        new_user_note = (
+            "这是全新用户，还没聊过。第一个问题优先问“以后想过什么样的生活 / 最怕什么 / "
+            "为什么而努力”这类人生问题；不要从日常习惯（作息、手机、课表、食堂、宿舍、周末）"
+            "或专业、写代码、计算机、工作、行业、就业开始。"
+        )
+    else:
+        new_user_note = (
+            "这是老用户。可以从记忆里挑一个还没聊过的角度；不要 recap，"
+            "也不要把上次的话题再问一遍。"
+        )
     prompt = deepseek_client.render_prompt(
-        load_prompt("chat_opening"), {"memory_block": memory}
+        load_prompt("chat_opening"),
+        {"memory_block": memory, "new_user_note": new_user_note},
     )
     system = "你是一个记得这个人的 AI。只输出你要说的那段话本身。"
 
@@ -681,13 +728,24 @@ async def _compose_opening(db: Session, user: User, conversation_id: UUID) -> st
 
     recap = _opening_recap_hit(text)
     repeated = _repeats_basic_fact(text, previous)
-    if recap or repeated:
-        reason = f"回述旧内容「{recap}」" if recap else f"重复问基本事实「{repeated}」"
+    off_track = _new_user_opening_off_track(text) if is_new else None
+    if recap or repeated or off_track:
+        reason = (
+            f"回述旧内容「{recap}」" if recap
+            else f"重复问基本事实「{repeated}」" if repeated
+            else f"新用户开场跑偏「{off_track}」"
+        )
         logger.warning("开场白%s，重试一次：%r", reason, text)
+        strict_new = (
+            "这是全新用户。第一个问题必须是人生问题（以后想过什么样的生活 / 最怕什么 / "
+            "为什么而努力），禁止出现日常习惯（屏幕/手机/作息/课表/食堂/宿舍/周末）"
+            "和职业词（专业/代码/计算机/工作/行业/就业）。"
+        )
         text = await _generate(
             "这是新的对话，不要回述旧内容（“你之前/你上次/你说过/我们上次”），"
             "也不要重复问已经问过的基本事实（大几、专业、学校、周末、在忙什么、新鲜事）。"
-            "换一个新话题，只输出你要说的那段话本身。"
+            + (("\n" + strict_new) if is_new else "")
+            + "\n换一个新话题，只输出你要说的那段话本身。"
         )
         if not text:
             raise BusinessException(ErrorCode.AI_ERROR, "开场白没生成好，请重试")
@@ -696,6 +754,10 @@ async def _compose_opening(db: Session, user: User, conversation_id: UUID) -> st
         repeated_again = _repeats_basic_fact(text, previous)
         if repeated_again:
             logger.warning("开场白再次重复基本事实「%s」，保留本次输出", repeated_again)
+        if is_new:
+            off_again = _new_user_opening_off_track(text)
+            if off_again:
+                logger.warning("开场白再次跑偏「%s」，保留本次输出", off_again)
     return text
 
 

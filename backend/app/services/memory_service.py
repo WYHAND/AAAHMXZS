@@ -140,7 +140,13 @@ def _clean_items(values: Iterable[Any], user_text: str) -> List[Dict[str, str]]:
 def _merge_items(
     existing: Iterable[Any], new: Iterable[Any], *, limit: int = MAX_ITEMS_PER_FIELD
 ) -> List[Dict[str, str]]:
-    merged: Dict[str, Dict[str, str]] = {}
+    """合并同一字段的记忆，顺手做“近似重复”收敛。
+
+    除了完全相同的文本，还会把“一条包含另一条”的近似条目合并成更具体的那条
+    （例如「讨厌一眼望到头」和「讨厌一眼望到头的生活，觉得活着没意思」）。
+    只对 >=4 字的文本做包含判断，避免「稳定」这种短词误吞别的条目。
+    """
+    items: List[Dict[str, str]] = []
     for value in list(existing) + list(new):
         item = _as_item(value)
         if item is None:
@@ -148,9 +154,30 @@ def _merge_items(
         key = normalize_for_match(item["text"])
         if not key:
             continue
-        # 后出现的覆盖先出现的（新信息更新旧信息），但保留原来的位置。
-        merged[key] = item
-    return list(merged.values())[-limit:]
+
+        replaced = False
+        for index, current in enumerate(items):
+            current_key = normalize_for_match(current["text"])
+            if not current_key:
+                continue
+            if key == current_key:
+                items[index] = item
+                replaced = True
+                break
+            if (
+                len(key) >= 4
+                and len(current_key) >= 4
+                and (key in current_key or current_key in key)
+            ):
+                if len(key) >= len(current_key):
+                    items[index] = item
+                replaced = True
+                break
+
+        if not replaced:
+            items.append(item)
+
+    return items[-limit:]
 
 
 def _merge(
