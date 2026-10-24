@@ -212,55 +212,37 @@ class TaskGenerateResult(BaseModel):
     steps: List[TaskStepItem] = Field(default_factory=list)
 
 
-# ---------- 11.4 新会话开场白（JSON 结构化 + 声明依据） ----------
+# ---------- 账号级长期记忆（动机地图） ----------
 
-class OpeningResult(BaseModel):
-    """开场白的结构化输出：**一句话 + 它依据了哪条素材**。
+class MemoryItem(BaseModel):
+    """一条关于这个人的记忆。``evidence`` 必须是用户原话的连续片段。"""
 
-    ⚠️ **2026-11 语义已变（第三次报同一个问题后）**：新会话的第一句话
-    **只聊日常**（"你今年大几啦？"），所以这一轮**不给模型任何素材**
-    （标签 / 任务 / 用户原话 / stage 一律不进 Prompt）。
+    text: str = Field(default="", description="记住的内容")
+    evidence: str = Field(default="", description="用户原话中可原样搜到的连续片段")
 
-    于是 ``used`` 的角色从"申报依据"变成了**自证字段**：
 
-    - 正常情况**恒为空数组** —— 第一句不依据任何素材；
-    - 任何非空的 ``used`` 都会被 ``chat_service._validate_opening`` 判违规
-      （本轮素材清单恒为空，申报的依据必然对不上）→ 换成本地日常模板；
-    - 服务端另外**无条件**扫"用户事实引导语"（``_USER_FACT_HINTS``）：``text`` 里
-      只要出现关于用户的具体事实（"你之前说过…""你提过…""你标签里…"），同样判违规。
+class MemoryExtractResult(BaseModel):
+    """从一段对话里提炼出的“他是谁”。
 
-    为什么还要保留 ``used`` 这个字段：它是"模型有没有偷偷加事实"的**可校验载体**，
-    接口契约（``{text, used}`` 两个字段）不变，服务端校验逻辑也不用重写。
-
-    ⚠️ **不要**给 ``used`` 加 ``max_length``/枚举校验器：允许空列表，
-    而"非空即违规"这条业务判断留给服务端（``_validate_opening``），Pydantic 层判不了。
-
-    （历史：最初加 ``used`` 是因为纯文本开场白无法检查"关于用户的陈述有没有依据"，
-    实测模型会把素材加工成新事件：「帮同学修电脑」-> 「你上次说帮同学修电脑，那次是哪出问题？」。
-    现在第一句连素材都没有了，这条防线改为"任何用户事实都拦"。）
+    ⚠️ 只记录用户**明确说过**的东西；每条都必须带 evidence，服务端会机械核对。
     """
 
-    text: str = Field(
-        default="",
-        description="开场白本身：一句话 ≤60 字，口语，无引号/JSON/Markdown/换行",
-    )
-    used: List[str] = Field(
-        default_factory=list,
-        description=(
-            "**恒为空数组**：第一句话只聊日常，不依据任何素材。"
-            "非空（标签/任务标题/用户原话）会被服务端判违规并换成日常模板；"
-            "它现在只用来自证「没有偷偷加关于用户的事实」"
-        ),
-    )
+    desired_life: List[MemoryItem] = Field(default_factory=list)
+    undesired_life: List[MemoryItem] = Field(default_factory=list)
+    values: List[MemoryItem] = Field(default_factory=list)
+    acceptable_costs: List[MemoryItem] = Field(default_factory=list)
+    unacceptable_costs: List[MemoryItem] = Field(default_factory=list)
+    motivation_sources: List[MemoryItem] = Field(default_factory=list)
+    uncertainty_tolerance: List[MemoryItem] = Field(default_factory=list)
+    role_models: List[MemoryItem] = Field(default_factory=list)
+    anti_models: List[MemoryItem] = Field(default_factory=list)
+    open_questions: List[MemoryItem] = Field(default_factory=list)
+    facts: List[MemoryItem] = Field(default_factory=list)
 
 
-# ---------- 11.11 结论卡片 ----------
-
-class ConclusionCardResult(BaseModel):
-    summary: str = ""
-    pain_points: List[str] = Field(default_factory=list)
-    suggestions: List[str] = Field(default_factory=list)
-    next_actions: List[str] = Field(default_factory=list)
+# ---------- 11.4 新会话开场白（纯文本，交给模型自由发挥） ----------
+# 开场白已改为纯文本输出 + thinking，不再强制 JSON / used 自证字段。
+# 相关约束见 ``app/ai/prompts/chat_opening.txt``。
 
 
 # ---------- 便捷默认实例（7.6 兜底用） ----------
@@ -298,10 +280,6 @@ def empty_task_generate(pain_point: str = "迷茫") -> TaskGenerateResult:
     )
 
 
-def empty_conclusion() -> ConclusionCardResult:
-    return ConclusionCardResult()
-
-
 def empty_profile_summary() -> ProfileSummaryResult:
     """摘要的兜底（7.6）：**空文本**。
 
@@ -333,12 +311,11 @@ __all__ = [
     "InterviewReviewResult",
     "TaskStepItem",
     "TaskGenerateResult",
-    "OpeningResult",
-    "ConclusionCardResult",
+    "MemoryItem",
+    "MemoryExtractResult",
     "empty_profile_extract",
     "empty_profile_summary",
     "empty_resume_polish",
     "empty_interview_review",
     "empty_task_generate",
-    "empty_conclusion",
 ]

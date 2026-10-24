@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Any, Dict, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # SSE 事件类型（前端可按 SSE 的 ``event:`` 行或 data 里的 type 字段分派）
 SSEEventType = Literal["start", "delta", "tag", "done", "error", "pending"]
@@ -23,10 +23,9 @@ class ConversationCreate(BaseModel):
 
 
 class ConversationUpdate(BaseModel):
-    """内部：更新标题/结论卡片。"""
+    """内部：更新标题。"""
 
     title: Optional[str] = Field(default=None, max_length=200)
-    conclusion: Optional[Dict[str, Any]] = None
 
 
 class ConversationResponse(BaseModel):
@@ -38,7 +37,6 @@ class ConversationResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     message_count: int = Field(default=0, description="消息数，列表页展示用")
-    conclusion: Optional[Dict[str, Any]] = Field(default=None, description="结论卡片（11.11）")
 
 
 class MessageResponse(BaseModel):
@@ -70,6 +68,24 @@ class ChatRequest(BaseModel):
         description="客户端消息幂等 id，建议 UUID；重试时复用同一个值",
     )
 
+    @field_validator("client_msg_id")
+    @classmethod
+    def _blank_client_msg_id_to_none(cls, value: Optional[str]) -> Optional[str]:
+        """空串/纯空白归一成 None。
+
+        唯一约束是 ``(conversation_id, client_msg_id)``：SQL 里多个 NULL 互不冲突，
+        但多个 ``""`` 会被判成同一个 id —— 用户发第二句话就会撞唯一约束。
+        前端偶尔会传空串，这里从入口堵住。
+        """
+        if value is None:
+            return None
+        value = value.strip()
+        if value.startswith("sys:"):
+            # 系统保留前缀（开场白用 sys:opening）：用户消息绝不能占用，
+            # 否则 find_client_message 会把开场白当成"用户已发过这条消息"。
+            raise ValueError("client_msg_id 不能使用系统保留前缀 sys:")
+        return value or None
+
 
 class ChatResponse(BaseModel):
     """非流式的完整回复（流式见 SSEEvent）。"""
@@ -79,8 +95,6 @@ class ChatResponse(BaseModel):
     assistant_message: MessageResponse
     # 7.8 画像回流：本轮抽取到的标签（已写库），前端可选展示“AI 对你的新认识”
     extracted_tags: list[Dict[str, Any]] = Field(default_factory=list)
-    # 与流式 done 事件的 conclusion_ready 同义：该会话是否已有可拉取的结论卡片
-    conclusion_ready: bool = False
 
 
 class PendingChatResponse(BaseModel):
@@ -94,17 +108,6 @@ class PendingChatResponse(BaseModel):
     user_message_id: UUID
     pending: bool = True
     message: str = "该消息正在生成回复，已忽略本次重复提交"
-
-
-class ChatConclusionCard(BaseModel):
-    """11.11 结论卡片（结构化诊断卡）。"""
-
-    conversation_id: UUID
-    summary: str = Field(default="", description="一句话总结")
-    pain_points: list[str] = Field(default_factory=list, description="识别出的痛点")
-    suggestions: list[str] = Field(default_factory=list, description="建议动作")
-    next_actions: list[str] = Field(default_factory=list, description="下一步可直接做的事")
-    generated_at: Optional[datetime] = None
 
 
 class SSEEvent(BaseModel):
@@ -126,10 +129,6 @@ class SSEEvent(BaseModel):
     )
     message_id: Optional[UUID] = Field(
         default=None, description="本轮 assistant 消息 id，仅 done 有值"
-    )
-    conclusion_ready: Optional[bool] = Field(
-        default=None,
-        description="仅 done 事件：本轮结束后是否已有结论卡片可拉取（GET .../conclusion）",
     )
     data: Optional[Dict[str, Any]] = Field(default=None, description="扩展数据，如 tag 事件的 tags")
     code: int = Field(default=0, description="error 时按 6.5 错误码表给值")

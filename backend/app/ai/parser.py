@@ -39,10 +39,11 @@ PROMPT_FILES: Dict[str, str] = {
     "interview_review": "interview_review.txt",
     "task_generate": "task_generate.txt",
     "daily_question": "daily_question.txt",
+    # 账号级长期记忆（动机地图）
+    "memory_extract": "memory_extract.txt",
     # 9.24：「我的画像」顶部那句人物速写（按可见标签生成，落库缓存）
     "profile_summary": "profile_summary.txt",
-    # 手册 7.4 未列出、但 11.4 / 11.11 需要，骨架补充
-    "chat_conclusion": "chat_conclusion.txt",
+    # 手册 7.4 未列出、但 11.2 / 11.4 需要，骨架补充
     "test_free_text": "profile_extract.txt",  # 11.2 文字补充复用画像抽取模板
     "chat_opening": "chat_opening.txt",  # 新会话 AI 先开口（11.4 扩展）
 }

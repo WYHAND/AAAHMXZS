@@ -32,9 +32,7 @@
 from __future__ import annotations
 
 import random
-import re
 from dataclasses import dataclass, field
-from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from app.services import career_content_service
@@ -71,23 +69,16 @@ _GOAL_HINTS = (
     "喜欢", "想做出", "创业", "加班", "体制", "编制", "出国", "读研",
 )
 
-# 三条硬边界（服务端唯一的"不许"，写在这里是为了让它漏不进 Prompt）
+# 两条硬边界（服务端唯一的"不许"，写在这里是为了让它漏不进 Prompt）
 HARD_LINES = [
     "素材里没有的数字（薪资、就业率、招多少人、哪家公司缺人）一个字都不许说。",
     "讲过的不再讲第二遍 —— 换个说法重讲一遍也算重复。",
-    "不许只复述他刚说的那句、再抛一个问题：那样他这一轮什么都没得到。",
 ]
 
 # 每轮最多给几条素材（多了模型就会"每条念一句"，反而没重点）
 # ⚠️ 2026-11（勘误 9.35）：3 → **2**。用户反馈"说得有点多，要提炼重点"，而素材条数是
 # 最直接的杠杆：给 3 条它就忍不住各讲一句，给 2 条才容易只挑一个点说。
 MATERIAL_LIMIT = 2
-
-# 空转判定里"沾上了素材"的最低门槛：最长公共子串 ≥ 这个长度才算真沾上。
-# ⚠️ 不能用 ``looks_referenced`` 的 ≥3 字口径（那是服务端去重的"宁可多剔"），
-# 实测会误报：「那你自己有没有想过往哪边走？」撞上了某条要点里的「有没有」，
-# 于是纯提问被判成"给了内容"，空转闸形同虚设。详见 ``_shares_material``。
-_EMPTY_TURN_OVERLAP_MIN = 6
 
 
 @dataclass
@@ -105,26 +96,22 @@ class TurnBrief:
     reason: str = ""
 
     def as_prompt_block(self) -> str:
-        """渲染成注入 system 的块。"""
+        """渲染成注入 system 的块：只给素材和两条事实底线，不规定怎么说。"""
         lines = [
             "【这一轮你手边有什么（服务端给的料，不是命令）】",
-            f"· 这段对话走到：{self.step}（认出来的方向：{self.direction or '还没认出来'}）；"
-            f"他这句话的样子：{self.user_state}",
-            "· 目的地：让他看清自己这条路真实的样子 → 想清楚自己在意什么 → "
-            "拿到「接下来我该学什么」。**怎么走到那儿由你判断**，不用被上面这些框住。",
         ]
         if self.materials:
             lines.append(
-                "· 这轮可以用的素材（⚠️ **是给你自己看的提纲，不是稿子**：只挑**一个点**，"
-                "提炼成一两句人话说出来，剩下的留着——他往下问了再讲。整段搬 = 一次说太多）："
+                "· 可以用的素材（⚠️ **是给你自己看的提纲，不是稿子**：挑不挑、挑几条、怎么讲，"
+                "都由你判断；整段搬 = 一次说太多）："
             )
             lines.append(career_content_service.format_materials(self.materials))
         else:
             lines.append(
-                "· 这个方向的素材他基本都听过了：这轮就照你对他专业的了解讲（方向 / 日常 / 门槛），"
-                "**讲过的别再讲一遍**，而且**一次只说一个点**。"
+                "· 这个方向的素材他基本都听过了：你可以照自己对这个方向的了解讲，"
+                "也可以顺着他的话聊别的，别把讲过的东西再讲一遍。"
             )
-        lines.append("· 只有这三条是硬的：")
+        lines.append("· 只有这两条是硬的：")
         lines.extend(f"  {index}. {text}" for index, text in enumerate(HARD_LINES, start=1))
         return "\n".join(lines)
 
@@ -240,15 +227,6 @@ def brief_turn(
     kept = [item for item in pool if career_content_service.item_probe(item) in set(kept_probes)]
     materials = picker.sample(kept, min(MATERIAL_LIMIT, len(kept))) if kept else []
 
-    # ⚠️ **行业/就业现状优先**（勘误 9.40）：用户明确要"介绍行业目前就业情况"，
-    # 而随机抽样完全可能一次都不抽 market 类 —— 那就永远给不出这一段。
-    # 规则：方向已知 + 这个会话还没讲过 market（它还在 kept 里）→ 这一轮**必须**带一条。
-    # 它只在"没讲过"时强制，讲过一次就自然退出，所以不会每轮都念行业现状。
-    if kept:
-        market_kept = [item for item in kept if item["kind"] == "market"]
-        if market_kept and not any(item["kind"] == "market" for item in materials):
-            materials = [picker.choice(market_kept), *materials][:MATERIAL_LIMIT]
-
     brief = TurnBrief(
         step=step,
         user_state=state,
@@ -265,72 +243,6 @@ def brief_turn(
     return brief
 
 
-# ---------------------------------------------------------------------------
-# 空转兜底（唯一的"质量底线"，与"指挥模型"无关）
-# ---------------------------------------------------------------------------
-
-def _shares_material(text: str, item: Dict[str, Any]) -> bool:
-    """回复里是不是**真的**沾到了这条素材的内容（比去重判据更严，只给空转判定用）。
-
-    ⚠️ 为什么不直接用 ``looks_referenced``：那是**服务端去重**用的口径（最长公共子串 ≥3
-    就"算提到过"，宁可多剔）。拿它判空转实测会误报 ——「那你自己有没有想过往哪边走？」
-    撞上了某条素材要点里的「有没有」（3 个字），于是一句纯提问被判成"给了内容"，
-    空转闸形同虚设。所以这里单独用一个更严的门槛（见 ``_EMPTY_TURN_OVERLAP_MIN``）。
-    """
-    compact = re.sub(r"\s+", "", text or "")
-    if not compact:
-        return False
-    parts = [item.get("title") or "", item.get("text") or "", *(item.get("points") or [])]
-    joined = re.sub(r"\s+", "", "".join(str(part) for part in parts))
-    if not joined:
-        return False
-    match = SequenceMatcher(None, compact, joined).find_longest_match(
-        0, len(compact), 0, len(joined)
-    )
-    return match.size >= _EMPTY_TURN_OVERLAP_MIN
-
-
-def looks_like_empty_turn(text: str, materials: Sequence[Dict[str, Any]]) -> bool:
-    """这轮是不是"说了等于没说"（复述 + 提问，没有任何新信息）。
-
-    刻意做得**保守**：只有同时满足下面几条才判空转（宁可放过，不可误杀）——
-
-    1. 很短（≤80 字，长回复基本都带了内容）；
-    2. 以问号收尾；
-    3. 素材里的内容**一处都没沾上**（沾上就算给到东西了，判据见 ``_shares_material``）。
-
-    判空转的后果是"带反馈重试一次"，成本是一次额外调用；误杀一段好回复的后果是
-    用户看到一段被换掉的话。所以判据只兜最刺眼的那种 —— 它**不指挥**模型说什么，
-    只是在"这一轮他真的什么都没得到"时让他再说一次。
-    """
-    stripped = (text or "").strip()
-    if not stripped or len(stripped) > 80:
-        return False
-    if not stripped.endswith(("?", "？")):
-        return False
-    for item in materials:
-        if _shares_material(stripped, item):
-            return False
-    return True
-
-
-def material_fallback_text(materials: Sequence[Dict[str, Any]]) -> str:
-    """空转重试**仍然**空转时的最后手段：服务端直接给一条素材。
-
-    只在"模型连着两次都只丢回一个问句"时才会走到 —— 极罕见，但必须有：
-    "这一轮什么都没给"正是这次要根除的形态。宁可服务端直给一条，
-    也不让一个空轮漏到用户面前。
-    """
-    item = career_content_service.pick_by_kind(list(materials), "daily_work")
-    if item is None:
-        item = materials[0] if materials else None
-    if not item:
-        return "这块我一时没想好怎么说，换个角度 —— 你最近有没有哪门课，上了之后觉得还行？"
-    points = "；".join((item.get("points") or [])[:3])
-    tail = f"（{points}）" if points else ""
-    return f"{item.get('title') or ''}：{item.get('text') or ''}{tail}"
-
-
 def content_stats_hint() -> str:
     """给日志 / 自检用的一句话（当前素材库规模）。"""
     stats = career_content_service.content_stats()
@@ -341,8 +253,6 @@ __all__ = [
     "TurnBrief",
     "brief_turn",
     "user_state",
-    "looks_like_empty_turn",
-    "material_fallback_text",
     "content_stats_hint",
     "HARD_LINES",
 ]

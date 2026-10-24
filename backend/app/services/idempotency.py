@@ -38,6 +38,7 @@ def find_client_message(
         return None
     statement = select(Message).where(
         Message.conversation_id == conversation_id,
+        Message.role == "user",
         Message.client_msg_id == client_msg_id,
     )
     return db.exec(statement).first()
@@ -61,13 +62,31 @@ def find_assistant_reply(
     ``app.models.user.utcnow`` 已改成**严格单调递增**；这里再补一个 ``id`` 次级排序键，
     并保留一个并列兜底分支，让外部写入（导入历史消息）的数据也能正确回放。
     """
-    statement = (
+    # 下一轮用户消息的时间：回复必须落在 (本条用户消息, 下一条用户消息) 之间。
+    # 否则"某条消息没生成成功、用户又发了新消息"时，这里会把**下一轮的回复**
+    # 当成它的回复回放给前端（内容对不上，且会掩盖原轮次的失败）。
+    next_user = db.exec(
         select(Message)
         .where(
             Message.conversation_id == conversation_id,
-            Message.role == "assistant",
+            Message.role == "user",
             Message.created_at > user_message.created_at,
         )
+        .order_by(Message.created_at.asc(), Message.id.asc())  # type: ignore[union-attr]
+    ).first()
+    next_at = next_user.created_at if next_user is not None else None
+
+    conditions = [
+        Message.conversation_id == conversation_id,
+        Message.role == "assistant",
+        Message.created_at > user_message.created_at,
+    ]
+    if next_at is not None:
+        conditions.append(Message.created_at < next_at)
+
+    statement = (
+        select(Message)
+        .where(*conditions)
         .order_by(Message.created_at.asc(), Message.id.asc())  # type: ignore[union-attr]
     )
     found = db.exec(statement).first()
@@ -75,15 +94,14 @@ def find_assistant_reply(
         return found
 
     # 兜底：时间戳并列（外部写入/秒级精度的库）时取同一时刻最早的 assistant
-    tie_statement = (
-        select(Message)
-        .where(
-            Message.conversation_id == conversation_id,
-            Message.role == "assistant",
-            Message.created_at == user_message.created_at,
-        )
-        .order_by(Message.id.asc())  # type: ignore[union-attr]
-    )
+    tie_conditions = [
+        Message.conversation_id == conversation_id,
+        Message.role == "assistant",
+        Message.created_at == user_message.created_at,
+    ]
+    if next_at is not None:
+        tie_conditions.append(Message.created_at < next_at)
+    tie_statement = select(Message).where(*tie_conditions).order_by(Message.id.asc())  # type: ignore[union-attr]
     return db.exec(tie_statement).first()
 
 

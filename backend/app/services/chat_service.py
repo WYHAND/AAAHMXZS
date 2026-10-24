@@ -15,11 +15,9 @@
 from __future__ import annotations
 
 import asyncio
-import random
 import re
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Dict, Iterable, List, Optional, Tuple
 from uuid import UUID
 
@@ -28,20 +26,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.ai import deepseek_client
-from app.ai.fallbacks import (
-    STRUCTURED_TEMPERATURE,
-    fallback_reply,
-    opening_fallback,
-)
+from app.ai.fallbacks import fallback_reply
 from app.ai.parser import load_prompt
-from app.ai.schemas import ConclusionCardResult, OpeningResult, empty_conclusion
 from app.core.config import settings
 from app.core.errors import BusinessException, ErrorCode, not_found_unless_owner
 from app.models.conversation import Conversation, Message
 from app.models.task import Task
 from app.models.user import User, utcnow
 from app.schemas.chat import (
-    ChatConclusionCard,
     ChatRequest,
     ChatResponse,
     ConversationCreate,
@@ -49,47 +41,24 @@ from app.schemas.chat import (
     MessageResponse,
     PendingChatResponse,
 )
-from app.services import chat_director, idempotency, profile_service
+from app.services import chat_director, idempotency, memory_service, profile_service
 from app.utils.logger import get_logger, sanitize
-from app.utils.reference_match import drop_referenced, looks_referenced
+from app.utils.reference_match import looks_referenced
 from app.utils.text import (
     MAX_ASSISTANT_CHARS,
-    build_history_text,
     normalize_for_match,
     truncate,
 )
 
 logger = get_logger(__name__)
 
-# 传给模型的历史消息条数上限（控制 token 成本）
-HISTORY_LIMIT = 12
+# 传给模型的历史消息条数上限（给模型更多上下文，不再卡在 12 条）
+HISTORY_LIMIT = 20
 
-# 空转校验的"攒字阈值"（勘误 9.31/9.32）：给内容的回复通常是长文，**只有整段都很短**才可能是空转。
-# 所以流式路径先把开头这几字攒住不发给前端（用户感觉不到，一眨眼就过），
-# 攒过这个长度就当作"有内容"，照常逐块流出去；整段都没攒过它，才做空转判定。
-# ⚠️ 这个值必须 ≥ ``chat_director.looks_like_empty_turn`` 自己的长度上限（它判 >80 字为"非空转"），
-# 否则会出现"已经发出去了才判定为空转、改不了"的死角。
-EMPTY_TURN_PROBE_CHARS = 80
-
-# 「问句先压一下」的停顿秒数（勘误 9.35 的追加要求）。
-#
-# 用户原话：「在给出下一个提问的时候要给用户时间反应，说不定用户想要回答上一个问题，
-# 结果下一个问题就出来了」。落地方式：**最后一段如果是提问**，就先压住不发 ——
-# 正文那几段照常流式输出，等正文说完、停这一下，再把问句发出去。
-# 为什么必须放在服务端：前端是"一收到 done 就把草稿换成落库消息"，
-# 客户端做延迟会在替换那一刻被绕过去；只有在 done 之前睡，用户才真的看到这个停顿。
-# 取值范围：太短（<0.8s）感觉不出来，太长（>3s）会被当成卡住。1.4s 实测比较像"人说话"。
-QUESTION_HOLD_SECONDS = 1.4
-
-# 被压住的"最后一段提问"的长短上限：超过这个长度多半是正文里带了问号，
-# 不是"最后抛一个问题"，压住会让用户干等。
-_QUESTION_TAIL_MAX_CHARS = 200
-
-# 「模型在思考」的心跳间隔（秒，勘误 9.38）。
+# 「模型在思考」的心跳间隔（秒）。
 # 用户原话：「不能光有一个动画在动，不然会以为是网卡了」。思考通常 3-10s，
 # 这段时间里如果只有三个点在跳，用户会怀疑卡死；所以每 2 秒发一次 `status` 事件，
-# 带上**真实已用毫秒**，前端显示成"正在想怎么跟你说… 6s"。
-# 2s 是"够密但不刷屏"的折中：再密会让状态行每帧都在抖，再疏（>3s）又会重新像卡住。
+# 带上**真实已用毫秒**，前端显示成"正在想… 6s"。
 STATUS_HEARTBEAT_SECONDS = 2.0
 
 
@@ -111,6 +80,18 @@ class StreamPreparation:
     # 幂等命中时填充：上一次的助手回复（可能为 None 表示还在生成中）
     replay_reply: Optional[MessageResponse] = None
     pending: Optional[PendingChatResponse] = None
+
+
+class _DuplicateMessage(Exception):
+    """并发重复提交：另一个请求在同一瞬间插入了相同的 ``client_msg_id``。
+
+    ``resolve_duplicate`` 的"先查再插"不是原子的，唯一约束才是最终裁判。
+    插入冲突时抛出本异常，调用方据此转成"回放/稍后再试"，而不是 500。
+    """
+
+    def __init__(self, message: Message) -> None:
+        super().__init__("duplicate client_msg_id")
+        self.message = message
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +196,7 @@ def get_conversation(db: Session, user: User, conversation_id: UUID) -> Conversa
     **「不存在」与「不属于自己」都返回 2001**（项目级编码规则，见 README §8 与
     ``app.core.errors.not_found_unless_owner``）。本函数是所有对话类端点的唯一入口：
     ``GET /chat/conversations/{id}/messages``、``POST .../messages``、
-    ``GET .../stream``（POST 与 GET 两个形式）、``GET .../conclusion`` ——
+    ``GET .../stream``（POST 与 GET 两个形式）——
     因此 SSE 端点也会在**开流之前**就把越权请求挡成 404，不会出现"流已建立才发现越权"。
     """
     return not_found_unless_owner(db.get(Conversation, conversation_id), user.id, "对话不存在")
@@ -277,8 +258,8 @@ def _build_llm_messages(
 ) -> Tuple[List[Dict[str, str]], chat_director.TurnBrief]:
     """组装发给 DeepSeek 的 messages（14.7：系统 Prompt 与用户输入分离），并顺带算本轮的"料"。
 
-    返回 ``(messages, brief)``：``brief`` 是供料层算出来的"走到哪一步 / 可用素材 / 目的地"，
-    调用方在生成后用它的 ``materials`` 做空转校验（见 ``_needs_delivery_retry``）。
+    返回 ``(messages, brief)``：``brief`` 只是供料层算出来的"这一轮手边有什么素材"，
+    怎么用、用不用由模型自己判断，服务端不再拿它做空转判定或强行塞话。
     """
     system_prompt = load_prompt("chat_system")
     tags = profile_service.list_tags(db, user.id)
@@ -334,13 +315,13 @@ def _build_llm_messages(
         titles = "、".join(f"「{t.title}」" for t in ongoing_tasks)
         context_lines.append(
             f"用户进行中的成长任务：{titles}。"
-            "如果本轮合适，可以顺势问他这些任务做到哪一步了（一轮只问一个，不要连问）。"
+            "如果本轮合适，可以顺势问他这些任务做到哪一步了。"
         )
     else:
         context_lines.append("用户目前没有进行中的成长任务。")
 
     # ---------------------------------------------------------------------
-    # 本轮的"料"（勘误 9.31/9.32）：走到哪一步 + 可用素材 + 目的地 + 三条硬边界
+    # 本轮的"料"（勘误 9.31/9.32）：可用素材 + 两条硬边界
     # ---------------------------------------------------------------------
     # ⚠️ 这里是**供料**，不是"指挥模型说哪句话"（指令式的 intent / angle / 频次硬闸
     # 已按用户要求整块删掉，别再加回来）。为了让供料认得准方向，除了画像标签与用户原话，
@@ -365,13 +346,11 @@ def _build_llm_messages(
         profile_text=" ".join(hint for hint in profile_hints if hint),
     )
 
-    # 跨会话信息（"不重复提问"要扩到别的会话）：
-    # 不注入这块，模型只知道**当前会话**里问过什么，于是在新会话里会把
-    # 用户已经答过的事（"还在弄吗" -> "不想搞了"）重新问一遍。
-    # ⚠️ 这块的语义是**禁止清单**（已经聊过、不要再提），不是"可以拿来问的素材"。
-    # 注意这是 append 到既有 context_lines 后面，不会顶掉上面的 stage/tags/任务。
+    # 记忆（2026-11 重构）：新对话 ≠ 新用户。同一个账号，记忆连续；换的只是话题。
+    # 这块是**背景，不是台词**：只用来避免重复问、把下一句问得更准，不许念出来。
     context_lines.append(
-        _collect_cross_session(db, user.id, conversation.id).as_prompt_block()
+        "【你记得的（背景，不是台词；不要念出来，也不要重复问）】\n"
+        + _memory_block(db, user, conversation.id)
     )
 
     system_content = (
@@ -403,14 +382,9 @@ def _build_llm_messages(
 # 所以新会话创建后由**后端**生成第一句：
 # - 存成一条真正的 assistant 消息（不是前端假气泡），因此它会进历史、
 #   进 LLM 上下文、进 message_count，刷新页面也还在；
-# - ⚠️ 内容**只聊日常**（年级、今天上什么课、最近在忙什么……），
-#   **一个字都不许提**画像标签 / 进行中任务 / 用户原话 / stage。
-#   用户原话（第三次报同一个问题）：
-#   「可以问，但是坚决不可以直接在第一句话的时候问」「第一个问题可以随便聊聊天，
-#   比如你今年大几了，比如你今天上的什么课啊」「要重视新对话这个问题」。
-#   他截图的现场是「新对话｜你之前说想学ai，这块是怎么来的？」—— 就是这一版要消灭的东西。
-#   画像素材**最早从第 2 轮**才可以用（见 chat_system.txt「你手里的背景信息怎么用」），
-#   而且开场白这一轮不喂任何素材：见 ``OpeningContext`` / ``_opening_context``。
+# - 内容由模型自由发挥：日常、未来、焦虑、动力、就业形势都可以，没有话题池、没有字数上限；
+# - 唯一的硬约束是**不许编造关于他的事实**：不知道就说不知道，别演"我记得你"。
+#   生成失败直接报错，不再用本地假开场糊弄用户。
 
 # 保留的 client_msg_id：只用于标识「这条 assistant 消息是本会话的开场白」。
 #
@@ -423,39 +397,9 @@ def _build_llm_messages(
 # 撞上的概率可以忽略；万一真的撞了也不会脏数据（见 ``_persist_opening`` 的处理）。
 OPENING_CLIENT_MSG_ID = "sys:opening"
 
-# 开场白长度上限（Prompt 里同样要求 60 字，这里是服务端的硬闸）。
-# 原来是 120，被用户否掉了："人刚见面不会一口气说 60 字以上"。
-# 长开场白读起来像一段产品文案，短一句才像随口搭话；
-# 顺带也把"只能问一件事"从长度上锁住（60 字塞不下两三个问题）。
-OPENING_MAX_CHARS = 60
-
-# ★ 开场白的"话题种子"（唯一进 Prompt 的变量）。
-#
-# 为什么需要它（实测，不是拍脑袋）：把开场白改成纯日常之后，模型会**把示范例句当模板**——
-# 连着 5 个新会话里 4 个都是「你今年大几啦？」，用户一眼就看出来这是模板
-# （他这次要的就是"换一个新的 AI 和用户聊天"的感觉）。给一颗随机话题种子后，
-# 每次的问法会分散到不同的小事上。
-#
-# ⚠️ 它**不是**用户信息：这份池子对所有用户完全一样，与画像/任务/原话无关，
-# 也不参与任何校验（``OpeningContext.materials`` 仍是空列表，``used`` 仍必须为空）。
-OPENING_TOPIC_SEEDS = (
-    "年级（大几了）",
-    "今天的课 / 这周的课",
-    "最近在忙些什么、手头在弄什么",
-    "周末一般怎么过",
-    "学校生活（食堂、宿舍、社团）",
-    "他自己觉得哪方面比别人强一点",
-    "这两天过得咋样",
-    "最近有没有什么新鲜事",
-)
-
-# 开场白温度：**保持 0.8 不变**。
-# 理由：这轮的"活人感"来自 Prompt 里的禁止项（不许给选项、不许问卷腔、只能问一件事）
-# 和上面那个 60 字硬闸，不来自温度；而且**纯日常**开场白的多样性主要靠
-# ``OPENING_TOPIC_SEEDS``（随机话题种子）而不是温度 —— 实测 0.8 下模型会把示范例句
-# 当模板反复吐同一句，加话题种子后才分散（见 README §5.1.1 最新一轮）。
-# 再往上调温度，模型更容易在"只问一件事 / 不超 60 字"这些硬约束上漂，收益不抵风险。
-OPENING_TEMPERATURE = 0.8
+# 开场白不再有话题池、字数上限、话题种子，也不再强制 JSON。
+# 生成方式：纯文本 + thinking=True，Prompt 见 ``app/ai/prompts/chat_opening.txt``。
+# 生成失败**直接报错**（不再用本地假开场糊弄用户）。
 
 # ---------------------------------------------------------------------------
 # 跨会话信息：AI 必须知道"在别的会话里已经问过 / 用户已经答过什么"（**只作禁止清单**）
@@ -485,9 +429,7 @@ CROSS_USER_LINES_LIMIT = 6        # 取其它会话里最近 N 条用户消息
 CROSS_USER_LINE_CHARS = 40        # 每条截断长度
 
 # 候选给足：任务重复多（历次测试生成过好几条同名任务），所以先多取再按标题去重
-OPENING_TASK_CANDIDATES = 5
-OPENING_TASK_FETCH = 15
-OPENING_TAG_CANDIDATES = 8
+# 开场白相关的旧常量（话题候选数）已随"自由开场白"一起删除。
 
 
 @dataclass
@@ -505,63 +447,12 @@ class CrossSessionContext:
     def empty(self) -> bool:
         return not self.openings and not self.user_lines
 
-    def as_prompt_block(self, forbidden: Optional[List[str]] = None) -> str:
-        """**对话**路径用的注入块：开场白原句 + 用户原话 + （可选）点名清单。
-
-        原句在这里是有用的（AI 得知道自己上几轮聊到哪了），而且对话中途不存在
-        "开场白又问一遍"的问题，所以照用户要求原样给。
-
-        ⚠️⚠️ 但**语义只有一个：这是"别再碰"的禁止清单，不是素材**。
-        措辞必须写死"一个字都不许提起、不许当铺垫、不许说成'你之前说过'"，理由是一起真实事故：
-
-        用户在「新对话 3」里刚说"我最近在看短句啊"，模型回了一句
-        **「哦对，你之前说过是短剧哈哈，我给记岔了」** —— "短剧"是他在**另一个会话**
-        （「新对话 4」）里说的。模型是把这段注入块当成了"可以拿来提的往事"，
-        而且同一句话里既说"你之前说过"又说"我给记岔了"，自相矛盾，用户当场投诉。
-        旧措辞只强调了"别再重复确认状态"，力度不够（"已经聊过"读起来仍像"可以接着聊"），
-        所以语义统一为"**不是素材、不许引用、不许回述**"。
-
-        ⚠️ **2026-10 精修**：措辞从原来那段"❌ 不许…（用户看不到这段）…"的高密度禁令，
-        压成下面这几行 —— 语义一个字没变（还是"别再碰"的清单），但**负向密度降下来了**。
-        背景：chat_system.txt 那次重构发现，成段堆"不许/禁止"会让模型把预算全花在避雷上，
-        输出变得畏缩、没活人味（见该 Prompt 顶部说明）。禁令只留必要的那几句，其余靠正向描述。
-
-        ⚠️ **2026-11：这个注入块只用于「对话」路径了**。开场白路径曾经有一个
-        ``as_opening_block()``（同样内容的"只给点名清单、不给原句"版本），
-        **已随"第一句只聊日常"一起删掉**：那段文字里含**用户原话**，与
-        "第一句不许出现任何旧内容"直接冲突（真实事故里的"短剧"正是从这类注入块漏出去的）。
-        开场白先生成的是一句"你今年大几啦？"，它不需要、也不该知道前情。
-        """
-        if self.empty:
-            return (
-                "【你在其它会话里已经问过 / 已经知道的事】\n"
-                "（暂无：这是该用户的第一个会话，或其它会话里还没留下可参考的内容。）"
-            )
-        lines = [
-            "【你在其它会话里已经问过 / 已经知道的事（用户看不到这段）】",
-            "下面这些**已经聊过**了 —— 这一轮别再问、别换个说法再问、也别当铺垫提起来，"
-            "就当不知道前情（别说成「你之前说过 / 你上次提到 / 我记得你」）：",
-        ]
-        if self.openings:
-            lines.append("· 你已经问过的：" + "；".join(self.openings))
-        if forbidden:
-            lines.append("· 这些具体内容也别再提：" + "、".join(forbidden))
-        if self.user_lines:
-            lines.append("· 他已经在别的会话里说过 / 答过的：" + "；".join(self.user_lines))
-        lines.append(
-            "（上面全是**已经发生过**的事，换个说法再问也算重复，拿来当铺垫也不行。"
-            "能用的只有：**这段对话里他自己说的话** + 【当前用户背景】里的画像。）"
-        )
-        return "\n".join(lines)
-
-
 # ``_looks_referenced`` / ``_drop_already_asked`` 的**实现**已抽到
 # ``app/utils/reference_match.py``：任务生成侧要用同一套判据把"已出现在
 # 【进行中】任务标题里的标签"从主题素材里机械剔掉（见
 # ``task_service._plan_theme_material``），两处口径必须完全一致。
 # 这里保留原私有名做别名，本模块的调用点与**行为一个字都没变**。
 _looks_referenced = looks_referenced
-_drop_already_asked = drop_referenced
 
 
 def _collect_cross_session(
@@ -615,127 +506,58 @@ def _collect_cross_session(
     return CrossSessionContext(openings=openings, user_lines=user_lines)
 
 
-def _ongoing_task_candidates(db: Session, user_id: UUID, limit: int) -> List[Task]:
-    """进行中任务候选：按 ``updated_at`` 从新到旧，**按标题去重**后取前 ``limit`` 条。
+def _memory_block(
+    db: Session, user: User, exclude_conversation_id: Optional[UUID] = None
+) -> str:
+    """给开场白/正文用的**记忆块**：已经知道的事，不是禁止清单。
 
-    为什么去重：实测库里同一个用户有 3 条"技术方向小实验"、3 条"Java 或 C 命令行小工具"
-    （历次测试生成），标题一模一样。不去重的话候选里一半是同名任务，
-    模型挑来挑去还是那件事。
+    语义（2026-11 重构）：
+    - 新对话 ≠ 新用户。同一个账号，记忆是连续的；换的只是这一段话题。
+    - 这块东西只用来**避免重复问、把下一句问得更准**，不是拿来念的。
+    - 所以措辞是"你已经知道的 / 你之前问过的"，不是"禁止提起"。
+
+    只保留高信号、短的内容：基本信息、画像（少量）、最近任务、用户原话、开场白。
+    真正的深度理解由模型自己做，这里只给它材料，不给结论。
     """
-    rows = db.exec(
-        select(Task)
-        .where(Task.user_id == user_id, Task.status == "进行中")  # type: ignore[arg-type]
-        .order_by(Task.updated_at.desc())  # type: ignore[union-attr]
-        .limit(OPENING_TASK_FETCH)
-    ).all()
-    seen: set = set()
-    candidates: List[Task] = []
-    for task in rows:
-        title = (task.title or "").strip()
-        if not title or title in seen:
-            continue
-        seen.add(title)
-        candidates.append(task)
-        if len(candidates) >= limit:
-            break
-    return candidates
+    cross = _collect_cross_session(db, user.id, exclude_conversation_id)
+    lines: List[str] = []
 
+    # 账号级长期记忆（动机地图）：想要的生活 / 怕什么 / 愿意付出什么。
+    long_term = memory_service.format_block(db, user)
+    if long_term:
+        lines.append(long_term)
 
-@dataclass
-class OpeningContext:
-    """开场白的**自检**上下文（开场白已经不再使用任何画像素材）。
+    basics = [item for item in (user.grade, user.major) if item]
+    if basics:
+        lines.append("- 基本信息：" + " / ".join(str(item) for item in basics))
 
-    ⚠️ 本版的核心改动（用户第三次报同一个问题后拍板）：新会话的第一句话
-    **只聊日常、只为了认识这个人**，所以标签 / 进行中任务 / 用户原话 / stage
-    **一律不进 Prompt** —— 见 ``as_prompt_variables()``（它返回空字典）。
-    他截图的现场是「新对话｜你之前说想学ai，这块是怎么来的？」。
-
-    这个类因此只承载"生成后自检"要用的三份清单，**都只作拦截、不作素材**：
-
-    - ``forbidden_items``：被"跨会话已经问过"命中的候选（标签 label / 任务标题）——
-      模型一旦提到就换模板（自检②）；它是**禁止清单**，同样不进 Prompt；
-    - ``cross_session_items`` / ``cross_user_lines``：**别的会话**里的开场白原句与用户原话
-      —— 复述它同样换模板（自检③；只用后者，理由见 ``_restated_cross_session_item``）；
-    - ``materials``：**恒为空列表**。它是"本轮真的喂进 Prompt 的素材"的唯一真相，
-      ``_validate_opening`` 拿它判"模型申报的依据存不存在"：素材为空 ->
-      模型任何非空的 ``used`` 都对不上 -> 判违规。所以这个字段不是"暂时是空的"，
-      而是"开场白不该有素材"这件事的可断言载体（回归里直接断言 ``materials == []``）。
-    """
-
-    forbidden_items: List[str] = field(default_factory=list)
-    cross_session_items: List[str] = field(default_factory=list)
-    cross_user_lines: List[str] = field(default_factory=list)
-    # 恒为空：开场白不提供任何画像素材（理由见类 docstring）。
-    materials: List[str] = field(default_factory=list)
-
-    def as_prompt_variables(self) -> Dict[str, str]:
-        """转为 ``chat_opening.txt`` 的占位符 —— **只有一颗"话题种子"**。
-
-        ``chat_opening.txt`` 是一份**静态** Prompt：第一句该说什么、不许说什么，
-        与这位学生的画像无关（他的档案再丰富，第一句也只能是"你今年大几啦？"这种搭话）。
-        所以这里**不给**任何画像素材：标签 / 任务 / 用户原话 / stage 一个都没有。
-        ⚠️ 连"这是该用户的第几个会话"都不给：那会让模型倾向于说"又见面了"，
-        而新会话的产品语义是「换一个新的 AI 和用户聊天」。
-
-        唯一的变量 ``topic_seed`` 是**与用户无关**的：它是从一份固定的日常话题池里
-        随机抽的一条（对每个用户都是同一个池子），只用来解决实测出来的一个问题 ——
-        连着几次新会话，模型会反复吐同一句「你今年大几啦？」（把示范当模板）。
-        它**不是**用户信息，也不参与任何校验（``materials`` 仍是空列表）。
-        """
-        return {"topic_seed": random.choice(OPENING_TOPIC_SEEDS)}
-
-
-def _opening_context(
-    db: Session, user: User, conversation_id: Optional[UUID] = None
-) -> OpeningContext:
-    """收集开场白的**自检**上下文（不再收集任何画像素材）。
-
-    ⚠️ 这一版把"素材"整块拿掉了，只留两件事：
-
-    1. ``_collect_cross_session()``：该用户**其它会话**的开场白原句与用户原话 ——
-       只用于"有没有复述别的会话"这条自检（自检③）。它**不进 Prompt**：
-       旧版把它渲染成"禁止清单"注入开场白，那段文字里含**用户原话**，
-       与"第一句不许出现任何旧内容"直接冲突（真实事故里的"短剧"就是这么被带进去的）。
-    2. ``forbidden_items``：把"已经聊过"的标签/任务候选算出来当下点名的禁止清单，
-       模型一旦又把它们拎出来就换模板（自检②）—— 这是**拦截**，不是素材。
-
-    Prompt 侧从此**不给任何用户相关的信息**（``materials=[]``；``as_prompt_variables()``
-    只返回一颗与用户无关的随机「话题种子」，见 ``OPENING_TOPIC_SEEDS``）：
-    开场白就是一个刚认识的人随口搭话，不需要知道这位学生的任何事。
-    """
-    cross = _collect_cross_session(db, user.id, conversation_id)
-    asked = cross.openings + cross.user_lines
-
-    # 候选 → 剔除（仍复用既有的 ``_drop_already_asked``；本轮只看被剔掉的那部分，
-    # 保留下来的标签/任务**不再**当素材给模型，所以直接丢弃）。
-    all_tags = profile_service.list_tags(db, user.id)
-    tag_labels = [tag.label for tag in all_tags][:OPENING_TAG_CANDIDATES]
-    _, dropped_labels = _drop_already_asked(tag_labels, asked)
-
-    task_candidates = _ongoing_task_candidates(db, user.id, OPENING_TASK_CANDIDATES)
-    _, dropped_titles = _drop_already_asked([task.title for task in task_candidates], asked)
-
-    # 点名禁止清单 = 这次剔掉的候选（去重、保序）
-    forbidden: List[str] = []
-    for item in dropped_titles + dropped_labels:
-        if item and item not in forbidden:
-            forbidden.append(item)
-
-    if forbidden:
-        # 剔除必须留痕：以后"为什么这次没提那个任务"能直接从日志看出来
-        logger.info(
-            "开场白禁止清单（只作拦截、不进 Prompt）：user_id=%s 标签剔除=%s 任务剔除=%s"
-            "（依据最近 %s 条开场白 + %s 条用户原话）",
-            user.id, dropped_labels, dropped_titles,
-            len(cross.openings), len(cross.user_lines),
+    tags = profile_service.list_tags(db, user.id)[:8]
+    if tags:
+        lines.append(
+            "- 他的画像："
+            + "、".join(f"{tag.dimension}/{tag.label}" for tag in tags)
         )
 
-    return OpeningContext(
-        forbidden_items=forbidden,
-        cross_session_items=list(cross.openings) + list(cross.user_lines),
-        cross_user_lines=list(cross.user_lines),
-        materials=[],  # ★ 恒为空：开场白不提供任何画像素材
-    )
+    tasks = db.exec(
+        select(Task)
+        .where(Task.user_id == user.id)
+        .order_by(Task.updated_at.desc())  # type: ignore[union-attr]
+        .limit(3)
+    ).all()
+    if tasks:
+        lines.append(
+            "- 他最近的任务："
+            + "、".join(f"「{task.title}」（{task.status}）" for task in tasks)
+        )
+
+    if cross.user_lines:
+        lines.append("- 他告诉过你的：" + "；".join(f"「{item}」" for item in cross.user_lines))
+    if cross.openings:
+        lines.append("- 你之前问过的：" + "；".join(f"「{item}」" for item in cross.openings))
+
+    if not lines:
+        return "（暂无：这是新用户，或者之前没留下可用信息。）"
+    return "\n".join(lines)
 
 
 def _find_opening(db: Session, conversation_id: UUID) -> Optional[Message]:
@@ -760,180 +582,121 @@ async def ensure_opening_message(
     """POST /chat/conversations/{id}/opening：确保会话里有一条 AI 开场白。
 
     返回 ``None`` 表示**本次不生成**：会话已经有消息了（用户自己先说了话），
-    这时再插一句"你好呀"式的开场白会插在用户消息后面，逻辑上说不通
-    （AI 变成在回答自己）。路由层把它翻成 ``{code:0, data:null}``。
+    这时再插一句开场白会插在用户消息后面，逻辑上说不通。
+    路由层把它翻成 ``{code:0, data:null}``。
 
-    三种情况：
-    1. 已有开场白 -> 直接回放（幂等，重复调用不产生第二条）；
-    2. 没有任何消息 -> 生成并落库；
-    3. 有消息但没有开场白（用户先说话了）-> 返回 ``None``。
+    开场白由模型自由生成（纯文本 + thinking），不设话题池、不设字数上限。
+    模型不可用时**直接抛 AI_ERROR**，由前端明确告诉用户"服务暂时不可用"，
+    不再用本地假开场糊弄。
     """
     conversation = get_conversation(db, user, conversation_id)
 
-    # ① 幂等：已经有开场白就回放。前端「进入会话就调一次」的写法会重复命中这里，
-    #    必须保证第二次不重复落库、也不重复扣 AI 额度。
+    # ① 幂等：已经有开场白就回放。
     existing = _find_opening(db, conversation.id)
     if existing is not None:
         logger.info("开场白幂等命中 conversation_id=%s message_id=%s", conversation.id, existing.id)
         return MessageResponse.model_validate(existing)
 
-    # ③ 会话已有消息（用户先说了话；或用户用了保留 id）-> 不生成
+    # ② 会话已有消息（用户先说了话）-> 不生成
     if _count_messages(db, conversation.id) > 0:
         logger.info("会话已有消息，跳过开场白 conversation_id=%s", conversation.id)
         return None
 
-    # ② 生成
-    context = _opening_context(db, user, conversation.id)
-    text = await _compose_opening(context)
-
+    # ③ 生成
+    text = await _compose_opening(db, user, conversation.id)
     return _persist_opening(db, conversation, text)
 
 
-async def _compose_opening(context: OpeningContext) -> str:
-    """生成开场白文本：优先调模型，失败/异常走开场专用的日常模板（7.6）。
+# 新会话里出现这些词，说明模型在回述"并不存在的旧事"（第一次说话不可能有前情）。
+_OPENING_RECAP_HINTS = (
+    "你上次", "你上回", "你之前", "你以前说", "你说过", "你提过", "我们上次", "上次聊",
+)
 
-    契约（不许破坏）：**绝不抛异常、绝不 500、永远返回一句可用的话**；
-    返回前一定做过"有没有偷偷加用户事实"的机械校验（用户原话：
-    「没有的事情坚决不要杜撰，要严厉禁止这种事情」——
-    本版更严：第一句话**连真事都不许提**，见 ``_validate_opening``）。
 
-    流程：
-    ① 调模型拿 **JSON**（``text`` + ``used``），失败走 ``default=OpeningResult()`` 兜底；
-       ⚠️ Prompt 变量**只有一颗与用户无关的随机话题种子**（``as_prompt_variables()``）：
-       开场白不接收任何画像素材；
-    ② 清洗 ``text``（去围栏/引号）；
-    ③ **本地**校验（``_validate_opening``，不额外调 AI）：出现任何用户事实引导语、
-       或申报了任何依据（素材清单恒为空，必然对不上）-> 一律换模板；
-    ④ 再用既有的"复述别的会话 / 命中禁止清单"两条自检兜一遍；
-    ⑤ ``truncate(text, 60)`` 兜住长度的硬闸。
-    """
-    # 结构化输出的兜底值：空 text 会让下面立刻落到本地模板。
-    # ``default`` 保证 chat_json 在任何解析失败（模型返回非 JSON、被截断、
-    # 干脆返回一句人话）时都**不抛异常**，只交出这个空结果。
-    try:
-        result = await deepseek_client.chat_prompt_json(
-            prompt_name="chat_opening",
-            variables=context.as_prompt_variables(),
-            schema=OpeningResult,
-            default=OpeningResult(),
-            # ⚠️ 温度**保持 0.8 不变**（原 ``chat_prompt_text`` 路径就是这个值）。
-            #    比结构化输出惯例的 0.2 高，会让 JSON 格式偶发不听话，
-            #    但那一路有 default 兜底成模板；而"活人感"是这一版开场白的核心诉求，
-            #    降温度会把句子重新变成产品文案（见 OPENING_TEMPERATURE 的说明）。
-            temperature=OPENING_TEMPERATURE,
-            # 开场白契约是 ≤60 字 + used=[]，2048 是 30 倍冗余（勘误 9.37 的审计）。
-            max_tokens=256,
-        )
-    except Exception as exc:  # noqa: BLE001 - 开场白绝不能因为 AI 挂了就失败
-        logger.warning("开场白生成异常，走本地模板: %s", sanitize(exc))
-        result = OpeningResult()
+def _opening_recap_hit(text: str) -> Optional[str]:
+    for hint in _OPENING_RECAP_HINTS:
+        if hint in text:
+            return hint
+    return None
 
-    text = _clean_opening(result.text or "")
-    used = [item.strip() for item in (result.used or []) if item and item.strip()]
 
-    # 模型**原始申报**（``used``）在这里落一条日志：
-    # 用户明确要求"要能看出模型申报了什么依据"，而 ``used`` 只存在于这一次调用里
-    # （最终落库的是 ``text``），不记下来事后就只能靠猜。级别用 INFO：
-    # 开场白一个会话只生成一次，不刷屏。
-    logger.info(
-        "开场白模型输出：text=%r used=%r 本轮素材清单=%r",
-        text, used, context.materials,
+# “基本事实”问题：这些答案不会天天变，问过一次就不该再问。
+# 只拦事实（大几/专业/学校/周末/在忙什么/新鲜事），
+# 不拦“钱、家里、未来、怕什么”这些可以反复深聊的主题。
+_BASIC_FACT_PATTERNS = {
+    "grade": ("大几", "几年级"),
+    "major": ("什么专业", "学什么专业", "哪个专业"),
+    "school": ("哪个学校", "什么学校", "哪所学校"),
+    "hometown": ("哪里人", "老家哪", "哪的人"),
+    "weekend": ("周末"),
+    "busy": ("在忙什么", "忙些什么", "最近忙", "最近在忙"),
+    "news": ("新鲜事",),
+}
+
+
+def _basic_fact_keys(text: str) -> set:
+    return {
+        key
+        for key, patterns in _BASIC_FACT_PATTERNS.items()
+        if any(pattern in (text or "") for pattern in patterns)
+    }
+
+
+def _repeats_basic_fact(text: str, previous_openings: List[str]) -> Optional[str]:
+    now = _basic_fact_keys(text)
+    if not now:
+        return None
+    for previous in previous_openings:
+        overlap = now & _basic_fact_keys(previous)
+        if overlap:
+            return sorted(overlap)[0]
+    return None
+
+
+async def _compose_opening(db: Session, user: User, conversation_id: UUID) -> str:
+    """生成开场白：同一个 AI，带着记忆开一个新话题；失败如实报错。"""
+    previous = _collect_cross_session(db, user.id, conversation_id).openings
+    memory = _memory_block(db, user, conversation_id)
+    prompt = deepseek_client.render_prompt(
+        load_prompt("chat_opening"), {"memory_block": memory}
     )
+    system = "你是一个记得这个人的 AI。只输出你要说的那段话本身。"
 
+    async def _generate(extra: str = "") -> str:
+        messages = [
+            {"role": "system", "content": system + (("\n" + extra) if extra else "")},
+            {"role": "user", "content": prompt},
+        ]
+        raw = await deepseek_client.chat_text(
+            messages,
+            max_tokens=settings.DEEPSEEK_CHAT_MAX_TOKENS,
+            thinking=True,
+            raise_on_error=True,
+        )
+        return _clean_opening(raw)
+
+    text = await _generate()
     if not text:
-        # 模型没给出可用文本（AI 挂 / 空串 / JSON 解析失败兜底成 default）——
-        # ⚠️ 老路径走 ``chat_text`` 时这里还要判一次 ``FALLBACK_CHAT_REPLY``（"我这边刚刚
-        #    卡了一下…"是中途断线话术，放会话第一句很突兀）。现在改成 ``chat_json`` 之后，
-        #    失败路径给的是 ``default=OpeningResult()`` 的**空串**，那句断线话术根本不会再
-        #    出现，所以那个判断已无对象；这里改为在下面用"疑似陈述用户事实"的启发式兜住
-        #    模型万一真的把类似整句抄进 text 的情况。
-        return _opening_fallback_for(context, "AI 不可用或无有效输出")
+        raise BusinessException(ErrorCode.AI_ERROR, "AI 服务暂时不可用，请稍后重试")
 
-    # ---- 输出自检①（核心，本版改为"无条件"）：话里有没有关于用户的具体事实 ----
-    # 纯本地计算，不额外调 AI，所以不加延迟和成本。
-    # ⚠️ 本版传的素材清单**恒为空**（开场白不给任何画像素材），所以
-    # ``used`` 只要非空就必然对不上 -> 判违规；而引导语那一条**无条件**跑
-    # （旧版只在 ``used`` 为空时才跑，模型随手申报一个标签就能绕过）。
-    violation = _validate_opening(text, used, context.materials)
-    if violation is not None:
-        reason, evidence_note = violation
-        return _opening_fallback_for(context, reason, raw=evidence_note)
-
-    # ---- 输出自检③：有没有承接**其它会话**的内容 ----
-    # 放在自检②**前面**、且**无论模型有没有申报依据都跑** —— 这一点很关键：
-    # 上面那条（①）虽然已经无条件扫引导语，但真实事故里泄漏的"短剧"来自**另一个会话**，
-    # 而模型那句话很可能换个措辞、不带任何引导语（"哦对，短剧哈哈"），
-    # 也没被 ``forbidden_items`` 点名 —— 单靠 ① ② 拦不住。
-    #
-    # 这里用**跨会话原话**（``_collect_cross_session`` 的 user_lines）查一次：
-    # 判据是"命中了具体内容词就判"（宁可误判成可疑，与 ``_looks_referenced`` 同一套信号）。
-    # 例：用户在「新对话 4」说过"我说错了，我说的是看短剧" -> 本轮的
-    # cross_user_lines 里有这句 -> 模型写「你之前说过是短剧」-> 判不合格换模板。
-    #
-    # ⚠️ 与本版的关系：第一句话本来就不该提任何旧内容，所以这条**更该拦得住**；
-    # 它现在也是"允许依据为空"的：``allowed_items`` 只有 ``context.materials``（恒为空），
-    # 于是任何>=4字的内容词都不算"有出处"。放行逻辑保留着，是为了万一以后
-    # 又给开场白接上素材时不会立刻失效（见 ``_restated_cross_session_item``）。
-    leak = _restated_cross_session_item(
-        text,
-        context.cross_user_lines,
-        list(context.materials),
-    )
-    if leak:
-        return _opening_fallback_for(context, f"复述了其它会话的内容 {leak!r}", raw=text)
-
-    # ---- 输出自检②（既有）：有没有又把"已经聊过的事"拿出来问 ----
-    # 用户报的 bug 是"新会话又问同一件事"：模型实测会把旧事改个说法再用一遍
-    # （"想起来你上次说想用C做个通讯录" -> "之前你说想用C写个通讯录"）。
-    # 这条规则不能只写在 Prompt 里赌它听话，所以这里再验一次：
-    # 只要新开场白又碰到了被剔除的候选（标签/任务），就换成模板（模板现在是纯日常，
-    # 天然不会重复）。这不是常规路径，是兜底 —— 触发时会打 warning 留痕。
-    hit = [item for item in context.forbidden_items if _looks_referenced(item, text)]
-    if hit:
-        return _opening_fallback_for(context, f"提到了已问过的素材 {hit}", raw=text)
-
-    # ---- 输出自检④（既有兜底）：话里关于用户的事实有没有出处 ----
-    # 前面的 ①~③ 都是**结构性**检查（申报对不对得上、有没有碰禁止清单、有没有搬别会话）。
-    # 这一条是**内容性**的兜底：扫"用户事实引导语"，看引导语后面引用的那件事能不能在
-    # 本轮素材（= 真的喂进 Prompt 的字）里找到出处。真实事故：
-    # 模型写「你之前说过想用C做个通讯录，那次是哪出问题？」—— 素材里只有"通讯录"，
-    # "那次是哪出问题"没有任何出处（用户从没说过出过问题）-> 判不合格换模板。
-    # 与正文侧复用同一个函数（``check_reply_for_cross_session_leak``），口径一致。
-    # ⚠️ 本版素材恒为空，所以这条基本被 ① 全面覆盖（① 更早、更严），留着是第四道网。
-    finding = check_reply_for_cross_session_leak(text, context.materials)
-    if finding:
-        return _opening_fallback_for(context, finding, raw=text)
-
-    # 长度硬闸放在**最后**：前面任何一条判杜撰/判重复的分支都直接换成模板，
-    # 不截断模型原话（截断会把句子切在半路，还可能切掉它自己申报的依据片段）。
-    if len(text) > OPENING_MAX_CHARS:
-        # 模板自身不超过 60 字（见 fallbacks.py 注释），万一超了也不能靠截断硬切
-        logger.warning(
-            "开场白超过 %s 字（实际 %s 字），改用本地模板（模型输出=%r）",
-            OPENING_MAX_CHARS, len(text), text,
+    recap = _opening_recap_hit(text)
+    repeated = _repeats_basic_fact(text, previous)
+    if recap or repeated:
+        reason = f"回述旧内容「{recap}」" if recap else f"重复问基本事实「{repeated}」"
+        logger.warning("开场白%s，重试一次：%r", reason, text)
+        text = await _generate(
+            "这是新的对话，不要回述旧内容（“你之前/你上次/你说过/我们上次”），"
+            "也不要重复问已经问过的基本事实（大几、专业、学校、周末、在忙什么、新鲜事）。"
+            "换一个新话题，只输出你要说的那段话本身。"
         )
-        return _opening_fallback_for(context, "超出长度上限", raw=text)
-
+        if not text:
+            raise BusinessException(ErrorCode.AI_ERROR, "开场白没生成好，请重试")
+        if _opening_recap_hit(text):
+            raise BusinessException(ErrorCode.AI_ERROR, "开场白没生成好，请重试")
+        repeated_again = _repeats_basic_fact(text, previous)
+        if repeated_again:
+            logger.warning("开场白再次重复基本事实「%s」，保留本次输出", repeated_again)
     return text
-
-
-def _opening_fallback_for(context: OpeningContext, reason: str, raw: str = "") -> str:
-    """判杜撰 / 判重复 / 超长 / AI 不可用 时统一走这里：留痕 + 换成本地模板。
-
-    ⚠️ 本版模板是**纯日常搭话**（"嗨，今天过得咋样？"），不再引用任何素材 ——
-    所以"模板不会杜撰、也不会重复提问"从"引用保留素材"变成了**结构性成立**：
-    模板里根本没有关于这位学生的任何字。这正是"宁可误判成可疑而换成模板"
-    这个取舍在本版更安全的原因（换了也不会有画像泄漏）。
-
-    ``raw`` 一定要把**模型原文**带上：用户要求"要能看出是哪一项对不上、模型原文是什么"，
-    排障时如果日志里只有一句原因，就还得回去翻模型返回，等于没留痕。
-    """
-    fallback = opening_fallback()
-    logger.warning(
-        "开场白判定不合格（%s），改用本地模板兜底：素材清单=%s 模型输出=%r 模板=%r",
-        reason, context.materials, raw, fallback,
-    )
-    return truncate(fallback, OPENING_MAX_CHARS)
 
 
 # ---------------------------------------------------------------------------
@@ -955,7 +718,7 @@ def _opening_fallback_for(context: OpeningContext, reason: str, raw: str = "") -
 #    你做过/你负责/你会/你想学/标签里/任务里/画像里/记录里"等引导语（**48 条**）。
 #
 # ⚠️ 2026-11（第三次修正）：这条启发式从"只在 ``used`` 为空时生效"改成
-#    **无条件生效**（见 ``_validate_opening``）。旧版只在没申报依据时才查，
+#    **无条件生效**（见 ``_compose_opening``）。旧版只在没申报依据时才查，
 #    于是模型只要随手申报一个合法标签（``used=["看短句"]``）就能绕过它 ——
 #    而这一版第一句话本来就不该涉及任何用户事实，没有"有依据的正常引用"需要放行。
 #
@@ -997,7 +760,7 @@ _SHORT_MATERIAL_CHARS = 4
 # 是它自己加的，用户从没说过出过问题。
 #
 # 正文是流式输出，没有开场白那套"先申报依据再核对"的机制，所以这里只做**成本可控**的
-# 事后检查；开场白侧也复用同一个函数当兜底（它已经有 ``_validate_opening`` 那一层，
+# 事后检查；开场白侧不再复用这套（开场白现在只做"回述旧会话"这一条窄检查）。
 # 这里只罩住"申报了依据却夹带别的事实"的情况）。
 #
 # ⚠️ 明确的边界（不要把它当成"已经解决了"）：
@@ -1304,140 +1067,6 @@ def audit_reply_for_leak(
     return finding or (f"档案播报句式「{narration}」" if narration else None)
 
 
-def _user_fact_hint(text: str) -> Optional[str]:
-    """返回命中的用户事实引导语（没命中返回 ``None``），用于 warning 留痕。"""
-    for hint in _USER_FACT_HINTS:
-        if hint in text:
-            return hint
-    return None
-
-
-def _match_material(declared: str, materials: List[str]) -> Optional[str]:
-    """把模型申报的依据对到**本轮真实素材清单**里的某一条上。
-
-    两轮匹配（都是"服务端说了算"，不看模型脸色）：
-    1. **原样包含**：素材是模型申报串的子串（模型把标签写成"标签『看短句』"也算）；
-    2. **模糊匹配**（只对 >=4 字的素材）：模型把任务标题改了措辞时兜一下，
-       直接复用既有的 ``_looks_referenced``（宁可多剔不可漏剔的那套信号）。
-       短素材（"看短句""剪辑"）**不允许**走这条 —— 像『焦虑』这种短标签跟任意一句话
-       都容易撞出"覆盖率 >= 0.5"，那会把"编一个短标签"放过去。
-
-    匹配不到返回 ``None`` -> 调用方判杜撰。
-    """
-    declared_key = normalize_for_match(declared)
-    if not declared_key:
-        return None
-    for material in materials:
-        key = normalize_for_match(material)
-        if not key:
-            continue
-        if key in declared_key:
-            return material
-    for material in materials:
-        if len(normalize_for_match(material)) >= _SHORT_MATERIAL_CHARS and _looks_referenced(
-            material, declared
-        ):
-            return material
-    return None
-
-
-def _quoted_user_evidence(evidence_values: Iterable[str], text: str) -> Optional[str]:
-    """判断模型这句话有没有**原样引用**某条通过过滤的用户原话。
-
-    方向是"原话 ⊃ 模型输出里的片段"（与 ``_match_material`` 正好相反），
-    因为模型经常只摘半句：原话是"健身，刷视频，看短句"，它写成
-    「你标签里有『看短句』这一条」；原话是"帮同学修电脑"，它写成
-    「你提过帮同学修电脑 —— 愿意多讲讲吗？」（引用时还要补"你提过"这种引导语）。
-
-    ⚠️ 这条宽松是**必要的**：用户原话与标签是"同一件事的两种粒度引用"，
-    用严格包含会把所有"引用原话"的合法输出打成杜撰、整句换成本地模板
-    —— 那正是本轮要修的体验问题（用户要"有和人在对话的感觉"，模板做不到）。
-    安全性由"原话已经过证据归属过滤"保证：能被引用的字**本来就都是用户自己说过的**，
-    模型引用它不可能构成杜撰；而"给原话加细节"（"那次是哪出问题"）里的细节不会出现在
-    任何一条原话里，所以那句话仍然过不了 ``_match_material`` / 素材依据这条线。
-    """
-    normalized_text = normalize_for_match(text)
-    if not normalized_text:
-        return None
-    for quote in sorted(evidence_values, key=len, reverse=True):  # 优先报告更具体的原话
-        key = normalize_for_match(quote)
-        if not key:
-            continue
-        if key in normalized_text:
-            return quote
-        if len(key) >= _SHORT_MATERIAL_CHARS and normalized_text in key:
-            return quote
-    return None
-
-
-def _validate_opening(
-    text: str,
-    used: List[str],
-    materials: List[str],
-    evidence: Optional[Iterable[str]] = None,
-) -> Optional[Tuple[str, str]]:
-    """校验开场白里有没有"关于用户的具体事实"（本版：**一个都不许有**）。
-
-    返回 ``None`` = 通过；否则返回 ``(违规说明, 留痕用的模型原文)`` ——
-    第二项会进 ``logger.warning``，方便直接看出"是哪一项对不上、模型原文是什么"。
-
-    本版语义（用户第三次报同一个问题后拍板）：**第一句话只聊日常**，
-    所以"关于用户的具体事实"（年级、专业、经历、喜好、任务、标签）**出现即违规**。
-    检查（顺序即优先级）：
-
-    ① **无条件**扫用户事实引导语（``_USER_FACT_HINTS``）：命中即违规。
-       ⚠️ 与旧版最关键的差别：旧版这条**只在 ``used`` 为空时**才跑，
-       于是模型随手申报一个合法标签就绕过了它（真实事故里的"短剧"就是这么漏的）；
-       现在无论 ``used`` 是什么都要过这一条，引导语表也从 26 条扩到 48 条
-       （补了"你上回/你说的是/你之前提/我们上次/你想学/你的专业/档案里"等）。
-       旧的"``used=[]`` + 引导语 = 杜撰"因此被**保留并加强** —— 它现在是这条的子集。
-    ② ``used`` **必须为空数组**（开场白不提供任何素材，``materials`` 恒为空）：
-       任何申报都对不上素材清单 -> 判违规。理由：素材清单为空时，
-       "申报了依据"本身就是"它在引用画像里的东西"的自证；而且没有素材清单，
-       服务端无法核实它申报的字是不是真的，宁可换模板。
-    ③ 万一以后又给开场白接上素材（``materials`` 非空），旧的两条仍然生效：
-       申报必须能在素材里原样找到；申报了就得在话里提到（含"引用通过过滤的用户原话"
-       的并列分支 ``_quoted_user_evidence``）—— 保留它是为了那种情况不回退。
-
-    :param evidence: 本轮通过证据归属过滤的用户原话。本版恒为 ``None``
-        （开场白不再有原话素材）；保留这个参数是为了让"将来若恢复素材"不走样，
-        也避免老调用点/回归脚本因为签名变化直接报错。
-
-    ⚠️ 本函数**不做任何网络调用**，纯本地计算 —— 校验不能给开场白再加一次 AI 往返。
-    """
-    # ① 无条件：任何"关于用户的事实"都不许出现在第一句里
-    hint = _user_fact_hint(text)
-    if hint is not None:
-        return (
-            f"开场白出现了关于用户的具体事实（命中引导语「{hint}」）",
-            f"text={text!r} used={used!r}",
-        )
-
-    # ② used 必须为空：开场白没有任何素材可申报
-    if not used:
-        return None
-
-    unmapped: List[str] = []
-    for declared in used:
-        if _match_material(declared, materials) is None:
-            unmapped.append(declared)
-    if unmapped or not materials:
-        return (
-            f"开场白不该申报任何依据（本轮素材清单={materials!r}）: {unmapped or used}",
-            f"text={text!r} used={used!r}",
-        )
-
-    # ③ 兼容分支：素材非空时，申报了就要在话里真的提到（或原样引用某条用户原话）
-    if not any(_looks_referenced(material, text) for material in used):
-        if _quoted_user_evidence(list(evidence or []), text) is None:
-            return (
-                f"申报了依据但话里没提到: {used}",
-                f"text={text!r}",
-            )
-
-    return None
-
-
 def _clean_opening(raw: str) -> str:
     """清洗模型输出：去空白、去代码块围栏、去整段包裹的引号。"""
     text = (raw or "").strip()
@@ -1497,6 +1126,20 @@ def _persist_opening(
 # 发送消息（非流式）
 # ---------------------------------------------------------------------------
 
+def _replay_chat_response(
+    conversation_id: UUID,
+    existing_user: Message,
+    existing_reply: Message,
+) -> ChatResponse:
+    """幂等命中时按第一次请求的完整结果回放（不再调模型、不再落消息）。"""
+    return ChatResponse(
+        conversation_id=conversation_id,
+        user_message=MessageResponse.model_validate(existing_user),
+        assistant_message=MessageResponse.model_validate(existing_reply),
+        extracted_tags=[],
+    )
+
+
 async def send_message(db: Session, user: User, conversation_id: UUID, payload: ChatRequest) -> ChatResponse:
     """POST /chat/conversations/{id}/messages：一次性返回完整回复。
 
@@ -1506,22 +1149,25 @@ async def send_message(db: Session, user: User, conversation_id: UUID, payload: 
 
     # 设计文档 4.3 幂等：同一 client_msg_id 重复提交
     existing_user, existing_reply = idempotency.resolve_duplicate(db, conversation.id, payload.client_msg_id)
-    if existing_user is not None and existing_reply is not None:
-        logger.info("幂等命中，回放上一次回复 conversation_id=%s", conversation.id)
-        return ChatResponse(
-            conversation_id=conversation.id,
-            user_message=MessageResponse.model_validate(existing_user),
-            assistant_message=MessageResponse.model_validate(existing_reply),
-            extracted_tags=[],
-            conclusion_ready=has_conclusion(db, conversation.id),
-        )
     if existing_user is not None:
+        if existing_reply is not None:
+            logger.info("幂等命中，回放上一次回复 conversation_id=%s", conversation.id)
+            return _replay_chat_response(conversation.id, existing_user, existing_reply)
         # 上一轮还在生成中：不重复调 AI，也不重复插消息。
         # 这里刻意用不带 status_code 的 BusinessException -> HTTP 200 + code 1001，
         # 因为"稍后再试"是正常的业务状态，不是客户端错误。
         raise BusinessException(ErrorCode.PARAM_ERROR, "该消息正在生成回复，请勿重复提交")
 
-    user_message = _persist_user_message(db, conversation, payload.content, payload.client_msg_id)
+    try:
+        user_message = _persist_user_message(db, conversation, payload.content, payload.client_msg_id)
+    except _DuplicateMessage as dup:
+        # 两个请求同时通过了上面的预检查：唯一约束只放行一个。
+        # 输的那一方按"已存在"处理，绝不能继续往下再调一次模型。
+        reply = idempotency.find_assistant_reply(db, conversation.id, dup.message)
+        if reply is not None:
+            logger.info("并发重复提交，回放先落库的回复 conversation_id=%s", conversation.id)
+            return _replay_chat_response(conversation.id, dup.message, reply)
+        raise BusinessException(ErrorCode.PARAM_ERROR, "该消息正在生成回复，请勿重复提交") from None
 
     # ⚠️ 这里**不修改会话标题**：需求 2 的范围已收敛为"仅创建时按序号命名"，
     #    "用首条消息自动命名"的方案已按用户要求完整回退（理由见 next_default_title 的说明）。
@@ -1530,29 +1176,84 @@ async def send_message(db: Session, user: User, conversation_id: UUID, payload: 
     # 旧的 "7.6 拒绝回答 / 答不上来 -> 本地模板，不调模型" 短路**已删除**——
     # 它用一句写死的话替模型提问，用户截图里出现过两次一字不差的重复，
     # 而手册规则 11 要的恰恰是"答不上来时给 2-3 个具体台阶"（那是模型该干的活）。
-    llm_messages, brief = _build_llm_messages(db, conversation, user)
-    assistant_text = await _generate_guarded(llm_messages, brief)
+    try:
+        llm_messages, brief = _build_llm_messages(db, conversation, user)
+        assistant_text = await _generate_guarded(llm_messages, brief)
+        if not (assistant_text or "").strip():
+            # 与流式路径一致：绝不把空 assistant 消息写进历史
+            assistant_text = fallback_reply()
 
-    assistant_message = _save_assistant_message(db, conversation.id, assistant_text)
+        assistant_message = _save_assistant_message(db, conversation.id, assistant_text)
 
-    # 正文侧跨会话泄漏自检（追加要求 2）：**只留痕，不改写、不打断**
-    audit_reply_for_leak(db, conversation.id, user.id, assistant_text)
+        # 正文侧跨会话泄漏自检（追加要求 2）：**只留痕，不改写、不打断**
+        audit_reply_for_leak(db, conversation.id, user.id, assistant_text)
 
-    # 7.8 画像回流：每轮结束后抽取标签
-    extracted_tags = await _extract_round_tags(db, conversation.id, user.id)
+        # 7.8 画像回流：每轮结束后抽取标签。
+        # 标签是附加收益：抽取失败不能让"回复已经生成并落库"变成 500
+        # （流式路径同样把它包在 try/except 里）。
+        try:
+            extracted_tags = await _extract_round_tags(db, conversation.id, user.id)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "非流式画像回流失败（已忽略）conversation_id=%s err=%s",
+                conversation.id,
+                sanitize(exc),
+            )
+            db.rollback()
+            extracted_tags = []
+
+        # 账号级长期记忆：后台提炼，不阻塞本次回复。
+        memory_service.schedule_extraction(user.id, conversation.id)
+    except (Exception, asyncio.CancelledError):
+        # 助手回复没落库 -> 清掉这条"永远等不到回复"的用户消息，
+        # 否则同一个 client_msg_id 重试会一直命中 pending（见 discard_... 说明）。
+        # CancelledError 也要兜住：客户端断开时 Starlette 会取消请求任务，
+        # 它继承 BaseException，不写在这里就会留下孤儿用户消息。
+        db.rollback()
+        discard_unanswered_user_message(db, user_message.id)
+        raise
 
     return ChatResponse(
         conversation_id=conversation.id,
         user_message=MessageResponse.model_validate(user_message),
         assistant_message=MessageResponse.model_validate(assistant_message),
         extracted_tags=extracted_tags,
-        conclusion_ready=has_conclusion(db, conversation.id),
     )
 
 
 # ---------------------------------------------------------------------------
 # 发送消息（SSE 流式，7.2）
 # ---------------------------------------------------------------------------
+
+def _duplicate_stream_preparation(
+    conversation_id: UUID,
+    existing_user: Message,
+    existing_reply: Optional[Message],
+    client_msg_id: Optional[str],
+) -> StreamPreparation:
+    """把"该 client_msg_id 已存在"统一翻译成 SSE 的准备结果。
+
+    三条进入路径共用：开流前的预检查、插入时的唯一冲突、以及未来任何
+    "发现重复"的分支 —— 保证它们给出完全一致的事件语义。
+    """
+    if existing_reply is not None:
+        logger.info("SSE 幂等命中，回放上一次回复 conversation_id=%s", conversation_id)
+        return StreamPreparation(
+            is_duplicate=True,
+            conversation_id=conversation_id,
+            replay_reply=MessageResponse.model_validate(existing_reply),
+        )
+    logger.info("SSE 幂等命中但上一轮未完成 conversation_id=%s", conversation_id)
+    return StreamPreparation(
+        is_duplicate=True,
+        conversation_id=conversation_id,
+        pending=PendingChatResponse(
+            conversation_id=conversation_id,
+            client_msg_id=str(client_msg_id or ""),
+            user_message_id=existing_user.id,
+        ),
+    )
+
 
 def prepare_stream(
     db: Session,
@@ -1584,31 +1285,31 @@ def prepare_stream(
     # 幂等：同一 client_msg_id 重复提交
     existing_user, existing_reply = idempotency.resolve_duplicate(db, conversation.id, client_msg_id)
     if existing_user is not None:
-        if existing_reply is not None:
-            logger.info("SSE 幂等命中，回放上一次回复 conversation_id=%s", conversation.id)
-            return StreamPreparation(
-                is_duplicate=True,
-                conversation_id=conversation.id,
-                replay_reply=MessageResponse.model_validate(existing_reply),
-            )
-        logger.info("SSE 幂等命中但上一轮未完成 conversation_id=%s", conversation.id)
-        return StreamPreparation(
-            is_duplicate=True,
-            conversation_id=conversation.id,
-            pending=PendingChatResponse(
-                conversation_id=conversation.id,
-                client_msg_id=str(client_msg_id),
-                user_message_id=existing_user.id,
-            ),
+        return _duplicate_stream_preparation(
+            conversation.id, existing_user, existing_reply, client_msg_id
         )
 
     # ⚠️ 这里**不修改会话标题**（与 send_message 一致）：首条消息自动命名已回退，
     #    标题只在 create_conversation 里写一次（见 next_default_title 的说明）。
-    user_message = _persist_user_message(db, conversation, content, client_msg_id)
+    try:
+        user_message = _persist_user_message(db, conversation, content, client_msg_id)
+    except _DuplicateMessage as dup:
+        # 与 send_message 相同：并发重复提交时唯一约束只放行一个。
+        # 输的一方按"已存在"回 pending/回放，绝不进入生成阶段。
+        reply = idempotency.find_assistant_reply(db, conversation.id, dup.message)
+        logger.info("SSE 并发重复提交，按幂等命中处理 conversation_id=%s", conversation.id)
+        return _duplicate_stream_preparation(
+            conversation.id, dup.message, reply, client_msg_id
+        )
 
     # 本轮上下文 + 供料（勘误 9.31/9.32）：**不再有本地模板短路**，
     # 一律把 messages 和"料"一起交给生成器（它自己开 Session 去发模型）。
-    llm_messages, brief = _build_llm_messages(db, conversation, user)
+    try:
+        llm_messages, brief = _build_llm_messages(db, conversation, user)
+    except Exception:
+        # 流还没建立就失败：这条用户消息永远等不到回复，清掉让重试能重新插入。
+        discard_unanswered_user_message(db, user_message.id)
+        raise
 
     return StreamPreparation(
         is_duplicate=False,
@@ -1626,56 +1327,25 @@ async def stream_reply(
     llm_messages: Optional[List[Dict[str, str]]] = None,
     brief: Optional[chat_director.TurnBrief] = None,
 ) -> AsyncGenerator[Dict[str, Any], None]:
-    """SSE 用的异步生成器：产出 ``{"type": ..., ...}`` 事件字典（7.2 + 设计文档 5.4）。
+    """SSE 异步生成器：产出 ``{"type": ..., ...}`` 事件字典。
 
-    ⚠️ Session 生命周期（FIX 2）：``session`` 必须是**生成器自己开、自己关**的
-    会话，例如 ``SessionLocal()``；**绝不能**传请求级 ``Depends(get_db)`` 的 Session
-    —— 那个 Session 在响应开始返回时就被 FastAPI 清理了，而本生成器的 body 是之后
-    才被消费的。同理 ``user`` 只以 ``user_id`` 形式传入：请求级 Session 上的 User
-    实例此时已 detached，访问任何未加载属性都会 ``DetachedInstanceError``。
+    只做四件事：报告"在想"、把模型吐的字原样流出去、落库、回流画像。
+    不做空转重试、不压问句、不替模型决定节奏 —— 那些都会让人看出是机器。
 
-    流程：
-    1. 先发 start 事件（带 conversation_id）
-    2. **发 `status` 状态事件（勘误 9.38）**：思考那几秒里必须让用户看见"在干什么"，
-       否则只有一个转圈动画，看起来像网卡了。三个阶段：
-       ``reading``（开场一次）→ ``thinking``（**每 2 秒心跳一次**，带 elapsed_ms）
-       → ``writing``（正文开始前一次）。
-       ⚠️ 这里**不显示模型的思维链原文**（用户拍板"思考过程不给用户看"），只报阶段与耗时。
-    3. 逐块 yield delta —— ⚠️ **开头几十字先攒住不发**（``EMPTY_TURN_PROBE_CHARS``）：
-       攒过这个长度就当作"有内容"，补齐后照常逐块流出去；整段都没攒过它，才有必要
-       判一次空转（``chat_director.looks_like_empty_turn``），不合格就带反馈重来一次。
-       这么做的原因见该常量与 ``looks_like_empty_turn`` 的说明 ——
-       **流出去的字改不了**，所以只能在"还没发"的那一小段里做质量兜底。
-       —— 同时：**最后一段如果是提问，会先压住**（``QUESTION_HOLD_SECONDS``），
-       等正文说完、停一下再发问句，给用户留出反应时间（见该常量说明）。
-    4. 累积完整文本 -> 截断（``MAX_ASSISTANT_CHARS``）-> 落库
-    5. 7.8 回流画像标签 -> 发 tag 事件
-    6. 发 done 事件
+    ⚠️ Session 生命周期：``session`` 必须是生成器自己开的（例如 ``SessionLocal()``），
+    不能传请求级 ``Depends(get_db)`` 的 Session。
     """
-    yield {
-        "type": "start",
-        "conversation_id": conversation_id,
-    }
-
-    # 第一帧就给"在干什么"：方向认出来了就说得具体一点（计算机方向 / 通用资料）
-    direction = brief.direction if brief else None
+    yield {"type": "start", "conversation_id": conversation_id}
     yield {
         "type": "status",
-        "stage": "reading",
-        "text": f"正在翻{direction}方向的就业资料…" if direction else "正在翻就业资料…",
+        "stage": "thinking",
+        "text": "正在想…",
         "elapsed_ms": 0,
     }
 
     text = ""
-    probing = brief is not None
-    released_at = 0  # 已经发出去的字符数（>= 这个位置的才算"用户看到了"）
     started = time.monotonic()
     writing_started = False
-
-    # 用"后台泵 + 队列"而不是直接 `async for`：这样才能在**等第一个 token** 的时候
-    # 每 STATUS_HEARTBEAT_SECONDS 发一次心跳。
-    # ⚠️ 不能用 ``asyncio.wait_for(iterator.__anext__())`` 做超时 —— 取消 `__anext__`
-    # 会把异步生成器一起关掉（流直接断），所以必须由一个独立 task 持续消费。
     queue: "asyncio.Queue[tuple]" = asyncio.Queue()
 
     async def _pump() -> None:
@@ -1686,7 +1356,7 @@ async def stream_reply(
                 thinking=True,
             ):
                 await queue.put(("chunk", piece))
-        except Exception as exc:  # noqa: BLE001 - 交给主循环统一走 7.6 兜底
+        except Exception as exc:  # noqa: BLE001 - 交给主循环统一处理
             await queue.put(("error", exc))
         finally:
             await queue.put(("done", None))
@@ -1695,13 +1365,14 @@ async def stream_reply(
     try:
         while True:
             try:
-                kind, payload = await asyncio.wait_for(queue.get(), timeout=STATUS_HEARTBEAT_SECONDS)
+                kind, payload = await asyncio.wait_for(
+                    queue.get(), timeout=STATUS_HEARTBEAT_SECONDS
+                )
             except asyncio.TimeoutError:
-                # 还在想：报一次真实耗时，让"动画"变成"进度"
                 yield {
                     "type": "status",
                     "stage": "thinking",
-                    "text": "正在想怎么跟你说…",
+                    "text": "正在想…",
                     "elapsed_ms": int((time.monotonic() - started) * 1000),
                 }
                 continue
@@ -1711,31 +1382,9 @@ async def stream_reply(
             if kind == "error":
                 raise payload
 
-            text += str(payload)
-            visible, held = _split_held_question(text)
-            if probing and len(visible) <= EMPTY_TURN_PROBE_CHARS:
-                continue  # 先攒着：短回复必须整段才判得出空转
-            if probing:
-                probing = False
-            if len(visible) > released_at:
-                if not writing_started:
-                    writing_started = True
-                    yield {
-                        "type": "status",
-                        "stage": "writing",
-                        "text": "正在写…",
-                        "elapsed_ms": int((time.monotonic() - started) * 1000),
-                    }
-                # 攒够之后一次补齐开头，之后逐块发；被压住的问句段不进 visible
-                yield {"type": "delta", "content": visible[released_at:]}
-                released_at = len(visible)
-
-        if probing:
-            # 整段都没超过阈值：这时才有必要判空转
-            if _needs_delivery_retry(text, brief):
-                text = await _regenerate_with_delivery_feedback(llm_messages, brief, text)
-                if _needs_delivery_retry(text, brief):
-                    text = chat_director.material_fallback_text(brief.materials)
+            piece = str(payload)
+            if not piece:
+                continue
             if not writing_started:
                 writing_started = True
                 yield {
@@ -1744,41 +1393,30 @@ async def stream_reply(
                     "text": "正在写…",
                     "elapsed_ms": int((time.monotonic() - started) * 1000),
                 }
-            # 短回复同样要"问句留白"：先发正文，停一下再抛问题
-            visible, held = _split_held_question(text)
-            if held:
-                yield {"type": "delta", "content": visible}
-                released_at = len(visible)
-                await asyncio.sleep(QUESTION_HOLD_SECONDS)
-                yield {"type": "delta", "content": held}
-            else:
-                yield {"type": "delta", "content": text}
-            released_at = len(text)
-        elif released_at < len(text):
-            # 最后那段"提问"被压住了：停一下再发 —— 用户可能还在看刚说完的那段，
-            # 甚至正准备回答上一个问题，问句紧跟着砸下来会很赶人。
-            await asyncio.sleep(QUESTION_HOLD_SECONDS)
-            yield {"type": "delta", "content": text[released_at:]}
-            released_at = len(text)
-    except Exception as exc:  # noqa: BLE001 - 7.6 兜底：流式失败也不能 500
+            text += piece
+            yield {"type": "delta", "content": piece}
+    except Exception as exc:  # noqa: BLE001 - SSE 已开始，只能如实说明
         logger.error("SSE 流式生成异常 conversation_id=%s err=%s", conversation_id, sanitize(exc))
-        if not released_at:
-            fallback = fallback_reply()
-            text = fallback
-            yield {
-                "type": "delta",
-                "content": fallback,
-            }
-        yield {"type": "error", "code": int(ErrorCode.AI_ERROR), "message": "AI 回复中断，已切换兜底话术"}
+        if not text:
+            text = fallback_reply()
+            yield {"type": "delta", "content": text}
+        yield {
+            "type": "error",
+            "code": int(ErrorCode.AI_ERROR),
+            "message": "AI 服务中断了，这条没说完。你重发一次，我接着聊。",
+        }
     finally:
         if not task.done():
             task.cancel()
 
+    if not text.strip():
+        # 模型返回空串：落一条如实说明，绝不写空 assistant 消息。
+        text = fallback_reply()
+
     full_text = truncate(text, MAX_ASSISTANT_CHARS)
     message = _save_assistant_message(session, conversation_id, full_text)
 
-    # 正文侧跨会话泄漏自检（追加要求 2）：**只留痕，不改写、不打断流**
-    # （用户可能已经看到这段文字了，所以这里绝不能改内容；目的是统计泄漏频率）
+    # 正文侧跨会话泄漏自检：只留痕，不改写、不打断流。
     audit_reply_for_leak(session, conversation_id, user_id, full_text)
 
     tags: List[Dict[str, Any]] = []
@@ -1789,92 +1427,14 @@ async def stream_reply(
     except Exception as exc:  # noqa: BLE001
         logger.warning("SSE 画像回流失败 conversation_id=%s err=%s", conversation_id, sanitize(exc))
 
+    # 账号级长期记忆：后台提炼，不阻塞本轮结束。
+    memory_service.schedule_extraction(user_id, conversation_id)
+
     yield {
         "type": "done",
         "message_id": message.id,
         "conversation_id": conversation_id,
-        "conclusion_ready": has_conclusion(session, conversation_id),
     }
-
-
-def has_conclusion(db: Session, conversation_id: UUID) -> bool:
-    """done 事件的 ``conclusion_ready``：该会话是否已有可拉取的结论卡片（11.11）。"""
-    conversation = db.get(Conversation, conversation_id)
-    return bool(conversation and conversation.conclusion)
-
-
-# ---------------------------------------------------------------------------
-# 结论卡片（11.11）
-# ---------------------------------------------------------------------------
-
-async def get_conclusion(db: Session, user: User, conversation_id: UUID) -> ChatConclusionCard:
-    """GET /chat/conversations/{id}/conclusion：结论卡片。
-
-    已有缓存直接返回；没有则调用 ``chat_conclusion`` Prompt 生成并写回
-    ``conversations.conclusion``。生成失败走 7.6 兜底模板。
-    """
-    conversation = get_conversation(db, user, conversation_id)
-
-    if conversation.conclusion:
-        card = ChatConclusionCard(conversation_id=conversation.id, **conversation.conclusion)
-        if card.generated_at is None:
-            card.generated_at = conversation.updated_at
-        return card
-
-    messages = _fetch_messages(db, conversation.id, 50)
-    history_text = build_history_text(messages, limit=30)
-    tags = profile_service.serialize_tags(profile_service.list_tags(db, user.id))
-    stage = profile_service.get_stage(db, user.id)
-
-    result: ConclusionCardResult = await deepseek_client.chat_prompt_json(
-        prompt_name="chat_conclusion",
-        variables={"history": history_text, "profile_tags": tags, "stage": stage},
-        schema=ConclusionCardResult,
-        default=empty_conclusion(),
-        temperature=STRUCTURED_TEMPERATURE,
-        # 结论卡是 300~500 字的小卡片；2048 有 4~10 倍冗余（勘误 9.37 的审计）。
-        max_tokens=1024,
-    )
-
-    generated_at = datetime.now(timezone.utc).replace(tzinfo=None)
-    payload = {
-        "summary": result.summary,
-        "pain_points": result.pain_points,
-        "suggestions": result.suggestions,
-        "next_actions": result.next_actions,
-        "generated_at": generated_at.isoformat(),
-    }
-
-    conversation.conclusion = payload
-    conversation.updated_at = generated_at
-    db.add(conversation)
-    db.commit()
-    db.refresh(conversation)
-
-    # 11.11：结论卡片保存到报告（reports.type = "conclusion"）
-    _save_conclusion_report(db, user.id, conversation.id, payload)
-
-    return ChatConclusionCard(
-        conversation_id=conversation.id,
-        summary=result.summary,
-        pain_points=result.pain_points,
-        suggestions=result.suggestions,
-        next_actions=result.next_actions,
-        generated_at=generated_at,
-    )
-
-
-def _save_conclusion_report(db: Session, user_id, conversation_id: UUID, payload: Dict[str, Any]) -> None:
-    """把结论卡片落一份到 reports（11.11）。"""
-    from app.models.report import Report
-
-    report = Report(
-        user_id=user_id,
-        type="conclusion",
-        content={"conversation_id": str(conversation_id), **payload},
-    )
-    db.add(report)
-    db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -1893,18 +1453,71 @@ def _persist_user_message(
     - ``client_msg_id`` 写进独立列（``messages.client_msg_id``），
       配合 ``(conversation_id, client_msg_id)`` 唯一索引在数据库层面防重复。
     """
+    # 空串必须归一成 NULL：唯一约束是 (conversation_id, client_msg_id)，
+    # 多个 NULL 互不冲突，但多个 "" 会被判成同一个 id —— 用户第二句话就 500。
+    normalized_id = (client_msg_id or "").strip() or None
     message = Message(
         conversation_id=conversation.id,
         role="user",
         content=content,
-        client_msg_id=client_msg_id,
+        client_msg_id=normalized_id,
     )
     db.add(message)
     conversation.updated_at = utcnow()
     db.add(conversation)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # 查-插不是原子的：并发重复提交时唯一约束只放行一个。
+        db.rollback()
+        existing = (
+            idempotency.find_client_message(db, conversation.id, normalized_id)
+            if normalized_id
+            else None
+        )
+        if existing is None:
+            raise
+        raise _DuplicateMessage(existing) from None
     db.refresh(message)
     return message
+
+
+def discard_unanswered_user_message(db: Session, user_message_id: Optional[UUID]) -> bool:
+    """清理"助手回复没落库"的用户消息，避免同一 client_msg_id 永久 pending。
+
+    触发场景：SSE 流在保存助手回复之前被客户端断开/取消。此时库里只有用户消息，
+    ``resolve_duplicate`` 每次都会返回 ``(用户消息, None)`` —— 前端重试永远得到
+    "正在生成回复"，而实际生成早就不存在了。
+
+    安全边界：**只在确认这条用户消息之后没有任何 assistant 回复时才删**；
+    已经落库的回复一条都不动。任何异常都吞掉并记 warning —— 清理失败不能
+    掩盖/替换掉原始的流错误。
+    """
+    if not user_message_id:
+        return False
+    try:
+        # 生成失败时会话可能停在失败事务里，先清掉再查询
+        db.rollback()
+        message = db.get(Message, user_message_id)
+        if message is None or message.role != "user":
+            return False
+        if idempotency.find_assistant_reply(db, message.conversation_id, message) is not None:
+            return False
+        db.delete(message)
+        db.commit()
+        logger.info("已清理未完成回复的用户消息 message_id=%s", user_message_id)
+        return True
+    except Exception as exc:  # noqa: BLE001 - 清理是兜底，绝不能盖住原始异常
+        try:
+            db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        logger.warning(
+            "清理未完成回复的用户消息失败（已忽略）message_id=%s err=%s",
+            user_message_id,
+            sanitize(exc),
+        )
+        return False
 
 
 def _save_assistant_message(db: Session, conversation_id: UUID, content: str) -> Message:
@@ -1927,99 +1540,16 @@ def _save_assistant_message(db: Session, conversation_id: UUID, content: str) ->
     return message
 
 
-def _split_held_question(text: str) -> Tuple[str, str]:
-    """把"最后抛出的那个问题"从**可见文本**里摘出来（流式用）。
-
-    返回 ``(可见文本, 被压住的问句)``；没有该压的就返回 ``(text, "")``。
-
-    规则（保守，宁可少压）：
-    1. 只在**最后一段**（最后一个空行之后）里找；这一段超过 ``_QUESTION_TAIL_MAX_CHARS``
-       就认为"正文里带了个问号"，不压；
-    2. 在这一段里，从**最后一个句末标点之后**算起（问句通常独立成句）；
-    3. 那截里必须真的含问号，且前面已经有一段正文（整条只有一句问话时不压 ——
-       压住等于不流式了）。
-    """
-    paragraph_start = text.rfind("\n\n") + 2 if "\n\n" in text else 0
-    tail = text[paragraph_start:]
-    if not tail.strip() or len(tail) > _QUESTION_TAIL_MAX_CHARS:
-        return text, ""
-
-    cut = max(tail.rfind(mark) for mark in ("。", "！", "!", "；", ";"))
-    candidate = tail[cut + 1 :] if cut >= 0 else tail
-    if len(candidate.strip()) < 2:
-        return text, ""
-    if not any(mark in candidate for mark in ("？", "?")):
-        return text, ""
-    # 前面得有正文：整条就是一句问话时，压住会让用户以为卡了
-    if len(text) - len(candidate) < 12:
-        return text, ""
-    return text[: len(text) - len(candidate)], candidate
-
-
-def _needs_delivery_retry(text: str, brief: Optional[chat_director.TurnBrief]) -> bool:
-    """这一轮要不要"带反馈重来一次"（勘误 9.31 / 9.41）。
-
-    三种情况下不判：
-    - 没有 ``brief``（非对话路径）；
-    - 这段文字就是"AI 挂了"的兜底话术 —— 那不是空转，重试也没有意义；
-    - **他这一轮只是在闲聊/敷衍/讲自己的事** —— 用户明确要求「想闲聊的时候可以陪他聊两句，
-      **不用目的性那么强**」。只有 ``卡住``（他说不知道）和 ``要东西``（他在问"有什么用/学什么"）
-      这两类，才要求这一轮**必须有东西交付**；闲聊轮丢回去一句"哈哈，那你打得不错啊"是完全正常的。
-    """
-    if brief is None or text == fallback_reply():
-        return False
-    if brief.user_state not in ("卡住", "要东西"):
-        return False
-    return chat_director.looks_like_empty_turn(text, brief.materials)
-
-
-async def _regenerate_with_delivery_feedback(
-    llm_messages: Optional[List[Dict[str, str]]],
-    brief: chat_director.TurnBrief,
-    previous: str,
-) -> str:
-    """空转时**带反馈**重来一次。
-
-    ``retries=0``：网络失败那层重试由第一次调用负责（``chat_text`` 默认会重试），
-    这里再来一次就是"重试套重试"，只会拖时间。
-    """
-    logger.warning("对话空转命中，带反馈重试一次 | %s", brief.reason)
-    messages = [
-        *(llm_messages or []),
-        {"role": "assistant", "content": previous},
-        {
-            "role": "user",
-            "content": "（系统提示：你上一句只把话问回去了，他这一轮什么都没得到。"
-            "请重新说一次 —— 至少给他一条能带走的东西，不许只提问。）",
-        },
-    ]
-    return await deepseek_client.chat_text(
-        messages,
-        max_tokens=settings.DEEPSEEK_CHAT_MAX_TOKENS,
-        thinking=True,
-        retries=0,
-    )
-
-
 async def _generate_guarded(
     llm_messages: List[Dict[str, str]],
     brief: chat_director.TurnBrief,
 ) -> str:
-    """非流式路径的"生成 + 空转兜底"（``send_message`` 用）。
-
-    与流式路径的唯一区别是**没有"先攒后发"那一步**：这边本来就要等整段生成完，
-    所以直接判空转即可（判据完全一样）。
-    """
-    text = await deepseek_client.chat_text(
+    """非流式路径：交给模型自由生成，不做空转重试、也不硬塞素材。"""
+    return await deepseek_client.chat_text(
         llm_messages,
         max_tokens=settings.DEEPSEEK_CHAT_MAX_TOKENS,
         thinking=True,
     )
-    if _needs_delivery_retry(text, brief):
-        text = await _regenerate_with_delivery_feedback(llm_messages, brief, text)
-        if _needs_delivery_retry(text, brief):
-            text = chat_director.material_fallback_text(brief.materials)
-    return text
 
 
 async def _extract_round_tags(db: Session, conversation_id: UUID, user_id: UUID) -> List[Dict[str, Any]]:

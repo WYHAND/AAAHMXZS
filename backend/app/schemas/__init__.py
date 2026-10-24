@@ -13,7 +13,6 @@ from app.schemas.badge import (
     BadgeResponse,
 )
 from app.schemas.chat import (
-    ChatConclusionCard,
     ChatRequest,
     ChatResponse,
     ConversationCreate,
@@ -114,7 +113,6 @@ __all__ = [
     "ChatRequest",
     "ChatResponse",
     "PendingChatResponse",
-    "ChatConclusionCard",
     "SSEEvent",
     "SSEEventType",
     # resume（现行：模板 / mine / polish；老的 ResumeCreate/Update/Parse/Optimize 已随 ATS 链路移除）

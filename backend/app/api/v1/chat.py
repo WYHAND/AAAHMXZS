@@ -1,4 +1,4 @@
-"""Chat 路由（10.2 Chat：conversations CRUD + messages + stream + conclusion）。
+"""Chat 路由（10.2 Chat：conversations CRUD + messages + stream）。
 
 流式对话有两个端点，事件序列完全一致（共用 ``_event_generator``）：
 
@@ -25,7 +25,6 @@ from app.core.deps import get_current_user, get_db
 from app.db.session import SessionLocal
 from app.models.user import User
 from app.schemas.chat import (
-    ChatConclusionCard,
     ChatRequest,
     ChatResponse,
     ConversationCreate,
@@ -107,12 +106,9 @@ async def ensure_opening(
 
     1. **已有开场白** -> 回放同一条（幂等）。前端"进入会话就调一次"的写法
        会反复命中这里，永远不会产生第二条开场白。
-    2. **会话没有任何消息** -> 生成开场白：**只聊日常**（年级、今天上什么课、最近在忙什么……），
-       **一句人话、不超过 60 字、只问一件事**，绝不出现 A/B/C 这类选项；
-       ⚠️ **一个字都不提**画像标签 / 进行中任务 / 用户原话 / 阶段
-       （开场白路径不给模型任何画像素材，见 ``chat_service._opening_context``）；
-       画像素材最早从**第 2 轮**起才可以用（``chat_system.txt``「你手里的背景信息怎么用」）。
-       AI 不可用时给开场专用的**日常**本地模板（7.6）。
+    2. **会话没有任何消息** -> 生成开场白：由模型自由发挥（纯文本 + 思考），
+       不设话题池、不设字数上限。Prompt 只要求温和、有吸引力、不编造关于他的事实。
+       模型不可用时**直接返回 AI_ERROR**，由前端明确提示"服务暂时不可用"，不再假装说话。
     3. **会话已有消息但没有开场白**（用户先说了话，例如前端没调本接口）
        -> 返回 ``{code:0, message:"会话已有消息，未生成开场白", data:null}``。
        这时补一句开场白会插在用户消息**之后**，变成 AI 在自言自语，所以不做。
@@ -165,7 +161,7 @@ SSE_DESCRIPTION = (
     'tag:     {"code":0,"message":"success","data":{"type":"tag","data":{"tags":[...]}}}\n'
     'pending: {"code":0,"message":"正在生成","data":{"type":"pending","user_message_id":"..."}}\n'
     'done:    {"code":0,"message":"success","data":{"type":"done","message_id":"...",'
-    '"conversation_id":"...","conclusion_ready":false}}\n'
+    '"conversation_id":"..."}}\n'
     'error:   {"code":3001,"message":"AI调用失败","data":null}\n'
     "流末尾固定补一个 ``event: end`` + ``data: [DONE]``。\n\n"
     "两个端点（POST 与 GET）共用同一个事件生成器，事件序列完全一致。"
@@ -292,6 +288,7 @@ def _event_generator(prep: "chat_service.StreamPreparation", user_id: UUID) -> A
     async def generator() -> AsyncGenerator[str, None]:
         # FIX 2：生成器内部自开会话，生命周期与流完全对齐
         session = SessionLocal()
+        completed = False
         try:
             async for event in chat_service.stream_reply(
                 session,
@@ -302,6 +299,7 @@ def _event_generator(prep: "chat_service.StreamPreparation", user_id: UUID) -> A
             ):
                 payload = _to_sse_payload(event)
                 yield f"event: {event.get('type', 'message')}\ndata: {_sse_data(payload)}\n\n"
+            completed = True
             yield "event: end\ndata: [DONE]\n\n"
         except Exception as exc:  # noqa: BLE001 - 流已开始，只能以 error 事件收尾
             # 用 exception() 而不是 error()：流内异常此前只留一行 err 文本、没有 traceback，
@@ -311,6 +309,14 @@ def _event_generator(prep: "chat_service.StreamPreparation", user_id: UUID) -> A
             yield f"event: error\ndata: {error_payload}\n\n"
             yield "event: end\ndata: [DONE]\n\n"
         finally:
+            if not completed:
+                # 客户端断开 / 取消：助手回复没落库时清掉这条用户消息，
+                # 否则同一 client_msg_id 的重试会永远命中 pending（死循环）。
+                # 已落库的回复不会被删（函数内部会再查一次）。
+                chat_service.discard_unanswered_user_message(
+                    session,
+                    prep.user_message.id if prep.user_message is not None else None,
+                )
             session.close()
 
     return generator()
@@ -331,17 +337,3 @@ def _to_sse_payload(event: dict) -> dict:
         }
     data = {k: v for k, v in event.items() if k != "type"}
     return {"code": 0, "message": "success", "data": {"type": event_type, **data}}
-
-
-@router.get(
-    "/conversations/{conversation_id}/conclusion",
-    response_model=ApiResponse[ChatConclusionCard],
-    summary="结论卡片",
-)
-async def conclusion(
-    conversation_id: UUID,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> ApiResponse[ChatConclusionCard]:
-    """11.11：结构化诊断卡；首次调用生成并缓存到 conversations.conclusion。"""
-    return ApiResponse.ok(await chat_service.get_conclusion(db, current_user, conversation_id))
