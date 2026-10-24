@@ -9,6 +9,7 @@
  * 前置：另开一个终端跑 `npx vite preview --port 4173`（注意用 localhost，preview 只监听 IPv6）
  */
 import { chromium } from 'playwright-core'
+import { shotPath } from './shot-path.mjs'
 
 const BASE = 'http://localhost:4173'
 
@@ -76,13 +77,13 @@ async function measure(label) {
 await page.goto(`${BASE}/test/question`, { waitUntil: 'networkidle' })
 await page.waitForTimeout(600)
 const a = await measure('3 选项')
-await page.screenshot({ path: 'shots/qa-3options.png' })
+await page.screenshot({ path: shotPath('qa-3options.png') })
 
 // 点「跳过这题」进入下一题（4 选项）
 await page.getByRole('button', { name: /跳过/ }).click()
 await page.waitForTimeout(600)
 const b = await measure('4 选项')
-await page.screenshot({ path: 'shots/qa-4options.png' })
+await page.screenshot({ path: shotPath('qa-4options.png') })
 
 console.log('========== 实测结果 ==========')
 for (const m of [a, b]) {

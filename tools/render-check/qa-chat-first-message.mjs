@@ -15,6 +15,7 @@
  * 前置：另开终端 `npx vite preview --port 4173`（preview 只监听 IPv6，用 localhost）
  */
 import { chromium } from 'playwright-core'
+import { shotPath } from './shot-path.mjs'
 
 const BASE = 'http://localhost:4173'
 const CONV_ID = 'c-new'
@@ -117,7 +118,7 @@ console.log(`  AI 气泡内容: ${JSON.stringify(aiText.slice(0, 60))}`)
 console.log(`  回复标记可见: ${hasMarker}`)
 console.log(`  未捕获异常: ${pageErrors.length ? pageErrors.join(' | ') : '无'}`)
 
-await page.screenshot({ path: 'shots/qa-chat-first-message.png' })
+await page.screenshot({ path: shotPath('qa-chat-first-message.png') })
 
 // 判定：修好之后，AI 回复应当**在界面上真实可见**
 const pass = hasMarker && userCount > 0 && pageErrors.length === 0

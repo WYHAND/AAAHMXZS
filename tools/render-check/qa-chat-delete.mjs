@@ -15,6 +15,7 @@
  * ⚠️ 只能连 http://localhost:4173（vite preview 只监听 IPv6），不要用 127.0.0.1。
  */
 import { chromium } from 'playwright-core'
+import { shotPath } from './shot-path.mjs'
 
 const BASE = 'http://localhost:4173'
 const C1 = 'c-1'
@@ -126,7 +127,7 @@ let pass = true
   const opacityIdle = await opacityOf(trash)
   const a1 = Number(opacityIdle) > 0
 
-  await page.screenshot({ path: 'shots/qa-chat-delete-1-idle.png' })
+  await page.screenshot({ path: shotPath('qa-chat-delete-1-idle.png') })
 
   // A2 hover 会话项：图标保持可见
   await row.hover()
@@ -134,7 +135,7 @@ let pass = true
   const opacityHover = await opacityOf(trash)
   const a2 = Number(opacityHover) > 0
 
-  await page.screenshot({ path: 'shots/qa-chat-delete-2-hover.png' })
+  await page.screenshot({ path: shotPath('qa-chat-delete-2-hover.png') })
 
   // A3 点图标 → 二次确认弹窗（且**没有**切换到别的会话：activeId 仍是 会话一）
   await trash.click()
@@ -146,7 +147,7 @@ let pass = true
     dialogText.includes('删除这个会话？') &&
     dialogText.includes('画像和成长任务都会保留')
 
-  await page.screenshot({ path: 'shots/qa-chat-delete-3-dialog.png' })
+  await page.screenshot({ path: shotPath('qa-chat-delete-3-dialog.png') })
 
   // A4 点「删除」
   await page.getByRole('button', { name: '删除', exact: true }).click()
@@ -160,7 +161,7 @@ let pass = true
   const a7 = bodyAfter.includes('C2的历史问题')
   const a8 = pageErrors.length === 0
 
-  await page.screenshot({ path: 'shots/qa-chat-delete-4-success.png' })
+  await page.screenshot({ path: shotPath('qa-chat-delete-4-success.png') })
 
   console.log('========== 场景 A：删除成功 ==========')
   console.log(`  A0 初始列表有两条会话          : ${a0 ? '通过 ✔' : '失败 ✘'}`)
@@ -199,7 +200,7 @@ let pass = true
   const b4 = (await page.getByRole('alertdialog').count()) === 0
   const b5 = pageErrors.length === 0
 
-  await page.screenshot({ path: 'shots/qa-chat-delete-5-fail.png' })
+  await page.screenshot({ path: shotPath('qa-chat-delete-5-fail.png') })
 
   console.log('\n========== 场景 B：删除失败（DELETE 500） ==========')
   console.log(`  B1 确实发出了 DELETE 请求      : ${b1 ? '通过 ✔' : '失败 ✘'}  ${JSON.stringify(deletes)}`)

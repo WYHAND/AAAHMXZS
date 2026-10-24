@@ -12,6 +12,7 @@
  * 用法：node qa-chat-history.mjs（前置：npx vite preview --port 4173）
  */
 import { chromium } from 'playwright-core'
+import { shotPath } from './shot-path.mjs'
 
 const BASE = 'http://localhost:4173'
 const C1 = 'c-1'
@@ -85,7 +86,7 @@ console.log(`  B2 切换会话（C2 的历史）  : ${b2 ? '通过 ✔' : '失�
 console.log(`     切换后页面是否还残留 C1 内容: ${bodyAfterSwitch.includes('C1的历史回复')}（预期 false）`)
 console.log(`  未捕获异常: ${pageErrors.length ? pageErrors.join(' | ') : '无'}`)
 
-await page.screenshot({ path: 'shots/qa-chat-history.png' })
+await page.screenshot({ path: shotPath('qa-chat-history.png') })
 await browser.close()
 const pass = b1 && b2 && !bodyAfterSwitch.includes('C1的历史回复') && pageErrors.length === 0
 console.log(pass ? '\n结果: 通过 —— 修复没有误伤历史消息加载' : '\n结果: 未通过')

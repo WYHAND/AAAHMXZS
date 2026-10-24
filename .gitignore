@@ -83,6 +83,10 @@ docs/_build/*
 # ---- 验证工具产物（渲染冒烟测试的截图与依赖） ----
 tools/render-check/shots/
 tools/render-check/node_modules/
+# 截图脚本历史上用相对 cwd 的 'shots/'，从 frontend/ 跑会漏到这里（脚本已改为写脚本目录）
+frontend/shots/
+# 旧的对比度/几何探针输出，不属于项目文件
+audit_probe_*.txt
 
 # ---- 桌面端（Electron）打包产物 ----
 # 这些都是构建输出/依赖，不进版本库；要重新生成看 electron/README-打包说明.md

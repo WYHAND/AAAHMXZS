@@ -9,6 +9,7 @@
  *   node qa-chat-title-width.mjs
  */
 import { chromium } from 'playwright-core'
+import { shotPath } from './shot-path.mjs'
 
 const BASE = 'http://localhost:4173'
 const LONG = '实习方向怎么选：后端还是 AI 应用，我到底该往哪个方向准备'
@@ -117,7 +118,7 @@ const checks = {
 
 /* ---------- 不 hover 直接点删除，确认能点开确认框 ---------- */
 const trash = page.getByRole('button', { name: `删除会话「${LONG}」` })
-await page.screenshot({ path: 'shots/qa-chat-width-1-idle.png' })
+await page.screenshot({ path: shotPath('qa-chat-width-1-idle.png') })
 let clickable = false
 try {
   await trash.click({ timeout: 2500 })
@@ -127,7 +128,7 @@ try {
   clickable = false
 }
 checks['不 hover 也能点开删除确认框'] = clickable
-await page.screenshot({ path: 'shots/qa-chat-width-2-dialog.png' })
+await page.screenshot({ path: shotPath('qa-chat-width-2-dialog.png') })
 
 console.log('========== 历史会话行几何 ==========')
 for (const [k, v] of Object.entries(checks)) console.log(`  ${v ? '通过 ✔' : '失败 ✘'}  ${k}`)
