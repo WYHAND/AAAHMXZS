@@ -28,7 +28,7 @@ from app.models.user import utcnow
 
 
 class Conversation(SQLModel, table=True):
-    """对话。``conclusion`` 存 11.11 的结论卡片（结构化 JSON）。"""
+    """对话。``conclusion`` 列是旧版结论卡遗留字段，**已废弃、不再读写**（保留列避免迁移）。"""
 
     __tablename__ = "conversations"
 

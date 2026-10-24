@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import UUID, uuid4
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 from app.models.types import json_column
@@ -35,6 +36,11 @@ class DailyAnswer(SQLModel, table=True):
     """用户对每日一问的回答（answer 为 VARCHAR(200)，5.3）。"""
 
     __tablename__ = "daily_answers"
+    # 一个用户对同一道题只能答一次（接口语义是"每天一题"）。
+    # answer_question 的"今天答过就拒绝"是查-插两步，并发提交会双写，唯一约束兜底。
+    __table_args__ = (
+        UniqueConstraint("user_id", "question_id", name="uq_daily_answers_user_question"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)

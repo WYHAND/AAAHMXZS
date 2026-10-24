@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import UUID, uuid4
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 from app.models.types import json_column
@@ -21,6 +22,9 @@ class Resume(SQLModel, table=True):
     """
 
     __tablename__ = "resumes"
+    # 产品契约是"每个用户唯一一份简历"（GET/PUT /resume/mine 都是单数语义）。
+    # 之前只靠业务代码"查不到就建"，并发润色/保存会写出两份，唯一约束兜底。
+    __table_args__ = (UniqueConstraint("user_id", name="uq_resumes_user_id"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)

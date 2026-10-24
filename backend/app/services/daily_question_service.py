@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.ai import deepseek_client
@@ -136,27 +137,45 @@ async def answer_question(db: Session, user: User, payload: DailyAnswerRequest) 
         answer=payload.answer,
     )
     db.add(answer)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        # 并发提交同一道题：查-插之间被另一个请求抢先，唯一约束把它挡在库里。
+        # 回滚这次未提交的 INSERT，返回与"今天已答过"一致的业务提示。
+        db.rollback()
+        raise BusinessException(ErrorCode.PARAM_ERROR, "今天已经回答过了，明天再来") from exc
     db.refresh(answer)
 
     total = count_answers(db, user.id)
     refreshed = False
     extracted: List[Dict[str, Any]] = []
 
-    # 规则：答题即记录一次"持续反思"线索（11.7 的无感采集）
-    profile_service.apply_tags(
-        db,
-        user.id,
-        [{"dimension": "能力", "label": "持续反思", "weight": 0.4, "source": "daily"}],
-        source="daily",
-    )
+    # 答题已经落库；下面的画像回流是附加收益，失败只记 warning，
+    # 否则用户会看到 500，重试又因为"今天已答过"被拒，等于答案白写。
+    try:
+        # 规则：答题即记录一次"持续反思"线索（11.7 的无感采集）
+        profile_service.apply_tags(
+            db,
+            user.id,
+            [{"dimension": "能力", "label": "持续反思", "weight": 0.4, "source": "daily"}],
+            source="daily",
+        )
 
-    if should_refresh_profile(total):
-        text = f"每日一问（{question.dimension}）：{question.content}\n学生回答：{payload.answer}"
-        extracted = await profile_service.extract_tags_from_text(db, user.id, text, source="daily")
-        profile_service.recompute_stage(db, user.id)
-        refreshed = True
-        logger.info("每日一问累计 %s 题，已触发画像微调 user_id=%s", total, user.id)
+        if should_refresh_profile(total):
+            text = f"每日一问（{question.dimension}）：{question.content}\n学生回答：{payload.answer}"
+            extracted = await profile_service.extract_tags_from_text(db, user.id, text, source="daily")
+            profile_service.recompute_stage(db, user.id)
+            refreshed = True
+            logger.info("每日一问累计 %s 题，已触发画像微调 user_id=%s", total, user.id)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "每日一问画像回流失败（已忽略，回答已保存）user_id=%s err=%s",
+            user.id,
+            sanitize(exc),
+        )
+        db.rollback()
+        refreshed = False
+        extracted = []
 
     response = DailyAnswerResponse.model_validate(answer)
     response.profile_refreshed = refreshed

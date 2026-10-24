@@ -45,7 +45,9 @@ async def generate(
     并把 message 换成给用户看的提示语 —— 前端应该判断 ``reused`` 而不是比 message 文案。
     出错路径与 HTTP 状态码规则不变（见 ``app.core.errors.CODE_TO_HTTP_STATUS``）。
     """
-    data = await task_service.generate_task(db, current_user, payload)
+    # 同一用户串行生成：连点会各调一次模型、各自通过标题去重，最后建出两条同题任务。
+    async with task_service.generate_guard(current_user.id):
+        data = await task_service.generate_task(db, current_user, payload)
     message = task_service.REUSED_TASK_MESSAGE if data.reused else "success"
     return ApiResponse.ok(data, message=message)
 
@@ -71,10 +73,14 @@ async def complete_step(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ApiResponse[TaskDetailResponse]:
-    """11.6：打卡 + 反馈 -> 更新画像标签 -> 可能触发奖章（11.12）。"""
-    return ApiResponse.ok(
-        await task_service.complete_step(db, current_user, task_id, step_id, payload)
-    )
+    """11.6：打卡 + 反馈 -> 更新画像标签 -> 可能触发奖章（11.12）。
+
+    同一任务串行：连点/重试否则会重复抽标签、重复发奖章。
+    """
+    async with task_service.task_guard(task_id):
+        return ApiResponse.ok(
+            await task_service.complete_step(db, current_user, task_id, step_id, payload)
+        )
 
 
 @router.post("/{task_id}/abandon", response_model=ApiResponse[TaskResponse], summary="放弃")
@@ -83,7 +89,8 @@ async def abandon(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ApiResponse[TaskResponse]:
-    return ApiResponse.ok(task_service.abandon_task(db, current_user, task_id))
+    async with task_service.task_guard(task_id):
+        return ApiResponse.ok(task_service.abandon_task(db, current_user, task_id))
 
 
 @router.delete(
@@ -105,4 +112,5 @@ async def delete_task(
       返回值里的 ``completed_steps`` 就是被删掉的打卡步骤数，前端据此在删除前说清后果。
     - 重复删除同一个 id 第二次返回 2001（已不存在），符合预期。
     """
-    return ApiResponse.ok(task_service.delete_task(db, current_user, task_id))
+    async with task_service.task_guard(task_id):
+        return ApiResponse.ok(task_service.delete_task(db, current_user, task_id))

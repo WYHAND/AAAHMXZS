@@ -28,6 +28,12 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 # 全局单例（12.1 示例即模块级 scheduler）
+#
+# ⚠️ 部署约束：本项目**按单进程运行**（Dockerfile / docker-compose 均未设置 --workers）。
+# APScheduler 的 job 只存在于当前进程内存里，每个 worker 都会各自注册并执行一遍：
+# 开 N 个 worker 就会把每日一问、任务提醒、奖章结算各做 N 次。
+# 如需扩容到多 worker/多副本，必须先引入跨进程互斥（数据库行锁或 Redis 锁），
+# 不能只改启动参数。
 scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")
 
 JOB_DAILY_QUESTION = "daily_question_generate"
@@ -74,11 +80,21 @@ def register_jobs() -> None:
 
 
 def start_scheduler() -> AsyncIOScheduler:
-    """在 FastAPI startup 时调用（见 app/main.py）。"""
-    if not scheduler.running:
-        register_jobs()
-        scheduler.start()
-        logger.info("APScheduler 已启动，时区=%s", scheduler.timezone)
+    """在 FastAPI startup 时调用（见 app/main.py）。
+
+    ⚠️ 每次启动都**新建**一个 scheduler，而不是复用模块级单例：
+    AsyncIOScheduler 在 ``start()`` 时绑定当前事件循环，TestClient 多次
+    lifespan、开发热重载或"先 shutdown 再 start"时，复用旧实例会抛
+    ``Event loop is closed``。生产一次进程只启动一次，行为不变。
+    """
+    global scheduler
+    if scheduler.running:
+        return scheduler
+
+    scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")
+    register_jobs()
+    scheduler.start()
+    logger.info("APScheduler 已启动，时区=%s", scheduler.timezone)
     return scheduler
 
 

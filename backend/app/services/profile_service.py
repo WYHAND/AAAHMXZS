@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.ai import deepseek_client
@@ -174,8 +175,17 @@ def build_summary_template(tags: Iterable[ProfileTag]) -> str:
 
 
 def summary_needs_refresh(db: Session, user_id) -> bool:
-    """摘要句是否需要（重新）生成 —— 端点据此决定要不要挂后台任务。"""
-    profile = get_or_create_profile(db, user_id, commit=False)
+    """摘要句是否需要（重新）生成 —— 端点据此决定要不要挂后台任务。
+
+    ⚠️ 这里**不能用** ``get_or_create_profile(commit=False)`` 做"顺便建画像"：
+    那会把一条未提交的 profile 留在请求会话里，随后 ``get_profile`` 的
+    ``get_or_create_profile`` 因为"查得到"而不再 commit，请求结束时会话关闭
+    → 新画像被静默回滚（用户每次打开画像页都重新建、永远不落库）。
+    新用户直接返回 True，让真正的创建发生在 ``get_profile`` 里并由它提交。
+    """
+    profile = db.exec(select(Profile).where(Profile.user_id == user_id)).first()
+    if profile is None:
+        return True
     key = summary_fingerprint(list_tags(db, user_id))
     return profile.ai_summary_key != key
 
@@ -466,15 +476,27 @@ def get_or_create_profile(db: Session, user_id, *, commit: bool = True) -> Profi
     （例如 ``submit_test``：写 test_results + profiles + profile_tags 必须同一个事务）。
     """
     profile = db.exec(select(Profile).where(Profile.user_id == user_id)).first()
-    if profile is None:
-        profile = Profile(user_id=user_id, stage=STAGE_EXPLORE)
-        db.add(profile)
-        if commit:
-            db.commit()
-            db.refresh(profile)
-        else:
+    if profile is not None:
+        return profile
+
+    candidate = Profile(user_id=user_id, stage=STAGE_EXPLORE)
+    try:
+        # 用 SAVEPOINT 包住插入：并发请求同时发现"没有画像"时，只有一个能插成功，
+        # 另一个命中 uq_profiles_user_id。这里只回滚 savepoint，**不能** rollback
+        # 整个会话 —— 调用方（如 submit_test）可能已经在同一事务里写了测试结果。
+        with db.begin_nested():
+            db.add(candidate)
             db.flush()
-    return profile
+    except IntegrityError:
+        profile = db.exec(select(Profile).where(Profile.user_id == user_id)).first()
+        if profile is None:
+            raise  # 不是并发创建导致的冲突（例如外键错误），交给上层处理
+        return profile
+
+    if commit:
+        db.commit()
+        db.refresh(candidate)
+    return candidate
 
 
 def has_finished_test(db: Session, user_id) -> bool:
@@ -584,36 +606,62 @@ def apply_tags(
         label = str(raw.get("label") or "").strip()
         if not label:
             continue
-        dimension = str(raw.get("dimension") or "其他")
+        dimension = (str(raw.get("dimension") or "其他").strip() or "其他")[:50]
         weight = clamp01(raw.get("weight", 0.5))
         tag_source = str(raw.get("source") or source or "chat")
+        # 落库值统一按列宽截断；查重/唯一约束必须用同一个值，否则长标签永远查不到、
+        # 每次都当成新标签插入。
+        stored_label = label[:100]
 
         existing = db.exec(
             select(ProfileTag).where(
                 ProfileTag.user_id == user_id,
                 ProfileTag.dimension == dimension,
-                ProfileTag.label == label,
+                ProfileTag.label == stored_label,
             )
         ).first()
 
         evidence = raw.get("evidence")
+
+        def _merge_into(tag: ProfileTag) -> None:
+            """把本次证据融合进已有标签（新增与并发冲突共用同一套规则）。"""
+            tag.weight = clamp01(0.6 * tag.weight + 0.4 * weight)
+            tag.source = tag_source
+            # extra 一起合并：证据日志 + 「跨天出现」记录（9.24 展示排序用，见 _merge_extra）
+            tag.extra = _merge_extra(tag.extra, evidence)
+            tag.updated_at = utcnow()
+
         if existing is None:
-            existing = ProfileTag(
+            candidate = ProfileTag(
                 user_id=user_id,
                 dimension=dimension,
-                label=label[:100],
+                label=stored_label,
                 weight=weight,
                 source=tag_source,
                 extra=_merge_extra(None, evidence),
             )
-            db.add(existing)
-            created += 1
+            try:
+                # 同上：并发抽标签时用 savepoint 兜住 uq_profile_tags_user_dim_label，
+                # 冲突后回读并融合权重（不能 rollback 外层事务）。
+                with db.begin_nested():
+                    db.add(candidate)
+                    db.flush()
+                existing = candidate
+                created += 1
+            except IntegrityError:
+                existing = db.exec(
+                    select(ProfileTag).where(
+                        ProfileTag.user_id == user_id,
+                        ProfileTag.dimension == dimension,
+                        ProfileTag.label == stored_label,
+                    )
+                ).first()
+                if existing is None:
+                    raise
+                _merge_into(existing)
+                db.add(existing)
         else:
-            existing.weight = clamp01(0.6 * existing.weight + 0.4 * weight)
-            existing.source = tag_source
-            # extra 一起合并：证据日志 + 「跨天出现」记录（9.24 展示排序用，见 _merge_extra）
-            existing.extra = _merge_extra(existing.extra, evidence)
-            existing.updated_at = utcnow()
+            _merge_into(existing)
             db.add(existing)
         results.append(existing)
 
@@ -754,7 +802,14 @@ def feedback(db: Session, user: User, payload: ProfileFeedbackRequest) -> Profil
         logger.info("整体画像反馈 user_id=%s approved=%s", user.id, payload.approved)
         # TODO: 写入 reports(type="profile_feedback")，手册未定义该报告类型，见 README「待确认」
 
-    recompute_stage(db, user.id)
+    try:
+        recompute_stage(db, user.id)
+    except Exception as exc:  # noqa: BLE001
+        # 标签反馈已经落库；重算失败只影响分数刷新，不能把反馈变成 500。
+        logger.warning(
+            "画像反馈后重算失败（已忽略）user_id=%s err=%s", user.id, sanitize(exc)
+        )
+        db.rollback()
     return get_profile(db, user)
 
 

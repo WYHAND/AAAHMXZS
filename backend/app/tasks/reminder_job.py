@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Dict, List
 
-from sqlmodel import select
+from sqlmodel import func, select
 
 from app.db.session import SessionLocal
 from app.models.task import Task, TaskStep
@@ -40,18 +40,19 @@ def remind_unfinished_tasks() -> List[Dict[str, str]]:
             statement = select(Task).where(Task.status == "进行中")  # type: ignore[union-attr]
             tasks = list(db.exec(statement).all())
 
-            for task in tasks:
-                last_step = db.exec(
-                    select(TaskStep)
-                    .where(TaskStep.task_id == task.id)
-                    .order_by(TaskStep.completed_at.desc())  # type: ignore[union-attr]
-                ).first()
+            # 一次查出所有任务的"最后一次打卡时间"（GROUP BY），
+            # 避免每条任务各查一次（活跃任务多时是 N+1）。
+            last_completed = {
+                task_id: completed_at
+                for task_id, completed_at in db.exec(
+                    select(TaskStep.task_id, func.max(TaskStep.completed_at))
+                    .where(TaskStep.completed.is_(True))  # type: ignore[union-attr]
+                    .group_by(TaskStep.task_id)  # type: ignore[union-attr]
+                ).all()
+            }
 
-                last_active = None
-                if last_step is not None and last_step.completed_at is not None:
-                    last_active = last_step.completed_at
-                else:
-                    last_active = task.created_at
+            for task in tasks:
+                last_active = last_completed.get(task.id) or task.created_at
 
                 if last_active is not None and last_active < threshold:
                     reminders.append(

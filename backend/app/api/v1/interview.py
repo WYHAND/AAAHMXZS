@@ -74,8 +74,16 @@ async def answer(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ApiResponse[InterviewAnswerResponse]:
-    """11.9：存回答 -> 判断是否追问（每题最多 2 轮）-> 返回下一题。"""
-    return ApiResponse.ok(await interview_service.submit_answer(db, current_user, interview_id, payload))
+    """11.9：存回答 -> 判断是否追问（每题最多 2 轮）-> 返回下一题。
+
+    ⚠️ 同一场面试串行处理：连点/重试会同时通过"读状态 -> 调 AI -> 写状态"，
+    导致回答被覆盖、追问调两次模型。锁在 service 里（单进程部署约束见
+    ``app/tasks/scheduler.py`` 顶部）。
+    """
+    async with interview_service.interview_guard(interview_id):
+        return ApiResponse.ok(
+            await interview_service.submit_answer(db, current_user, interview_id, payload)
+        )
 
 
 @router.post(
@@ -88,8 +96,14 @@ async def finish(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ApiResponse[InterviewFinishResponse]:
-    """11.9：生成复盘报告；7.8 画像回流在 service 内完成。"""
-    return ApiResponse.ok(await interview_service.finish_interview(db, current_user, interview_id))
+    """11.9：生成复盘报告；7.8 画像回流在 service 内完成。
+
+    同一场面试串行：两次并发 finish 会各调一次 AI（约 8s）并重复回流标签。
+    """
+    async with interview_service.interview_guard(interview_id):
+        return ApiResponse.ok(
+            await interview_service.finish_interview(db, current_user, interview_id)
+        )
 
 
 @router.get(

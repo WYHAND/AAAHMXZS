@@ -11,9 +11,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import delete as sa_delete
@@ -43,6 +45,43 @@ logger = get_logger(__name__)
 
 # 任务状态中文枚举（5.3）。去重只跟「进行中」比，见 _find_duplicate_task。
 ACTIVE_TASK_STATUS = "进行中"
+
+# 进程内互斥（与 interview_service.interview_guard 同一思路）：
+# - task_guard(task_id)：打卡 / 放弃 / 删除同一任务时串行，防连点造成
+#   "重复抽标签、重复发奖章、删除与打卡交错"；
+# - generate_guard(user_id)：同一用户同一时刻只跑一次生成，防连点重复调 AI、
+#   也防两次生成各自通过"标题去重"后建出两条同题任务。
+# 条目是 [asyncio.Lock, 引用计数]，最后一个等待者离开时删除，长期运行不泄漏。
+_task_locks: Dict[UUID, list] = {}
+_generate_locks: Dict[UUID, list] = {}
+
+
+@asynccontextmanager
+async def _keyed_guard(locks: Dict[UUID, list], key: UUID) -> AsyncIterator[None]:
+    entry = locks.get(key)
+    if entry is None:
+        entry = [asyncio.Lock(), 0]
+        locks[key] = entry
+    entry[1] += 1
+    try:
+        async with entry[0]:
+            yield
+    finally:
+        entry[1] -= 1
+        if entry[1] <= 0:
+            locks.pop(key, None)
+
+
+@asynccontextmanager
+async def task_guard(task_id: UUID) -> AsyncIterator[None]:
+    async with _keyed_guard(_task_locks, task_id):
+        yield
+
+
+@asynccontextmanager
+async def generate_guard(user_id: UUID) -> AsyncIterator[None]:
+    async with _keyed_guard(_generate_locks, user_id):
+        yield
 
 # 复用已有任务时的固定提示语（前端不应依赖它做判断，判断用 TaskGenerateResponse.reused；
 # 这里定义在服务层，是为了让"命中重复"这件事只有一处文案出处）。
@@ -380,12 +419,33 @@ def template_for_pain(pain_point: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def list_tasks(db: Session, user: User, status: Optional[str] = None) -> List[TaskResponse]:
-    """GET /task：我的任务列表，可按状态过滤。"""
+    """GET /task：我的任务列表，可按状态过滤。
+
+    ⚠️ 进度必须**批量取步骤**：以前是每条任务各查一次（N+1），任务一多列表页
+    就会变成 N+1 次 SQL。这里一次取回全部步骤再按 task_id 分组。
+    """
     statement = select(Task).where(Task.user_id == user.id)
     if status:
         statement = statement.where(Task.status == status)
     statement = statement.order_by(Task.created_at.desc())  # type: ignore[union-attr]
-    return [_to_response(db, task) for task in db.exec(statement).all()]
+    tasks = list(db.exec(statement).all())
+    if not tasks:
+        return []
+
+    task_ids = [task.id for task in tasks]
+    steps = db.exec(
+        select(TaskStep).where(TaskStep.task_id.in_(task_ids))  # type: ignore[union-attr]
+    ).all()
+    steps_by_task: Dict[UUID, List[TaskStep]] = {}
+    for step in steps:
+        steps_by_task.setdefault(step.task_id, []).append(step)
+
+    responses: List[TaskResponse] = []
+    for task in tasks:
+        response = TaskResponse.model_validate(task)
+        response.progress = _progress(steps_by_task.get(task.id, []))
+        responses.append(response)
+    return responses
 
 
 def get_task_detail(db: Session, user: User, task_id: UUID) -> TaskDetailResponse:
@@ -566,8 +626,9 @@ async def generate_task(
         estimated_days=result.estimated_days,
     )
     db.add(task)
-    db.commit()
-    db.refresh(task)
+    # 任务与步骤同一事务：以前先 commit 任务、再 commit 步骤，
+    # 步骤写入失败会留下一条"没有任何步骤"的任务（进度永远 0、打卡无从点起）。
+    db.flush()
 
     steps = result.steps or []
     for index, step in enumerate(steps, start=1):
@@ -581,6 +642,7 @@ async def generate_task(
             )
         )
     db.commit()
+    db.refresh(task)
     logger.info("生成任务成功 user_id=%s task_id=%s pain_point=%s", user.id, task.id, pain_point)
 
     return _to_generate_response(get_task_detail(db, user, task.id), reused=False)
@@ -599,6 +661,10 @@ async def complete_step(
 ) -> TaskDetailResponse:
     """POST /task/{id}/steps/{step_id}/complete：打卡 + 反馈 + 画像更新。"""
     task = get_task(db, user, task_id)
+    if task.status == "已放弃":
+        # 已放弃的任务不允许再打卡：否则把最后一步打完后，下面的
+        # "全部完成 -> 已完成" 会把状态从「已放弃」翻回「已完成」。
+        raise BusinessException(ErrorCode.PARAM_ERROR, "该任务已放弃，不能再打卡")
 
     step = db.get(TaskStep, step_id)
     if step is None or step.task_id != task.id:
@@ -627,7 +693,9 @@ async def complete_step(
     step.feedback = payload.feedback
     step.completed_at = utcnow()
     db.add(step)
-    db.commit()
+    # 先 flush 让"本步骤已完成"对下面的查询可见，但**不提交**：
+    # 步骤状态与任务状态（全部完成 -> 已完成）必须在同一个事务里生效。
+    db.flush()
 
     # 进度推进：全部步骤完成 -> 任务完成
     steps = list_steps(db, task.id)
@@ -638,18 +706,28 @@ async def complete_step(
     db.commit()
     db.refresh(task)
 
-    # 7.8 画像回流：打卡反馈 -> 行动力/自律性标签
-    await _extract_task_tags(db, user, task, step, payload.feedback)
-    profile_service.recompute_stage(db, user.id)
+    # 以下都是**附加收益**（画像标签 / 奖章）：打卡本身已经提交成功，
+    # 它们失败只记 warning，不能把"已经打上的卡"变成一个 500。
+    # 放在 commit 之后也保留了原有语义：AI 抽标签失败不影响打卡结果。
+    try:
+        # 7.8 画像回流：打卡反馈 -> 行动力/自律性标签
+        await _extract_task_tags(db, user, task, step, payload.feedback)
+        profile_service.recompute_stage(db, user.id)
 
-    # 11.12 奖章触发：**打卡路径也要触发**（原先只在任务变成「已完成」时才触发，
-    # 于是「坚持打卡者」这种按步骤累计的奖章要等最多一小时（settle_badges）
-    # 才发放 —— 用户"明明做到了却没给"）。现在放在这里，且是**无条件**调用：
-    # 引擎一次触发会评估全部条件（任务数 / 步骤数 / 画像标签数），所以这一行同时
-    # 覆盖「起步行动家」「坚持打卡者」「方向初现」；放在 `_extract_task_tags` 之后
-    # 是为了让本次打卡新抽到的标签也能立刻算进画像那枚奖章的进度。
-    # event 只是触发器（日志用），不再决定评估哪些奖章 -> 见 badge_service。
-    badge_service.check_and_award(db, user, event="steps_completed")
+        # 11.12 奖章触发：**打卡路径也要触发**（原先只在任务变成「已完成」时才触发，
+        # 于是「坚持打卡者」这种按步骤累计的奖章要等最多一小时（settle_badges）
+        # 才发放 —— 用户"明明做到了却没给"）。现在放在这里，且是**无条件**调用：
+        # 引擎一次触发会评估全部条件（任务数 / 步骤数 / 画像标签数），所以这一行同时
+        # 覆盖「起步行动家」「坚持打卡者」「方向初现」；放在 `_extract_task_tags` 之后
+        # 是为了让本次打卡新抽到的标签也能立刻算进画像那枚奖章的进度。
+        # event 只是触发器（日志用），不再决定评估哪些奖章 -> 见 badge_service。
+        badge_service.check_and_award(db, user, event="steps_completed")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "打卡后的画像/奖章回流失败（已忽略，打卡已生效）user_id=%s task_id=%s step_id=%s err=%s",
+            user.id, task.id, step.id, sanitize(exc),
+        )
+        db.rollback()
 
     return get_task_detail(db, user, task.id)
 

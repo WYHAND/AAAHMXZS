@@ -46,6 +46,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, func, select
 
 from app.models.badge import Badge, UserBadge
@@ -186,7 +187,15 @@ def get_or_create_badge(db: Session, name: str) -> Badge:
     if badge is None:
         badge = Badge(name=name, condition=dict(BADGE_RULES.get(name, {})))
         db.add(badge)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            # 并发请求/定时任务同时兜底创建：唯一约束挡住后回读已存在的那一枚。
+            db.rollback()
+            badge = db.exec(select(Badge).where(Badge.name == name)).first()
+            if badge is None:
+                raise
+            return badge
         db.refresh(badge)
     return badge
 
@@ -201,7 +210,15 @@ def award_badge(db: Session, user: User, badge: Badge) -> Optional[UserBadge]:
 
     user_badge = UserBadge(user_id=user.id, badge_id=badge.id)
     db.add(user_badge)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # "查-插"之间被另一个请求抢先发放：唯一约束兜底，按幂等语义返回 None。
+        db.rollback()
+        logger.info(
+            "奖章已由并发请求发放（本次跳过）user_id=%s badge=%s", user.id, badge.name
+        )
+        return None
     db.refresh(user_badge)
     logger.info("发放奖章 user_id=%s badge=%s key=%s", user.id, badge.name, (badge.condition or {}).get("key"))
     return user_badge

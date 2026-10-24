@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
 from sqlmodel import Field, SQLModel
@@ -56,10 +56,12 @@ class InterviewQuestion(SQLModel, table=True):
     content: str = Field(description="题目文本")
     answer: Optional[str] = Field(default=None, description="用户回答")
 
-    followups: Optional[Dict[str, Any]] = Field(
+    # 实际存的是**列表**（形如 [{"round":1,"q":"...","a":"..."}]），
+    # 早期误标成 Dict，与 service/schema 的用法不一致；这里修正类型（JSON 列本身不变）。
+    followups: Optional[List[Dict[str, Any]]] = Field(
         default=None,
         sa_column=json_column(),
-        description="追问与追问回答 JSONB，形如 [{q, a}]",
+        description="追问与追问回答 JSONB，形如 [{round, q, a}]",
     )
 
     score: Optional[float] = Field(default=None, description="该题得分 0-100")

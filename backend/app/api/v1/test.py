@@ -25,8 +25,15 @@ router = APIRouter(prefix="/test", tags=["Test 基础测试表"])
     response_model=ApiResponse[List[TestQuestionResponse]],
     summary="获取测试题",
 )
-async def get_questions(db: Session = Depends(get_db)) -> ApiResponse[List[TestQuestionResponse]]:
-    """11.2 第 1 步：获取题目列表（骨架阶段不要求登录）。
+async def get_questions(
+    _current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ApiResponse[List[TestQuestionResponse]]:
+    """11.2 第 1 步：获取题目列表（需登录）。
+
+    早期骨架为了让引导页显示题量曾允许匿名读取，属于历史遗留；
+    题库与后续提交/结果属于同一条用户链路（``submit`` / ``result`` 都要求登录），
+    这里统一要求登录，避免匿名端点成为未登记的攻击面。
 
     题库来自数据库 ``test_questions`` 表。**若返回空数组**，说明还没初始化，
     请先执行 ``python -m app.db.init_db``（不会再用代码常量假装有题）。

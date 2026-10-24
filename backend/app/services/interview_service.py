@@ -13,8 +13,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from sqlmodel import Session, select
@@ -50,6 +52,34 @@ logger = get_logger(__name__)
 
 # 11.9：每题后 1-2 轮追问
 MAX_FOLLOWUP_PER_QUESTION = 2
+
+# 同一场面试的进程内互斥（answer / finish）。条目是 [asyncio.Lock, 引用计数]。
+_interview_locks: Dict[UUID, list] = {}
+
+
+@asynccontextmanager
+async def interview_guard(interview_id: UUID) -> AsyncIterator[None]:
+    """把同一场面试的 ``answer`` / ``finish`` 串行化。
+
+    为什么需要：这两个接口都是"读状态 -> 调 AI（数秒）-> 写状态"。
+    两个并发请求会同时通过前置检查，于是重复调模型、覆盖回答、重复写报告/标签。
+    进程内锁覆盖当前**单 worker** 部署（同 ``app/tasks/scheduler.py`` 顶部约束）；
+    将来多 worker/多副本时，要换成数据库行锁或带租约的状态列。
+
+    引用计数保证最后一个等待者离开时删除条目，长期运行不会按面试场次无限增长。
+    """
+    entry = _interview_locks.get(interview_id)
+    if entry is None:
+        entry = [asyncio.Lock(), 0]
+        _interview_locks[interview_id] = entry
+    entry[1] += 1
+    try:
+        async with entry[0]:
+            yield
+    finally:
+        entry[1] -= 1
+        if entry[1] <= 0:
+            _interview_locks.pop(interview_id, None)
 
 # 模式 -> 题目数量（小测试轻量，全真完整）
 MODE_QUESTION_COUNT: Dict[str, int] = {"小测试": 3, "全真": 6}
@@ -151,8 +181,11 @@ async def start_interview(db: Session, user: User, payload: InterviewStartReques
 
     interviews = Interview(user_id=user.id, mode=mode, scene=scene, status="进行中")
     db.add(interviews)
-    db.commit()
-    db.refresh(interviews)
+
+    # ⚠️ 面试记录与本轮题目必须**同一个事务**：以前先 commit 面试、再 commit 题目，
+    # 题目写入失败就会留下一场"没有任何题目"的面试（finish 直接报"还没有题目"）。
+    # flush 只把 INSERT 发出去、不提交，失败时由请求级 get_db 整体回滚。
+    db.flush()
 
     questions = result.questions or []
     if not questions:
@@ -175,6 +208,7 @@ async def start_interview(db: Session, user: User, payload: InterviewStartReques
             )
         )
     db.commit()
+    db.refresh(interviews)
 
     return InterviewResponse.model_validate(interviews)
 
@@ -183,7 +217,16 @@ def get_questions(db: Session, user: User, interview_id: UUID) -> InterviewQuest
     """GET /interview/{id}/questions。"""
     interview = get_interview(db, user, interview_id)
     questions = list_questions(db, interview.id)
-    current = next((q.question_order for q in questions if not q.answer), len(questions) or 1)
+    # 有待回答的追问时，当前题仍是这道主问题（question.answer 已经有值，
+    # 只看 answer 会把进度错误地推到下一题）。
+    current = next(
+        (
+            q.question_order
+            for q in questions
+            if not q.answer or (q.extra or {}).get("followup_question")
+        ),
+        len(questions) or 1,
+    )
     return InterviewQuestionsResponse(
         interview_id=interview.id,
         mode=interview.mode,
@@ -286,42 +329,65 @@ async def submit_answer(
     # 如果直接 `question.extra["x"] = 1` 而不重新赋值，flush 时比较不出差异，UPDATE 不会发。
     # 所以这里统一是 `extra = dict(question.extra or {})` -> 改副本 -> `question.extra = extra`，
     # `followups` 同理（每次都新建 list 再赋值）。
+    duplicate = False
     if pending_followup:
         followups = list(question.followups or [])
-        followups.append({"round": asked_rounds, "q": pending_followup, "a": payload.answer})
-        question.followups = followups
-        extra["followup_question"] = None      # 追问已答完
-        extra["kind"] = "followup"
+        already_answered = any(
+            isinstance(item, dict) and int(item.get("round") or 0) == asked_rounds
+            for item in followups
+        )
+        if already_answered:
+            # 同一条追问重复提交（网络重试/连点）：不能把回答再追加一遍。
+            duplicate = True
+            logger.info(
+                "追问已作答，忽略重复提交 interview_id=%s question_id=%s round=%s",
+                interview.id, question.id, asked_rounds,
+            )
+        else:
+            followups.append({"round": asked_rounds, "q": pending_followup, "a": payload.answer})
+            question.followups = followups
+            extra["followup_question"] = None      # 追问已答完
+            extra["kind"] = "followup"
+    elif (question.answer or "").strip():
+        # 主问题已经有回答：说明这是重试/重复提交。
+        # 原实现会直接 `question.answer = payload.answer`，把第一次认真写的回答
+        # （以及 answered_at）静默覆盖掉 —— 与函数文档"主问题回答永不被覆盖"相反。
+        duplicate = True
+        logger.info(
+            "主问题已作答，忽略重复提交（不覆盖原回答）interview_id=%s question_id=%s",
+            interview.id, question.id,
+        )
     else:
         question.answer = payload.answer       # 主问题回答，永不覆盖
         extra["kind"] = extra.get("kind") or "main"
 
-    question.answered_at = utcnow()
-    question.extra = extra
-    db.add(question)
-    db.commit()
-    db.refresh(question)
+    if not duplicate:
+        question.answered_at = utcnow()
+        question.extra = extra
+        db.add(question)
+        db.commit()
+        db.refresh(question)
 
-    # 3) 还要不要继续追问（上限 MAX_FOLLOWUP_PER_QUESTION 轮）
-    if asked_rounds < MAX_FOLLOWUP_PER_QUESTION:
-        followup = await _maybe_followup(db, interview, question, payload.answer, asked_rounds)
-        if followup is not None:
-            extra["followup_question"] = followup
-            extra["followup_round"] = asked_rounds + 1
-            question.extra = extra
-            db.add(question)
-            db.commit()
-            db.refresh(question)
-            return InterviewAnswerResponse(
-                interview_id=interview.id,
-                action="followup",
-                question_id=question.id,
-                parent_question_id=question.id,   # 同一行题，前端就地续问
-                display_content=followup,
-                followup_round=asked_rounds + 1,
-                next_question=to_question_response(question),
-                message="请回答追问",
-            )
+        # 3) 还要不要继续追问（上限 MAX_FOLLOWUP_PER_QUESTION 轮）
+        if asked_rounds < MAX_FOLLOWUP_PER_QUESTION:
+            followup = await _maybe_followup(db, interview, question, payload.answer, asked_rounds)
+            if followup is not None:
+                extra["followup_question"] = followup
+                extra["followup_round"] = asked_rounds + 1
+                question.extra = extra
+                db.add(question)
+                db.commit()
+                db.refresh(question)
+                return InterviewAnswerResponse(
+                    interview_id=interview.id,
+                    action="followup",
+                    question_id=question.id,
+                    parent_question_id=question.id,   # 同一行题，前端就地续问
+                    display_content=followup,
+                    followup_round=asked_rounds + 1,
+                    next_question=to_question_response(question),
+                    message="请回答追问",
+                )
 
     # 4/5) 换下一道未作答的主问题；没有就结束
     next_question = next((q for q in list_questions(db, interview.id) if not q.answer), None)
@@ -415,11 +481,21 @@ async def finish_interview(db: Session, user: User, interview_id: UUID) -> Inter
     db.commit()
     db.refresh(interview)
 
-    # 7.8 画像回流：面试 -> 技能/项目深度/知识盲区/沟通能力
-    tags = report.get("tags") or []
-    if tags:
-        profile_service.apply_tags(db, user.id, tags, source="interview")
-    profile_service.recompute_stage(db, user.id)
+    # 7.8 画像回流：面试 -> 技能/项目深度/知识盲区/沟通能力。
+    # 复盘已经生成并落库，画像回流是附加收益：失败只记 warning，
+    # 绝不能把"已经拿到的复盘"变成一个 500（重试会命中幂等分支，反而不再回流）。
+    try:
+        tags = report.get("tags") or []
+        if tags:
+            profile_service.apply_tags(db, user.id, tags, source="interview")
+        profile_service.recompute_stage(db, user.id)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "面试复盘画像回流失败（已忽略，复盘仍可用）interview_id=%s err=%s",
+            interview.id,
+            sanitize(exc),
+        )
+        db.rollback()
 
     return InterviewFinishResponse(interview_id=interview.id, status=interview.status, report=report)
 

@@ -33,7 +33,7 @@ class ReportResponse(BaseModel):
 
     id: UUID
     user_id: UUID
-    type: str = Field(description="growth / conclusion / resume")
+    type: str = Field(description="growth / resume")
     content: Optional[Dict[str, Any]] = None
     created_at: datetime
 

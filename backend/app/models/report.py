@@ -13,9 +13,9 @@ from app.models.user import utcnow
 
 
 class Report(SQLModel, table=True):
-    """成长报告（11.10：聚合画像变化、完成任务数；11.11 结论卡片也落这里）。
+    """成长报告（11.10：聚合画像变化、完成任务数）。
 
-    type 约定：``growth``（成长报告）/ ``conclusion``（对话结论卡片）/ ``resume``（简历报告）
+    type 约定：``growth``（成长报告）/ ``resume``（简历报告）
     """
 
     __tablename__ = "reports"

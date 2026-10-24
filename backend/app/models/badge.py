@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import UUID, uuid4
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 from app.models.types import json_column
@@ -36,6 +37,10 @@ class UserBadge(SQLModel, table=True):
     """用户获得的奖章。"""
 
     __tablename__ = "user_badges"
+    # 同一用户同一枚奖章只能有一条发放记录（award_badge 声称幂等，但查-插不是原子的）。
+    __table_args__ = (
+        UniqueConstraint("user_id", "badge_id", name="uq_user_badges_user_badge"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)

@@ -33,6 +33,37 @@ from app.services import voice_service
 router = APIRouter(prefix="/voice", tags=["Voice 语音"])
 
 
+async def _read_audio_body(request: Request, max_bytes: int) -> bytes:
+    """带硬上限地读取原始音频，避免 ``request.body()`` 把超大 body 全读进内存。
+
+    ``await request.body()`` 会先把**整个**请求体读进内存，再让业务代码判断长度；
+    一个 2GB 的请求足以把进程打爆（而且鉴权用户也能做到）。这里分块读取，
+    每块累加后立刻判断，超过上限就停止。
+
+    先看 ``Content-Length`` 只是"早失败"的优化，不能作为唯一防线：
+    该头可以被伪造/缺省，真正的边界是下面的累计长度。
+    """
+    declared = request.headers.get("content-length")
+    if declared:
+        try:
+            if int(declared) > max_bytes:
+                raise BusinessException.param_error("这段录音太长了，请分几次说")
+        except ValueError:
+            # 非法 Content-Length 不在这里 400：以实际读到的字节数为准
+            pass
+
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in request.stream():
+        if not chunk:
+            continue
+        total += len(chunk)
+        if total > max_bytes:
+            raise BusinessException.param_error("这段录音太长了，请分几次说")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 @router.get(
     "/status",
     response_model=ApiResponse[VoiceStatusResponse],
@@ -62,11 +93,9 @@ async def transcribe(
     前端在"用户说完 + 静音"后上传 16k 单声道 WAV（一次回答通常 10-60 秒）。
     音频只在内存里经过，不落盘、不写库。
     """
-    audio = await request.body()
+    audio = await _read_audio_body(request, settings.VOICE_MAX_AUDIO_BYTES)
     if not audio:
         raise BusinessException.param_error("没有收到录音")
-    if len(audio) > settings.VOICE_MAX_AUDIO_BYTES:
-        raise BusinessException.param_error("这段录音太长了，请分几次说")
 
     text = await voice_service.transcribe(audio, request.headers.get("content-type", ""))
     return ApiResponse.ok(VoiceTextResponse(text=text))

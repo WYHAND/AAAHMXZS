@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import UUID, uuid4
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 from app.models.types import json_column
@@ -21,6 +22,9 @@ class Profile(SQLModel, table=True):
     """
 
     __tablename__ = "profiles"
+    # 一个用户只能有一行画像。懒创建（get_or_create_profile）在并发请求下
+    # 会同时通过"查不到就建"的检查，唯一约束是最后一道防线。
+    __table_args__ = (UniqueConstraint("user_id", name="uq_profiles_user_id"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)
@@ -51,6 +55,11 @@ class ProfileTag(SQLModel, table=True):
     """
 
     __tablename__ = "profile_tags"
+    # 同一用户同一维度同一标签只应有一行（apply_tags 做权重融合的前提）。
+    # 并发抽标签时两个请求都可能"查不到 -> 各自插入"，唯一约束防止标签被写重。
+    __table_args__ = (
+        UniqueConstraint("user_id", "dimension", "label", name="uq_profile_tags_user_dim_label"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)

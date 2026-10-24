@@ -38,6 +38,10 @@ async def generate_daily_questions() -> int:
                     processed += 1
                 except Exception as exc:  # noqa: BLE001 - 单用户失败不中断任务
                     logger.error("每日一问生成失败 user_id=%s err=%s", user.id, sanitize(exc))
+                    # 单用户失败的若是数据库异常，会话会停在失败事务里；
+                    # 不 rollback 的话后面每个用户都会继续抛 PendingRollbackError，
+                    # 等于"一个人失败，全站当天都没有每日一问"。
+                    db.rollback()
 
             total_questions = len(db.exec(select(DailyQuestion.id)).all())
             logger.info("每日一问生成完成 processed=%s 题库总量=%s", processed, total_questions)

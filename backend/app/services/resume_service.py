@@ -19,9 +19,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.ai import deepseek_client
@@ -502,18 +504,107 @@ def _normalize_lexical(text: Any) -> str:
     return "".join(str(text or "").split()).lower()
 
 
-def _skill_items_kept(old_list: Sequence[Any], new_list: Sequence[Any]) -> bool:
-    """``skills`` 的机械闸：**条数与顺序都不许变，且每条必须仍然留着用户写的那项技术**。
+# 技能条目里的"技术名"：以字母开头，允许数字与 ``+`` / ``#``（C++、C#、Vue3），
+# 允许点号连接的写法（``Node.js`` / ``Vue.js`` / ``.NET`` 的 ``NET`` 部分）。
+_SKILL_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9+#]*(?:\.[A-Za-z0-9+#]+)*")
 
-    为什么不再是"逐字等价"：用户要的是把关键词**展开**成简历表述
-    （``"Java"`` -> ``"熟悉 Java 基础语法、面向对象编程（封装、继承、多态）、集合框架…"``），
-    逐字等价会把这种正常润色判成违规退回原文 —— 用户看到的就还是光秃秃一个"Java"。
+# 同一个技术名的常见写法（归一化后再比，避免"写法不一样"被误判成"换了技术"）
+_SKILL_TOKEN_ALIASES = {
+    "cpp": "c++",
+    "csharp": "c#",
+    "javascript": "js",
+    "typescript": "ts",
+    "python": "py",
+    "nodejs": "node",
+    "vuejs": "vue",
+}
+
+
+def _skill_tokens(text: Any) -> List[str]:
+    """取一段技能文本里的"技术名"（归一化成小写、去空白）。"""
+    return [_normalize_lexical(token) for token in _SKILL_TOKEN_RE.findall(str(text or ""))]
+
+
+def _canonical_skill_token(token: str) -> str:
+    """技术名归一化：去点号 / 版本号，别名收敛（``Node.js`` / ``NodeJS`` -> ``node``）。"""
+    value = _normalize_lexical(token).replace(".", "")
+    stripped = value.rstrip("0123456789")
+    # 只在剩下的部分还是"一个词"时去掉版本号（java11 -> java、c++11 -> c++；h5 保留原样）
+    if stripped != value and len(stripped) >= 2 and (stripped[-1].isalpha() or stripped[-1] in "+#"):
+        value = stripped
+    return _SKILL_TOKEN_ALIASES.get(value, value)
+
+
+def _skill_token_covered(token: str, new_text: str) -> bool:
+    """润色后的这一条里，是否还留着原来的这个技术名。
+
+    三种认法（都只看字符串，不做技术名词判定）：
+    1. 归一化后完全相同：``C++`` / ``cpp``、``Node.js`` / ``NodeJS``、``vue.js`` / ``Vue``；
+    2. 互相包含（都至少 3 个字符才认）：``Vue`` / ``VueJS``、``Node`` / ``NodeJS``；
+    3. 版本号不算换技术：``Java11`` -> ``Java``、``Vue3`` -> ``Vue``。
+
+    ⚠️ 已知边界：``Java`` 会命中 ``JavaScript``（包含关系）。这条闸只负责"别把用户写的
+    技术换掉/丢掉"，判断"这串英文是不是技术名"需要技术名词表，不做。
+    """
+    canon = _canonical_skill_token(token)
+    if not canon:
+        return False
+    for raw in _skill_tokens(new_text):
+        other = _canonical_skill_token(raw)
+        if not other:
+            continue
+        if canon == other:
+            return True
+        if len(canon) >= 3 and len(other) >= 3 and (canon in other or other in canon):
+            return True
+    return False
+
+
+def _shares_cjk_term(old_text: Any, new_text: Any, min_len: int = 2) -> bool:
+    """两条纯中文表述是否至少共用一段 ``min_len`` 个连续汉字。
+
+    技能条目里没有英文技术名时（"会做表格" / "擅长剪视频"），没法按技术名比对，
+    就用"至少还有一个两字词是原来的"当底线：``"会做表格"`` -> ``"熟悉表格制作"``
+    共享"表格"（通过）；``"会做表格"`` -> ``"熟悉沟通协作"`` 一个两字词都不共享
+    （判违规，因为这已经不是同一项技能了）。
+    """
+    old_cjk = "".join(ch for ch in str(old_text or "") if "\u4e00" <= ch <= "\u9fff")
+    new_cjk = "".join(ch for ch in str(new_text or "") if "\u4e00" <= ch <= "\u9fff")
+    if not old_cjk or not new_cjk:
+        return False
+    if len(old_cjk) < min_len:
+        return old_cjk in new_cjk
+    return any(old_cjk[i:i + min_len] in new_cjk for i in range(len(old_cjk) - min_len + 1))
+
+
+def _skill_item_kept(old_item: Any, new_item: Any) -> bool:
+    """单条技能：原来的技术名/关键词必须还在（允许展开成能力表述）。"""
+    new_text = str(new_item or "")
+    if not _normalize_lexical(new_text):
+        return False
+    tokens = _skill_tokens(old_item)
+    if tokens:
+        return all(_skill_token_covered(token, new_text) for token in dict.fromkeys(tokens))
+    return _shares_cjk_term(old_item, new_text)
+
+
+def _skill_items_kept(old_list: Sequence[Any], new_list: Sequence[Any]) -> bool:
+    """``skills`` 的机械闸：**条数与顺序都不许变，且每条必须仍然留着用户写的那几项技术**。
+
+    为什么不是"整条逐字等价"：用户要的是把关键词**展开**成简历表述
+    （``"Java"`` -> ``"熟悉 Java 基础语法、面向对象编程（封装、继承、多态）、集合框架…"``）。
+    逐字等价会把正常润色判成违规、整段退回原文 —— 用户看到的就还是光秃秃一个"Java"。
+
+    **为什么也不是"整条包含原文"**（这次修的 bug）：用户在前面已经润色好的那一句后面
+    补了「会C++」，AI 把它改写成「熟悉 C++ 基础语法…」时，整条里已经没有「会c++」
+    这串字了 —— 旧判法判违规、整段技能退回原文，用户看到的就是"补的那句没被润色、
+    被直接忽略了"。现在改成**按技术名逐项验收**：只要 ``Java``、``C++`` 都还在，
+    "会"被改写成"熟悉"、"C++"被展开成能力表述，都属于正常润色。
 
     这条仍然挡得住最危险的那几件事：
-    - ``["Java"]`` -> ``["Python"]``：换掉了技术名（``"java" not in "python"``）；
+    - ``["Java"]`` -> ``["Python"]``：换掉了技术名（``java`` 不在新文本里）；
     - ``["Java", "Vue"]`` -> ``["熟悉 Java…"]``：少了条目（条数不等）；
-    - ``["Java"]`` -> ``["熟悉 Java、Python 与 MySQL"]``：**并列把 Java 去掉了也不行**
-      （归一化后必须整项包含原词）。
+    - ``["Java", "C++"]`` -> ``["熟悉 Java…"]``：丢了 C++（``c++`` 不在新文本里）。
 
     ⚠️ **已知边界（明确披露，别当成做到了）**：模型在条目里"**额外**"塞进用户没写过的技术名
     （``["Java"]`` -> ``["熟悉 Java 与 Python"]``）机械上拦不住 —— 判"这串英文是不是技术名"
@@ -523,13 +614,7 @@ def _skill_items_kept(old_list: Sequence[Any], new_list: Sequence[Any]) -> bool:
     """
     if len(old_list) != len(new_list):
         return False
-    for old_item, new_item in zip(old_list, new_list):
-        key = _normalize_lexical(old_item)
-        if not key:
-            return False
-        if key not in _normalize_lexical(new_item):
-            return False
-    return True
+    return all(_skill_item_kept(old_item, new_item) for old_item, new_item in zip(old_list, new_list))
 
 
 def _field_guard_reason(original: Any, polished: Any, *, section_key: Optional[str] = None) -> str:
@@ -807,19 +892,36 @@ def _save_resume(
             for label, reason, echo in list(fallbacks)[:10]
         ]
 
+    def _apply(target: Resume) -> None:
+        target.parsed_data = payload
+        target.completeness = completeness
+        if resolved_target:
+            target.target_job = resolved_target
+        target.updated_at = utcnow()
+
     resume = find_my_resume(db, user.id)
     if resume is None:
         resume = Resume(user_id=user.id, title="我的简历")
+        _apply(resume)
         db.add(resume)
-    resume.parsed_data = payload
-    resume.completeness = completeness
-    if resolved_target:
-        resume.target_job = resolved_target
-    resume.updated_at = utcnow()
-    db.add(resume)
-    db.commit()
-    db.refresh(resume)
+        try:
+            db.commit()
+        except IntegrityError:
+            # 并发润色/保存同时走到"没有简历"分支：唯一约束只允许一个插入成功。
+            # 回滚后改用另一个请求刚创建的那一条，把本次内容覆盖上去。
+            db.rollback()
+            resume = find_my_resume(db, user.id)
+            if resume is None:
+                raise
+            _apply(resume)
+            db.add(resume)
+            db.commit()
+    else:
+        _apply(resume)
+        db.add(resume)
+        db.commit()
 
+    db.refresh(resume)
     profile_service.update_resume_score(db, user.id, completeness)
     return resume
 

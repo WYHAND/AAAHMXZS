@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.models.report import Report
@@ -264,22 +265,27 @@ def _count_active_days(db: Session, user_id) -> int:
     """
     from app.models.conversation import Conversation, Message
 
-    conversation_ids = [
-        c.id for c in db.exec(select(Conversation).where(Conversation.user_id == user_id)).all()
-    ]
+    # 只取"日期"这一列并 DISTINCT，不把整张 messages/steps 表拉回 Python：
+    # 聊天多的用户几年下来可能有上万条消息，旧实现每次首页/报告都要全量加载。
+    # ``date()`` 在 SQLite 与 PostgreSQL 上都可用，且与旧口径一致（UTC 日历日）。
     days = set()
-    if conversation_ids:
-        messages = db.exec(
-            select(Message).where(Message.conversation_id.in_(conversation_ids))  # type: ignore[union-attr]
-        ).all()
-        days |= {m.created_at.date() for m in messages if m.created_at}
 
-    steps = db.exec(
-        select(TaskStep)
+    message_days = db.exec(
+        select(func.date(Message.created_at))
+        .join(Conversation, Message.conversation_id == Conversation.id)  # type: ignore[arg-type]
+        .where(Conversation.user_id == user_id)  # type: ignore[union-attr]
+        .distinct()
+    ).all()
+    days |= {day for day in message_days if day is not None}
+
+    step_days = db.exec(
+        select(func.date(TaskStep.completed_at))
         .join(Task, TaskStep.task_id == Task.id)  # type: ignore[arg-type]
         .where(Task.user_id == user_id, TaskStep.completed.is_(True))  # type: ignore[union-attr]
+        .distinct()
     ).all()
-    days |= {s.completed_at.date() for s in steps if s.completed_at}
+    days |= {day for day in step_days if day is not None}
+
     return len(days)
 
 
